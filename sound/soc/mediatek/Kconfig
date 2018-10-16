@@ -171,3 +171,18 @@ config SND_SOC_MTK_BTCVSD
 	  BT encoded data to/from BT firmware.
 	  Select Y if you have such device.
 	  If unsure select "N".
+
+config SND_SOC_MT8167
+	tristate "ASoC support for Mediatek MT8167 chip"
+	depends on ARCH_MEDIATEK
+	select SND_SOC_MEDIATEK
+
+config SND_SOC_MT8516_PUMPKIN_MACH
+       tristate "ASoC Audio driver for MT8516P1"
+       select SND_SOC_MT8167
+       select SND_SOC_MT8167_CODEC
+       help
+         This adds support for ASoC machine driver for Mediatek MT8516 Pumpkin
+         platforms with internal audio codec and speaker codec CS4382A.
+         Select Y if you have such device.
+         If unsure select "N".
