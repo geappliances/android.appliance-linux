@@ -3471,19 +3471,9 @@ static int power_control_init(struct platform_device *pdev)
 			kbdev->clocks[i] = NULL;
 			break;
 		}
-
-		err = clk_prepare_enable(kbdev->clocks[i]);
-		if (err) {
-			dev_err(kbdev->dev,
-				"Failed to prepare and enable clock (%d)\n",
-				err);
-			clk_put(kbdev->clocks[i]);
-			break;
-		}
 	}
 	if (err == -EPROBE_DEFER) {
 		while ((i > 0) && (i < BASE_MAX_NR_CLOCKS_REGULATORS)) {
-			clk_disable_unprepare(kbdev->clocks[--i]);
 			clk_put(kbdev->clocks[i]);
 		}
 		goto clocks_probe_defer;
@@ -3551,8 +3541,6 @@ static void power_control_term(struct kbase_device *kbdev)
 
 	for (i = 0; i < BASE_MAX_NR_CLOCKS_REGULATORS; i++) {
 		if (kbdev->clocks[i]) {
-			if (__clk_is_enabled(kbdev->clocks[i]))
-				clk_disable_unprepare(kbdev->clocks[i]);
 			clk_put(kbdev->clocks[i]);
 			kbdev->clocks[i] = NULL;
 		} else
