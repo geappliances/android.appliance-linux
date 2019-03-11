@@ -841,6 +841,8 @@ patternProperties:
     description: SGX Sensortech
   "^sharp,.*":
     description: Sharp Corporation
+  "^shiji,.*":
+    description: Shiji Lighting
   "^shimafuji,.*":
     description: Shimafuji Electric, Inc.
   "^si-en,.*":
