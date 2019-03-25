@@ -394,3 +394,17 @@
 	mac-address = [00 00 00 00 00 00];
 	status = "okay";
 };
+
+&usb0 {
+	status = "okay";
+	dr_mode = "peripheral";
+
+	usb_con: connector {
+		compatible = "usb-c-connector";
+		label = "USB-C";
+	};
+};
+
+&usb0_phy {
+	status = "okay";
+};
