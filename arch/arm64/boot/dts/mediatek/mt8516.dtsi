@@ -395,7 +395,7 @@
 			status = "disabled";
 		};
 
-		mmc2: sdio@11170000 {
+		mmc2: mmc@11170000 {
 			compatible = "mediatek,mt8516-mmc";
 			reg = <0 0x11170000 0 0x1000>;
 			interrupts = <GIC_SPI 109 IRQ_TYPE_LEVEL_LOW>;

@@ -287,6 +287,47 @@
 			bias-pull-up = <MTK_PUPD_SET_R1R0_10>;
 		};
 	};
+
+	mmc2_pins_default: mmc2default {
+		pins_cmd_dat {
+			pinmux = <MT8516_PIN_70_MSDC2_DAT0__FUNC_MSDC2_DAT0>,
+				 <MT8516_PIN_71_MSDC2_DAT1__FUNC_MSDC2_DAT1>,
+				 <MT8516_PIN_72_MSDC2_DAT2__FUNC_MSDC2_DAT2>,
+				 <MT8516_PIN_73_MSDC2_DAT3__FUNC_MSDC2_DAT3>,
+				 <MT8516_PIN_68_MSDC2_CMD__FUNC_MSDC2_CMD>;
+			input-enable;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_clk {
+			pinmux = <MT8516_PIN_69_MSDC2_CLK__FUNC_MSDC2_CLK>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+
+		pin_cd {
+			pinmux = <MT8516_PIN_4_EINT4__FUNC_GPIO4>;
+			bias-pull-up;
+		};
+	};
+
+	mmc2_pins_uhs: mmc2@0 {
+		pins_cmd_dat {
+			pinmux = <MT8516_PIN_70_MSDC2_DAT0__FUNC_MSDC2_DAT0>,
+				 <MT8516_PIN_71_MSDC2_DAT1__FUNC_MSDC2_DAT1>,
+				 <MT8516_PIN_72_MSDC2_DAT2__FUNC_MSDC2_DAT2>,
+				 <MT8516_PIN_73_MSDC2_DAT3__FUNC_MSDC2_DAT3>,
+				 <MT8516_PIN_68_MSDC2_CMD__FUNC_MSDC2_CMD>;
+			input-enable;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_clk {
+			pinmux = <MT8516_PIN_69_MSDC2_CLK__FUNC_MSDC2_CLK>;
+			drive-strength = <MTK_DRIVE_8mA>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+	};
 };
 
 &mmc1 {
@@ -296,7 +337,6 @@
 	pinctrl-2 = <&mmc1_pins_dat1>;
 	pinctrl-3 = <&mmc1_dat1_eint>;
 	eint-gpios = <&pio 107 GPIO_ACTIVE_HIGH>;
-	status = "okay";
 	bus-width = <4>;
 	max-frequency = <200000000>;
 	cap-sd-highspeed;
@@ -308,4 +348,21 @@
 	vmmc-supply = <&mt6392_vemc3v3_reg>;
 	vqmmc-supply = <&mt6392_vio18_reg>;
 	non-removable;
+	status = "okay";
+};
+
+&mmc2 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc2_pins_default>;
+	pinctrl-1 = <&mmc2_pins_uhs>;
+	cd-gpios = <&pio 4 GPIO_ACTIVE_HIGH>;
+	bus-width = <4>;
+	max-frequency = <200000000>;
+	cap-sd-highspeed;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
+	vmmc-supply = <&mt6392_vmch_reg>;
+	vqmmc-supply = <&mt6392_vio18_reg>;
+//	vqmmc-supply = <&mt6392_vmc_reg>;
+	status = "okay";
 };
