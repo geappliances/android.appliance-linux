@@ -266,6 +266,14 @@ config COMMON_CLK_MT8135
 	---help---
 	  This driver supports MediaTek MT8135 clocks.
 
+config COMMON_CLK_MT8167
+	bool "Clock driver for MediaTek MT8167"
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	select COMMON_CLK_MEDIATEK
+	default ARCH_MEDIATEK
+	help
+	  This driver supports MediaTek MT8167 clocks.
+
 config COMMON_CLK_MT8173
 	bool "Clock driver for MediaTek MT8173"
 	depends on ARCH_MEDIATEK || COMPILE_TEST
