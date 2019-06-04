@@ -88,9 +88,11 @@
 #define CAMSV_MODULE_EN					0x10
 #define CAMSV_FMT_SEL					0x14
 #define CAMSV_INT_EN					0x18
+#define CAMSV_SW_CTL					0x20
 #define CAMSV_CLK_EN					0x30
 
 #define CAMSV_TG_SEN_MODE				0x500
+#define CAMSV_TG_VF_CON					0x504
 #define CAMSV_TG_SEN_GRAB_PXL				0x508
 #define CAMSV_TG_SEN_GRAB_LIN				0x50C
 #define CAMSV_TG_PATH_CFG				0x510
@@ -541,10 +543,40 @@ static void mtk_mipicsi_vb2_queue(struct vb2_buffer *vb)
 	spin_unlock(&mipicsi->queue_lock);
 }
 
+static void mtk_mipicsi_cmos_vf_enable(struct mtk_mipicsi_dev *mipicsi,
+				       unsigned int max_camsv_num,
+				       bool enable)
+{
+	void __iomem *base = NULL;
+	u32 mask = enable ? (u32)1 : ~(u32)1;
+	int i;
+
+	for (i = 0; i < max_camsv_num; i++)
+		if (((mipicsi->link_reg_val >> i) & 0x01U) == 0x01U) {
+			if (enable) {
+				/*enable cmos_en and vf_en*/
+				base = mipicsi->camsv[i];
+				writel(readl(base + CAMSV_TG_SEN_MODE) | mask,
+				       base + CAMSV_TG_SEN_MODE);
+				writel(readl(base + CAMSV_TG_VF_CON) | mask,
+				       base + CAMSV_TG_VF_CON);
+			} else {
+				/*disable cmos_en and vf_en*/
+				base = mipicsi->camsv[i];
+				writel(readl(base + CAMSV_TG_SEN_MODE) & mask,
+					base + CAMSV_TG_SEN_MODE);
+				writel(readl(base + CAMSV_TG_VF_CON) & mask,
+					base + CAMSV_TG_VF_CON);
+			}
+		}
+}
+
 static int mtk_mipicsi_vb2_start_streaming(struct vb2_queue *vq,
 		unsigned int count)
 {
 	struct mtk_mipicsi_dev *mipicsi = vb2_get_drv_priv(vq);
+
+	mtk_mipicsi_cmos_vf_enable(mipicsi, mipicsi->camsv_num, true);
 
 	mipicsi->streamon = true;
 
@@ -557,6 +589,8 @@ static void mtk_mipicsi_vb2_stop_streaming(struct vb2_queue *vq)
 	struct mtk_mipicsi_buf *buf = NULL;
 	struct mtk_mipicsi_buf *tmp = NULL;
 	unsigned int index = 0;
+
+	mtk_mipicsi_cmos_vf_enable(mipicsi, mipicsi->camsv_num, false);
 
 	spin_lock(&mipicsi->queue_lock);
 	while (list_empty(&(mipicsi->fb_list)) == 0) {
