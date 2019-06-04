@@ -52,6 +52,7 @@
 
 #define MTK_MIPICSI_DRV_NAME "mtk-mipicsi"
 #define MTK_PLATFORM_STR "platform:mt2712"
+#define MTK_DATAWIDTH_8					(0x01U << 7U)
 #define MAX_SUPPORT_WIDTH             4096U
 #define MAX_SUPPORT_HEIGHT            4096U
 #define MAX_BUFFER_NUM                  32U
@@ -158,6 +159,7 @@ struct mtk_mipicsi_dev {
 	unsigned int			num_user_formats;
 	const struct mtk_format		**user_formats;
 	const struct mtk_format		*current_fmt;
+	u16			width_flags;	/* max 12 bits */
 
 	struct mtk_mipicsi_buf	cam_buf[MAX_BUFFER_NUM];
 	struct list_head	fb_list;
@@ -1522,6 +1524,7 @@ static int mtk_mipicsi_probe(struct platform_device *pdev)
 		goto err_vb2_queue;
 	}
 
+	mipicsi->width_flags = MTK_DATAWIDTH_8;
 	mipicsi->streamon = false;
 
 	ret = mtk_mipicsi_subdev_init(mipicsi);
