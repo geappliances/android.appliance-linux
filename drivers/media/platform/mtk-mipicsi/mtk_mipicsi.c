@@ -120,6 +120,7 @@ struct mtk_mipicsi_subdev {
 	struct device_node *node;
 	struct v4l2_async_subdev asd;
 	struct v4l2_subdev *subdev;
+	unsigned int max_vc;
 };
 
 struct mtk_mipicsi_channel {
@@ -153,6 +154,8 @@ struct mtk_mipicsi_dev {
 	struct mtk_mipicsi_buf	cam_buf[MAX_BUFFER_NUM];
 	struct list_head	fb_list;
 	bool streamon;
+	unsigned int link;
+	u8 link_reg_val;
 	char drv_name[16];
 	u32 id;
 
@@ -181,6 +184,25 @@ static const struct mtk_format mtk_mipicsi_formats[] = {
 	.bpp = 2,
 },
 };
+
+static int get_subdev_link(struct mtk_mipicsi_dev *mipicsi,
+	unsigned int *link, u8 *link_reg_val)
+{
+	struct device *dev = &mipicsi->pdev->dev;
+	struct mtk_mipicsi_subdev *sd = &mipicsi->mipicsi_sd;
+
+	if (sd->max_vc == 1) {
+		*link = 1;
+		*link_reg_val = 0x1;
+		dev_info(dev, "mtk mipicsi support 1 channel\n");
+
+		return 0;
+	}
+
+	dev_info(dev, "mtk mipicsi support %d channel\n", sd->max_vc);
+
+	return 0;
+}
 
 static void mtk_mipicsi_ana_clk_enable(void __iomem *base, bool enable)
 {
@@ -877,6 +899,7 @@ static int mtk_mipicsi_node_parse(struct mtk_mipicsi_dev *mipicsi)
 	struct resource *res = NULL;
 	struct device_node *common_node = NULL;
 	struct platform_device *pdev = NULL;
+	struct mtk_mipicsi_subdev *sd = &mipicsi->mipicsi_sd;
 
 	dev = &mipicsi->pdev->dev;
 	pdev = mipicsi->pdev;
@@ -890,6 +913,14 @@ static int mtk_mipicsi_node_parse(struct mtk_mipicsi_dev *mipicsi)
 	}
 	(void)sprintf(mipicsi->drv_name, MTK_MIPICSI_DRV_NAME"%d",
 		mipicsi->id);
+
+	/*get the number of virtual channel*/
+	ret = of_property_read_u32(dev->of_node, "mediatek,mipicsi_max_vc",
+				   &sd->max_vc);
+	if (ret != 0) {
+		dev_info(dev, "not set mediatek,mipicsi_max_vc, use default value 1\n");
+		sd->max_vc = 1;
+	}
 
 	/* get and parse seninf_mux_camsv */
 	camsv_num = of_count_phandle_with_args(dev->of_node,
@@ -1164,6 +1195,8 @@ static int mtk_mipicsi_open(struct file *file)
 	ret = mtk_mipicsi_set_fmt(mipicsi, &mipicsi->fmt);
 	if (ret)
 		v4l2_subdev_call(sd, core, s_power, 0);
+
+	get_subdev_link(mipicsi, &mipicsi->link, &mipicsi->link_reg_val);
 
 	pm_runtime_get_sync(&mipicsi->pdev->dev);
 
