@@ -25,6 +25,7 @@
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/moduleparam.h>
+#include <linux/time64.h>
 #include <linux/device.h>
 #include <linux/platform_device.h>
 #include <linux/clk.h>
@@ -109,6 +110,15 @@
 
 #define notifier_to_mipicsi(n) container_of(n, struct mtk_mipicsi_dev, \
 					    notifier)
+static int mtk_mipicsi_dbg_level;
+#define mtk_mipicsi_dbg(level, fmt, args...)				 \
+	do {								 \
+		if (mtk_mipicsi_dbg_level >= level)			\
+			pr_info("[MTK_MIPICSI%d] L%d %s %d: " fmt "\n", \
+				mipicsi->id, level,  __func__, __LINE__, \
+				##args);	\
+	} while (0)
+
 /* buffer for one video frame */
 struct mtk_mipicsi_buf {
 	struct list_head queue;
@@ -168,6 +178,8 @@ struct mtk_mipicsi_dev {
 	u8 link_reg_val;
 	char drv_name[16];
 	u32 id;
+	struct timespec64 fps_time_cur;
+	struct timespec64 fps_time_pre;
 
 	spinlock_t		irqlock;
 	spinlock_t		queue_lock;
@@ -535,6 +547,11 @@ static int mtk_mipicsi_vb2_prepare(struct vb2_buffer *vb)
 		buf->prepare_flag = 1;
 		buf->vb_dma_addr_phy =
 			vb2_dma_contig_plane_dma_addr(vb, 0);
+
+		mtk_mipicsi_dbg(1, "vb_dma_addr_phy=%lx size=%d",
+			(unsigned long)buf->vb_dma_addr_phy,
+			vb->planes[0].bytesused);
+
 		buf->vb = vb;
 	}
 
@@ -581,6 +598,8 @@ static void mtk_mipicsi_vb2_queue(struct vb2_buffer *vb)
 		mtk_mipicsi_write_camsv(mipicsi, vb->index, mipicsi->camsv_num);
 
 	spin_unlock(&mipicsi->irqlock);
+
+	mtk_mipicsi_dbg(2, "enqueue NO.%d buffer(%p).", vb->index, vb);
 }
 
 static void mtk_mipicsi_cmos_vf_enable(struct mtk_mipicsi_dev *mipicsi,
@@ -888,6 +907,7 @@ static void mtk_mipicsi_irq_buf_process(struct mtk_mipicsi_dev *mipicsi)
 	struct mtk_mipicsi_buf *tmp = NULL;
 	unsigned int index = 0;
 	unsigned int next = 0;
+	long time_interval;
 
 	for (i = 0; i < mipicsi->camsv_num; ++i)
 		ch[i].irq_status = false;
@@ -895,8 +915,10 @@ static void mtk_mipicsi_irq_buf_process(struct mtk_mipicsi_dev *mipicsi)
 	i = 0;
 
 	/* only one buffer left */
-	if ((&(mipicsi->fb_list))->next->next == &(mipicsi->fb_list))
+	if ((&(mipicsi->fb_list))->next->next == &(mipicsi->fb_list)) {
+		mtk_mipicsi_dbg(1, "only 1 buffer left, drop frame");
 		return;
+	}
 
 	/*for each fb_lst 2 times to get the top 2 buffer.*/
 	list_for_each_entry_safe(new_cam_buf, tmp,
@@ -920,6 +942,21 @@ static void mtk_mipicsi_irq_buf_process(struct mtk_mipicsi_dev *mipicsi)
 		VB2_BUF_STATE_DONE);
 
 	list_del_init(&(mipicsi->cam_buf[index].queue));
+
+	if (mtk_mipicsi_dbg_level >= 2) {
+		ktime_get_real_ts64(&(mipicsi->fps_time_cur));
+
+		time_interval = (mipicsi->fps_time_cur.tv_sec
+			- mipicsi->fps_time_pre.tv_sec) * 1000000000
+			+ (mipicsi->fps_time_cur.tv_nsec
+			- mipicsi->fps_time_pre.tv_nsec);
+		mtk_mipicsi_dbg(0, "time interval is %ld\n",
+			time_interval);
+		mipicsi->fps_time_pre.tv_sec =
+			mipicsi->fps_time_cur.tv_sec;
+		mipicsi->fps_time_pre.tv_nsec =
+			mipicsi->fps_time_cur.tv_nsec;
+	}
 }
 
 static irqreturn_t mtk_mipicsi_isr(int irq, void *data)
@@ -1575,5 +1612,6 @@ static struct platform_driver mtk_mipicsi_driver = {
 };
 
 module_platform_driver(mtk_mipicsi_driver);
+module_param(mtk_mipicsi_dbg_level, int, 0644);
 MODULE_DESCRIPTION("MediaTek SoC Camera Host driver");
 MODULE_LICENSE("GPL v2");
