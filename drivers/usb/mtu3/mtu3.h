@@ -231,6 +231,8 @@ struct otg_switch_mtk {
  * @dma_clk: dma_bus_ck clock for AXI bus etc
  * @dr_mode: works in which mode:
  *		host only, device only or dual-role mode
+ * @otg_srp_reqd: used for SRP request handling.
+ * @otg_hnp_reqd: used for HNP request handling.
  * @u2_ports: number of usb2.0 host ports
  * @u3_ports: number of usb3.0 host ports
  * @u3p_dis_msk: mask of disabling usb3 ports, for example, bit0==1 to
@@ -258,6 +260,8 @@ struct ssusb_mtk {
 	/* otg */
 	struct otg_switch_mtk otg_switch;
 	enum usb_dr_mode dr_mode;
+	bool otg_srp_reqd;
+	bool otg_hnp_reqd;
 	bool is_host;
 	int u2_ports;
 	int u3_ports;
