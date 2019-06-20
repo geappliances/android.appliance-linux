@@ -134,6 +134,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_PCM179X_SPI if SPI_MASTER
 	select SND_SOC_PCM186X_I2C if I2C
 	select SND_SOC_PCM186X_SPI if SPI_MASTER
+	select SND_SOC_TLV320ADC3101 if  I2C
 	select SND_SOC_PCM3008
 	select SND_SOC_PCM3060_I2C if I2C
 	select SND_SOC_PCM3060_SPI if SPI_MASTER
@@ -845,6 +846,16 @@ config SND_SOC_PCM186X_SPI
 	depends on SPI_MASTER
 	select SND_SOC_PCM186X
 	select REGMAP_SPI
+
+config SND_SOC_TLV320ADC3101
+	tristate
+
+config SND_SOC_TLV320ADC3101_I2C
+	tristate "Texas Instruments TLV320ADC3101 CODECs - I2C"
+	depends on I2C
+	select SND_SOC_TLV320ADC3101
+	select REGMAP_I2C
+
 
 config SND_SOC_PCM3008
        tristate
