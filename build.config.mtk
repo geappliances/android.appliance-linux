@@ -1,0 +1,98 @@
+[ -n "${MTK_BUILD_CONFIG_INCLUDED}" ] && return; MTK_BUILD_CONFIG_INCLUDED="y"
+
+# In addition of the environment variables used by build.sh, the following
+# environment variables are considered during execution:
+#
+#   PREBUILT_DIR
+#     Directory where Android prebuilt images could be found.
+#     If set, the build system will update prebuilt image such as boot.img and
+#     vendor.img.
+#     This could be used to only build and update the kernel without having to
+#     to fetch and build Android.
+#
+#     When the PREBUILT_DIR flag is defined, the following flags that point to the
+#     various components needed to update a boot.img also need to be defined.
+#     - UNPACK_BOOTIMG_PATH=<path to unpack_bootimg script which extract boot.img>
+#     - MKBOOTIMG_PATH=<path to the mkbootimg.py script which builds boot.img>
+#       (defaults to tools/mkbootimg/mkbootimg.py)
+#     This also require to have e2tools installed to manipulate the vendor.img.
+#
+
+. ${ROOT_DIR}/src/build.config.common
+. ${ROOT_DIR}/src/build.config.aarch64
+
+DEFCONFIG=mtk_android_defconfig
+POST_DEFCONFIG_CMDS="check_defconfig"
+KERNEL_DIR=src
+FILES="
+arch/arm64/boot/Image
+arch/arm64/boot/dts/mediatek/mt8167-pumpkin.dtb
+arch/arm64/boot/dts/mediatek/mt8183-pumpkin.dtb
+"
+
+SKIP_CP_KERNEL_HDR=1
+# This is needed to generate __symbols__ to apply overlays in bootloader
+DTC_FLAGS="-@"
+
+EXTRA_CMDS="update_prebuilt"
+
+# Configure and enable build MT8183 EVB Connectivity modules
+MTK_COMBO_CHIP=MT6632
+CONFIG_MTK_WIFI_ONLY=m
+CONFIG_MTK_COMBO=m
+CONFIG_MTK_COMBO_WIFI=m
+CONFIG_MTK_COMBO_WIFI_HIF=sdio
+WLAN_CHIP_ID=mt7668
+
+EXT_MODULES="mt7668-wifi-mod"
+
+function product_modules_install() {
+    (cd ${OUT_DIR} && \
+    KERNEL_VERSION=$(make "${TOOL_ARGS[@]}" kernelversion) && \
+    cd ${COMMON_OUT_DIR}/$1/ && \
+    PRODUCT_OUT=${DIST_DIR/common-kernel/${2}-binaries} && \
+    mkdir -p ${PRODUCT_OUT}/ && \
+    find -wholename "*${KERNEL_VERSION}*/*.ko" -exec cp {} ${PRODUCT_OUT} \;)
+}
+
+function product_install() {
+    if [[ $# -ne 2 ]]; then
+        echo "Error: product_install usage: product_directory external_dir"
+        return 1
+    fi
+    product_modules_install $1 $2
+}
+
+function update_vendorimg() {
+    PREBUILT_VENDORIMG=${PREBUILT_DIR}/vendor.img
+    (cd ${OUT_DIR} && KERNEL_VERSION=$(make "${TOOL_ARGS[@]}" kernelversion))
+    simg2img ${PREBUILT_VENDORIMG} ${TMP}/vendor.img
+    find ${COMMON_OUT_DIR}/dist/ -name "*.ko" -exec e2cp {} ${TMP}/vendor.img:/lib/modules/ \;
+    find ${COMMON_OUT_DIR}/dist-binaries/ -name "*.ko" -exec e2cp {} ${TMP}/vendor.img:/lib/modules/ \;
+    img2simg ${TMP}/vendor.img ${PREBUILT_VENDORIMG}
+}
+
+function update_bootimg() {
+    PREBUILT_BOOTIMG=${PREBUILT_DIR}/boot.img
+    BOOTIMG_OUT=$(${UNPACK_BOOTIMG_PATH} --boot_img ${PREBUILT_BOOTIMG} --out ${TMP}/)
+    BOOTIMG_OUT=$(echo "$BOOTIMG_OUT" | tr "\n" ";")
+    BASE_ADDRESS=$(echo $BOOTIMG_OUT | cut -f 3 -d ";" | cut -f 2 -d ":")
+    KERNEL_CMDLINE=$(echo $BOOTIMG_OUT | cut -f 13 -d ";" | cut -f 2 -d ":")
+    cp -r -f ${OUT_DIR}/arch/arm64/boot/Image ${TMP}/kernel
+    ${MKBOOTIMG_PATH} \
+      --kernel ${TMP}/kernel \
+      --ramdisk ${TMP}/ramdisk \
+      --cmdline "${KERNEL_CMDLINE}" \
+      --base ${BASE_ADDRESS} \
+      -o ${PREBUILT_BOOTIMG}
+}
+
+function update_prebuilt() {
+    if [ -n "$PREBUILT_DIR" ]; then
+        TMP=${COMMON_OUT_DIR}/tmp
+        mkdir -p ${TMP}/vendor
+        update_bootimg
+        update_vendorimg
+        rm -r -f ${TMP}
+    fi
+}
