@@ -1,0 +1,26 @@
+. ${ROOT_DIR}/src/build.config.common
+. ${ROOT_DIR}/src/build.config.aarch64
+
+BRANCH=android-mtk-4.19-r
+DEFCONFIG=mtk_android_defconfig
+KERNEL_DIR=src
+EXTRA_CMDS=''
+POST_DEFCONFIG_CMDS="check_defconfig && set_make_args"
+POST_KERNEL_BUILD_CMDS="save_defconfig"
+FILES="defconfig"
+
+STOP_SHIP_TRACEPRINTK=1
+SKIP_CP_KERNEL_HDR=1
+SKIP_MRPROPER=1
+SKIP_EXT_MODULES=1
+
+function set_make_args() {
+    MAKE_ARGS="${MAKE_ARGS} menuconfig"
+}
+
+function save_defconfig() {
+    (cd ${OUT_DIR} && \
+     make ${CC_LD_ARG} O=${OUT_DIR} $archsubarch CROSS_COMPILE=${CROSS_COMPILE} savedefconfig && \
+     cd - && \
+     cp ${OUT_DIR}/defconfig ${KERNEL_DIR}/arch/${ARCH}/configs/${DEFCONFIG})
+}
