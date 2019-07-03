@@ -961,5 +961,17 @@
 			clock-names = "apb", "smi", "gals";
 			power-domains = <&scpsys MT8183_POWER_DOMAIN_CAM>;
 		};
+
+		mmc0: mmc@11230000 {
+			compatible = "mediatek,mt8183-mmc";
+			reg = <0 0x11230000 0 0x1000>,
+			      <0 0x11f50000 0 0x1000>;
+			interrupts = <GIC_SPI 77 IRQ_TYPE_LEVEL_LOW>;
+			clocks = <&topckgen CLK_TOP_MUX_MSDC50_0>,
+				 <&infracfg CLK_INFRA_MSDC0>,
+				 <&infracfg CLK_INFRA_MSDC0_SCK>;
+			clock-names = "source", "hclk", "source_cg";
+			status = "disabled";
+		};
 	};
 };
