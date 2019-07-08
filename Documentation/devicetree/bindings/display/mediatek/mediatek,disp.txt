@@ -53,6 +53,7 @@ Required properties (all function blocks):
   For most function blocks this is just a single clock input. Only the DSI and
   DPI controller nodes have multiple clock inputs. These are documented in
   mediatek,dsi.txt and mediatek,dpi.txt, respectively.
+  for MT8183 mutex, this hardware is always free run, has no clocks control 
 
 Required properties (DMA function blocks):
 - compatible: Should be one of
