@@ -434,6 +434,9 @@ static unsigned int mtk_ddp_sout_sel(const struct mtk_mmsys_reg_data *data,
 	} else if (cur == DDP_COMPONENT_RDMA0 && next == DDP_COMPONENT_COLOR0) {
 		*addr = data->rdma0_sout_sel_in;
 		value = data->rdma0_sout_color0;
+	} else if (cur == DDP_COMPONENT_RDMA1 && next == DDP_COMPONENT_DSI0) {
+		*addr = data->rdma1_sout_sel_in;
+		value = data->rdma1_sout_dsi0;
 	} else {
 		value = 0;
 	}
