@@ -30,6 +30,7 @@ Required properties (all function blocks):
 	"mediatek,<chip>-disp-ovl"   		- overlay (4 layers, blending, csc)
 	"mediatek,<chip>-disp-ovl-2l"           - overlay (2 layers, blending, csc)
 	"mediatek,<chip>-disp-rdma"  		- read DMA / line buffer
+	"mediatek,<chip>-disp-rdma1"            - function is same with RDMA, fifo size is different
 	"mediatek,<chip>-disp-wdma"  		- write DMA
 	"mediatek,<chip>-disp-ccorr"            - color correction
 	"mediatek,<chip>-disp-color" 		- color processor
