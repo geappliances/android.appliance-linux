@@ -39,6 +39,11 @@ bool enable_cursor = true;
 module_param_named(enable_cursor, enable_cursor, bool, 0444);
 MODULE_PARM_DESC(enable_cursor, "Enable/Disable cursor support");
 
+bool virtual_hw;
+module_param_named(virtual_hw, virtual_hw, bool, 0444);
+MODULE_PARM_DESC(virtual_hw,
+		 "Enable virtual hardware mode (disables vblanks and immediately completes flips)");
+
 DEFINE_DRM_GEM_FOPS(vkms_driver_fops);
 
 
@@ -153,9 +158,13 @@ static int __init vkms_init(void)
 		goto out_fini;
 	}
 
-	vkms_device->drm.irq_enabled = true;
+	vkms_device->output.disable_vblank =  virtual_hw;
+	vkms_device->drm.irq_enabled = !virtual_hw;
 
-	ret = drm_vblank_init(&vkms_device->drm, 1);
+	if (virtual_hw)
+		DRM_INFO("Virtual hardware mode enabled");
+
+	ret = (virtual_hw) ? 0 : drm_vblank_init(&vkms_device->drm, 1);
 	if (ret) {
 		DRM_ERROR("Failed to vblank\n");
 		goto out_fini;
