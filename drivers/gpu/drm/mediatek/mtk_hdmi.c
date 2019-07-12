@@ -37,6 +37,8 @@
 struct mtk_hdmi_conf {
 	uint32_t sys_cfg1c;
 	uint32_t sys_cfg20;
+	uint32_t hdisplay_max;
+	uint32_t vdisplay_max;
 };
 
 enum mtk_hdmi_clk_id {
@@ -1257,6 +1259,14 @@ static int mtk_hdmi_conn_mode_valid(struct drm_connector *conn,
 			return MODE_BAD;
 	}
 
+	if (hdmi->conf->hdisplay_max &&
+	    mode->hdisplay > hdmi->conf->hdisplay_max)
+		return MODE_BAD;
+
+	if (hdmi->conf->vdisplay_max &&
+	    mode->vdisplay > hdmi->conf->vdisplay_max)
+		return MODE_BAD;
+
 	if (mode->clock < 27000)
 		return MODE_CLOCK_LOW;
 	if (mode->clock > 297000)
@@ -1777,6 +1787,8 @@ static struct mtk_hdmi_conf mt8173_conf = {
 static struct mtk_hdmi_conf mt8167_conf = {
 	.sys_cfg1c = MT8167_HDMI_SYS_CFG1C,
 	.sys_cfg20 = MT8167_HDMI_SYS_CFG20,
+	.hdisplay_max = 1920,
+	.vdisplay_max = 1080,
 };
 
 static const struct of_device_id mtk_drm_hdmi_of_ids[] = {
