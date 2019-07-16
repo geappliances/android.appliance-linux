@@ -347,6 +347,9 @@
 				 <MT8516_PIN_39_MRG_DO__FUNC_EXT_MDC>;
 		};
 	};
+
+	usb1_default_pins: usb1_pins {
+	};
 };
 
 &mmc1 {
@@ -406,5 +409,11 @@
 };
 
 &usb0_phy {
+	status = "okay";
+};
+
+&usb1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&usb1_default_pins>;
 	status = "okay";
 };
