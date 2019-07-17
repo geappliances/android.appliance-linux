@@ -14,6 +14,13 @@
 		ethernet0 = &ethernet;
 	};
 
+	firmware {
+		optee: optee@4fd00000 {
+			compatible = "linaro,optee-tz";
+			method = "smc";
+		};
+	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 		input-name = "gpio-keys";
