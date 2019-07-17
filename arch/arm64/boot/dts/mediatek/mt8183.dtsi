@@ -179,6 +179,12 @@
 		compatible = "simple-bus";
 		ranges;
 
+		watchdog: watchdog@10007000 {
+			compatible = "mediatek,mt8183-wdt",
+				      "mediatek,mt6589-wdt";
+			reg = <0 0x10007000 0 0x100>;
+		};
+
 		soc_data: soc_data@8000000 {
 			compatible = "mediatek,mt8183-efuse",
 				     "mediatek,efuse";
