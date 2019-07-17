@@ -6,7 +6,6 @@
 
 #include <dt-bindings/gpio/gpio.h>
 
-#include "mt8516.dtsi"
 #include "mt6392.dtsi"
 
 / {

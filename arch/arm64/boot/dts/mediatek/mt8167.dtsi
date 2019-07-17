@@ -168,30 +168,34 @@
 };
 
 &topckgen {
-	compatible = "mediatek,mt8167-topckgen", "syscon";
+	compatible = "mediatek,mt8167-topckgen",
+		     "mediatek,mt8516-topckgen", "syscon";
 	reg = <0 0x10000000 0 0x1000>;
 	#clock-cells = <1>;
 };
 
 &infracfg {
-	compatible = "mediatek,mt8167-infracfg", "syscon";
+	compatible = "mediatek,mt8167-infracfg",
+		     "mediatek,mt8516-infracfg", "syscon";
 	reg = <0 0x10001000 0 0x1000>;
 	#clock-cells = <1>;
 };
 
 &apmixedsys {
-	compatible = "mediatek,mt8167-apmixedsys", "syscon";
+	compatible = "mediatek,mt8167-apmixedsys",
+		     "mediatel,mt8516-apmixedsys", "syscon";
 	reg = <0 0x10018000 0 0x710>;
 	#clock-cells = <1>;
 };
 
 &syscfg_pctl_a {
-	compatible = "mediatek,mt8167-pctl-a-syscfg", "syscon";
+	compatible = "mediatek,mt8167-pctl-a-syscfg",
+		     "mediatek,mt8516-pctl-a-syscfg", "syscon";
 	reg = <0 0x10005000 0 0x1000>;
 };
 
 &pio {
-	compatible = "mediatek,mt8167-pinctrl";
+	compatible = "mediatek,mt8167-pinctrl", "mediatek,mt8516-pinctrl";
 	reg = <0 0x1000b000 0 0x1000>;
 	mediatek,pctl-regmap = <&syscfg_pctl_a>;
 	pins-are-numbered;

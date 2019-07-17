@@ -6,9 +6,9 @@
 
 /dts-v1/;
 
+#include "mt8167.dtsi"
 #include "pumpkin-common.dtsi"
 #include "pumpkin-emmc-common.dtsi"
-#include "mt8167.dtsi"
 
 / {
 	model = "Pumpkin MT8167";
