@@ -314,27 +314,6 @@
 		};
 	};
 
-	/* XXX: these two are not really part of the eMMC driver and are
-	 * not being used. Look whether they are not really related to
-	 * Wi-Fi/Bluetooth
-	 */
-	mmc1_pins_dat1: mmc1_dat1 {
-		pins_dat1 {
-			pinmux = <MT8516_PIN_107_MSDC1_DAT1__FUNC_MSDC1_DAT1>;
-			input-enable;
-			drive-strength = <MTK_DRIVE_8mA>;
-			bias-pull-up = <MTK_PUPD_SET_R1R0_10>;
-		};
-	};
-
-	mmc1_dat1_eint: dat1_eint {
-		pins_dat1 {
-			pinmux = <MT8516_PIN_107_MSDC1_DAT1__FUNC_GPIO107>;
-			input-enable;
-			bias-pull-up = <MTK_PUPD_SET_R1R0_10>;
-		};
-	};
-
 	mmc2_pins_default: mmc2default {
 		pins_cmd_dat {
 			pinmux = <MT8516_PIN_70_MSDC2_DAT0__FUNC_MSDC2_DAT0>,
@@ -396,12 +375,9 @@
 };
 
 &mmc1 {
-	pinctrl-names = "default", "state_uhs", "state_dat1", "state_eint";
+	pinctrl-names = "default", "state_uhs";
 	pinctrl-0 = <&mmc1_pins_default>;
 	pinctrl-1 = <&mmc1_pins_uhs>;
-	pinctrl-2 = <&mmc1_pins_dat1>;
-	pinctrl-3 = <&mmc1_dat1_eint>;
-	eint-gpios = <&pio 107 GPIO_ACTIVE_HIGH>;
 	bus-width = <4>;
 	max-frequency = <200000000>;
 	cap-sd-highspeed;
