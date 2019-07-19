@@ -13,6 +13,11 @@
 		ethernet0 = &ethernet;
 		ethernet1 = &wifi;
 		ethernet2 = &bluetooth;
+		serial0 = &uart0;
+	};
+
+	chosen {
+		stdout-path = "serial0:921600n8";
 	};
 
 	firmware {
