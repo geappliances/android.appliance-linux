@@ -373,6 +373,14 @@
 
 	usb1_default_pins: usb1_pins {
 	};
+
+	spi_pins_a: spi@0 {
+		pins1 {
+			pinmux = <MT8516_PIN_49_SPI_CK__FUNC_SPI_CLK>,
+				 <MT8516_PIN_51_SPI_MO__FUNC_SPI_MO>;
+			bias-disable;
+		};
+	};
 };
 
 &mmc1 {
@@ -459,4 +467,9 @@
 	mediatek,awb-irq-mode = <4>;
 	/*0(Spearated Mode) 1(Share Mode)*/
 	mediatek,i2s-clock-modes = <1 1>;
+};
+
+&spi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&spi_pins_a>;
 };
