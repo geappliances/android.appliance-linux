@@ -27,7 +27,7 @@
 #define STAR_DRV_VERSION "version-1.0"
 #define ETH_WOL_NAME "WOL"
 
-int star_dbg_level = STAR_DBG_MAX;
+int star_dbg_level = STAR_ERR;
 
 static void star_finish_xmit(struct net_device *dev);
 
@@ -882,7 +882,7 @@ static int star_probe(struct platform_device *pdev)
 	star_prv->opened = false;
 
 #ifdef ETH_SUPPORT_WOL
-	STAR_MSG(STAR_ERR, "%s() support WOL\n", __func__);
+	STAR_MSG(STAR_DBG, "%s() support WOL\n", __func__);
 	star_prv->support_wol = true;
 #endif
 	star_dev = &star_prv->star_dev;
@@ -983,7 +983,7 @@ static int star_probe(struct platform_device *pdev)
 
 	star_dev->star_prv = star_prv;
 
-	STAR_MSG(STAR_ERR, "Ethernet disable powerdown!\n");
+	STAR_MSG(STAR_DBG, "Ethernet disable powerdown!\n");
 	star_nic_pdset(star_dev, false);
 
 	star_hw_init(star_dev);
@@ -1015,7 +1015,7 @@ static int star_probe(struct platform_device *pdev)
 	/* If the mac address is invalid, use random mac address  */
 	if (!is_valid_ether_addr(netdev->dev_addr)) {
 		random_ether_addr(netdev->dev_addr);
-		STAR_MSG(STAR_DBG, "generated random MAC address %pM\n",
+		STAR_MSG(STAR_WARN, "generated random MAC address %pM\n",
 			netdev->dev_addr);
 		netdev->addr_assign_type = NET_ADDR_RANDOM;
 	}
@@ -1025,7 +1025,7 @@ static int star_probe(struct platform_device *pdev)
 		STAR_MSG(STAR_ERR, "no IRQ resource found\n");
 		goto phy_detect_fail;
 	}
-	STAR_MSG(STAR_ERR, "eth irq (%d)\n", netdev->irq);
+	STAR_MSG(STAR_DBG, "eth irq (%d)\n", netdev->irq);
 
 #ifdef CONFIG_STAR_USE_RMII_MODE
 	star_prv->eint_pin = of_get_named_gpio(np, "eth-gpios", 0);
@@ -1054,7 +1054,7 @@ static int star_probe(struct platform_device *pdev)
 	if (ret)
 		STAR_MSG(STAR_WARN, "star_init_procfs fail\n");
 
-	STAR_MSG(STAR_WARN, "star_probe success.\n");
+	STAR_MSG(STAR_DBG, "star_probe success.\n");
 
 	return 0;
 
@@ -1115,13 +1115,13 @@ static int __init star_init(void)
 {
 	int err;
 
-	STAR_MSG(STAR_WARN, "enter %s\n", __func__);
+	STAR_MSG(STAR_DBG, "enter %s\n", __func__);
 
 	err = platform_driver_register(&star_pdrv);
 	if (err)
 		return err;
 
-	STAR_MSG(STAR_WARN, "%s success.\n", __func__);
+	STAR_MSG(STAR_DBG, "%s success.\n", __func__);
 	return 0;
 }
 
@@ -1129,7 +1129,7 @@ static void __exit star_exit(void)
 {
 	platform_device_unregister(star_pdev);
 	platform_driver_unregister(&star_pdrv);
-	STAR_MSG(STAR_WARN, "%s ...\n", __func__);
+	STAR_MSG(STAR_DBG, "%s ...\n", __func__);
 }
 
 module_init(star_init);

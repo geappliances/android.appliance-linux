@@ -153,7 +153,7 @@ enum {
 };
 
 #ifndef STAR_DBG_LVL_DEFAULT
-#define STAR_DBG_LVL_DEFAULT STAR_DBG
+#define STAR_DBG_LVL_DEFAULT STAR_ERR
 #endif
 
 extern int star_dbg_level;
