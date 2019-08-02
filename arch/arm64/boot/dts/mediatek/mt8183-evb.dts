@@ -66,6 +66,14 @@
 		regulator-always-on;
 		regulator-boot-on;
 	};
+
+	sound {
+		compatible = "mediatek,mt8183-mt6358-sound";
+		mediatek,platform = <&afe>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&aud_pins>;
+		status = "okay";
+	};
 };
 
 &auxadc {
@@ -303,6 +311,19 @@
 			pinmux = <PINMUX_GPIO43__FUNC_DISP_PWM>;
 		};
 	};
+
+	aud_pins: audiopins {
+		pins_bus {
+			pinmux = <PINMUX_GPIO136__FUNC_AUD_CLK_MOSI>,
+				<PINMUX_GPIO137__FUNC_AUD_SYNC_MOSI>,
+				<PINMUX_GPIO138__FUNC_AUD_DAT_MOSI0>,
+				<PINMUX_GPIO139__FUNC_AUD_DAT_MOSI1>,
+				<PINMUX_GPIO140__FUNC_AUD_CLK_MISO>,
+				<PINMUX_GPIO141__FUNC_AUD_SYNC_MISO>,
+				<PINMUX_GPIO142__FUNC_AUD_DAT_MISO0>,
+				<PINMUX_GPIO143__FUNC_AUD_DAT_MISO1>;
+		};
+	};
 };
 
 &spi0 {
@@ -423,4 +444,8 @@
 			};
 		};
 	};
+};
+
+&mt6358codec {
+	Avdd-supply = <&mt6358_vaud28_reg>;
 };
