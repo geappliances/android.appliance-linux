@@ -527,5 +527,19 @@
 				<&topckgen CLK_TOP_RG_APLL1_D8_EN>,
 				<&topckgen CLK_TOP_RG_APLL2_D8_EN>;
 		};
+
+		xo: xo@10210000 {
+			compatible = "mediatek,mt8167-xo";
+			reg = <0 0x10210000 0 0x1000>;
+			default_capid = <0x00>;
+			clocks = <&topckgen CLK_TOP_BSI>,
+				 <&topckgen CLK_TOP_RG_BSI>,
+				 <&topckgen CLK_TOP_BSI_SEL>,
+				 <&topckgen CLK_TOP_CLK26M>;
+			clock-names = "bsi",
+				      "rgbsi",
+				      "bsisel",
+				      "clk26m";
+		};
 	};
 };
