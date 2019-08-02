@@ -876,7 +876,7 @@ static void xocap_work_func(struct work_struct *work)
 	uint32_t capid;
 	int ret;
 
-	pr_debug("[XO] xocap_work_func\n");
+	pr_err("[XO] xocap_work_func\n");
 	bsi_clock_enable(true);
 
 	capid = XO_trim_read();
@@ -900,7 +900,7 @@ static void xocap_work_func(struct work_struct *work)
 
 static void xocap_timer_func(struct timer_list *timer)
 {
-	pr_debug("[XO] xocap_timer_func\n");
+	pr_err("[XO] xocap_timer_func\n");
 	schedule_work(&xocap_work);
 }
 
