@@ -378,6 +378,12 @@
 		};
 	};
 
+	pwm1_pin_default: pwm1_pin_default {
+		pwm {
+			pinmux = <PINMUX_GPIO90__FUNC_PWM_A>;
+		};
+	};
+
 	ctp_pins_default: ctp_pins_default {
 		pins_eint_ctp {
 			pinmux = <PINMUX_GPIO176__FUNC_GPIO176>;
@@ -484,4 +490,10 @@
 
 &uart0 {
 	status = "okay";
+};
+
+&pwm1 {
+	status = "okay";
+	pinctrl-0 = <&pwm1_pin_default>;
+	pinctrl-names = "default";
 };
