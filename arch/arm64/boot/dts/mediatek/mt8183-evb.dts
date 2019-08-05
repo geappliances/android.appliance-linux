@@ -321,6 +321,12 @@
 		};
 	};
 
+	pwm1_pin_default: pwm1_pin_default {
+		pwm {
+			pinmux = <PINMUX_GPIO90__FUNC_PWM_A>;
+		};
+	};
+
 	aud_pins: audiopins {
 		pins_bus {
 			pinmux = <PINMUX_GPIO136__FUNC_AUD_CLK_MOSI>,
@@ -487,6 +493,12 @@
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pwm0_pin_default>;
+};
+
+&pwm1 {
+	status = "okay";
+	pinctrl-0 = <&pwm1_pin_default>;
+	pinctrl-names = "default";
 };
 
 &dsi0 {
