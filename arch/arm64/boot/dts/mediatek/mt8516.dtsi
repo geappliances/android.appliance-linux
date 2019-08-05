@@ -541,5 +541,20 @@
 				      "bsisel",
 				      "clk26m";
 		};
+
+		pwm: pwm@11008000 {
+			compatible = "mediatek,mt8516-pwm";
+			reg = <0 0x11008000 0 0x1000>;
+			interrupts = <GIC_SPI 76 IRQ_TYPE_LEVEL_LOW>;
+			clocks = <&topckgen CLK_TOP_PWM>,
+				 <&topckgen CLK_TOP_PWM_B>,
+				 <&topckgen CLK_TOP_PWM1_FB>,
+				 <&topckgen CLK_TOP_PWM2_FB>,
+				 <&topckgen CLK_TOP_PWM3_FB>,
+				 <&topckgen CLK_TOP_PWM4_FB>,
+				 <&topckgen CLK_TOP_PWM5_FB>;
+			clock-names = "top", "main", "pwm1", "pwm2", "pwm3",
+				      "pwm4", "pwm5";
+		};
 	};
 };
