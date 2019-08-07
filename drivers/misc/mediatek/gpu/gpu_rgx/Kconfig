@@ -1,0 +1,2 @@
+config RGX_M1_13_5776728
+	tristate "Imagination Rogue GX M1.13_5776728 driver"
