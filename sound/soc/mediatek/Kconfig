@@ -186,3 +186,12 @@ config SND_SOC_MT8516_PUMPKIN_MACH
          platforms with internal audio codec and speaker codec CS4382A.
          Select Y if you have such device.
          If unsure select "N".
+
+config SND_SOC_MT8516_VESPER
+	tristate "ASoC Audio driver for MT8516-Vesper"
+	select SND_SOC_MT8167
+	select SND_SOC_MT8167_CODEC
+	help
+	  This adds support for ASoC machine driver for Mediatek MT8516 Vesper
+	  Select Y if you have such device.
+	  If unsure select "N".
