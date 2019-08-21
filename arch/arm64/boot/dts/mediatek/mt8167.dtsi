@@ -77,6 +77,52 @@
 			#iommu-cells = <1>;
 		};
 
+		mfg: clark@13000000 {
+			compatible = "mediatek,mt8167-clark";
+			reg = <0 0x13000000 0 0x80000>, <0 0x13ffe000 0 0x1000>;
+			interrupts = <GIC_SPI 185 IRQ_TYPE_LEVEL_LOW>;
+			interrupt-names = "RGX";
+			power-domains =  <&scpsys MT8167_POWER_DOMAIN_MFG>;
+			clocks = <&topckgen CLK_TOP_MFG_MM_SEL>,
+				 <&topckgen CLK_TOP_AXI_MFG_IN_SEL>,
+				 <&topckgen CLK_TOP_SLOW_MFG_SEL>,
+				 <&topckgen CLK_TOP_RG_SLOW_MFG>,
+				 <&topckgen CLK_TOP_RG_AXI_MFG>,
+				 <&topckgen CLK_TOP_MFG_MM>,
+				 <&topckgen CLK_TOP_CLK26M>,
+				 <&topckgen CLK_TOP_UNIVPLL_D24>,
+				 <&topckgen CLK_TOP_MAINPLL_D11>,
+				 <&topckgen CLK_TOP_CSW_MUX_MFG_SEL>;
+			clock-names = "mfg_mm_in_sel",
+				      "mfg_axi_in_sel",
+				      "mfg_slow_in_sel",
+				      "top_slow",
+				      "top_axi",
+				      "top_mm",
+				      "slow_clk26m",
+				      "bus_univpll_d24",
+				      "bus_mainpll_d11",
+				      "engine_csw_mux";
+			clock-frequency = <400000000>;
+		};
+
+		mfgcfg: mfgcfg@13ffe000 {
+			compatible = "mediatek,mt8167-mfgcfg", "syscon";
+			reg = <0 0x13ffe000 0 0x1000>;
+			#clock-cells = <1>;
+		};
+
+
+		mfg_async: mfgsys-async {
+			compatible = "mediatek,mt8167-mfg-async";
+			power-domains = <&scpsys MT8167_POWER_DOMAIN_MFG_ASYNC>;
+		};
+
+		mfg_2d: mfgsys-2d {
+			compatible = "mediatek,mt8167-mfg-2d";
+			power-domains = <&scpsys MT8167_POWER_DOMAIN_MFG_2D>;
+		};
+
 		smi_common: smi@14017000 {
 			compatible = "mediatek,mt8167-smi-common";
 			reg = <0 0x14017000 0 0x1000>;
