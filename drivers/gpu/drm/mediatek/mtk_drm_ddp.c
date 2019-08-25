@@ -13,11 +13,13 @@
 #include "mtk_drm_ddp.h"
 #include "mtk_drm_ddp_comp.h"
 
+#define DISP_REG_CONFIG_DISP_DITHER_MOUT_EN	0x038
 #define DISP_REG_CONFIG_DISP_OVL0_MOUT_EN	0x040
 #define DISP_REG_CONFIG_DISP_OVL1_MOUT_EN	0x044
 #define DISP_REG_CONFIG_DISP_OD_MOUT_EN		0x048
 #define DISP_REG_CONFIG_DISP_GAMMA_MOUT_EN	0x04c
 #define DISP_REG_CONFIG_DISP_UFOE_MOUT_EN	0x050
+#define DISP_REG_CONFIG_DISP_RDMA0_SOUT_SEL_IN	0x06c
 #define DISP_REG_CONFIG_DISP_COLOR0_SEL_IN	0x084
 #define DISP_REG_CONFIG_DISP_COLOR1_SEL_IN	0x088
 #define DISP_REG_CONFIG_DSIE_SEL_IN		0x0a4
@@ -193,6 +195,9 @@
 
 #define OVL0_MOUT_EN_OVL0_2L		BIT(4)
 
+#define DITHER_MOUT_EN_RDMA            0x1
+#define RDMA0_SOUT_SEL_IN_DSI0         0x2
+
 struct mtk_disp_mutex {
 	int id;
 	bool claimed;
@@ -237,6 +242,7 @@ struct mtk_mmsys_reg_data {
 	u32 dpi1_sel_in_rdma1;
 	u32 dsi0_sel_in;
 	u32 dsi0_sel_in_rdma1;
+	u32 color0_sel_in;
 };
 
 static const unsigned int mt2701_mutex_mod[DDP_COMPONENT_ID_MAX] = {
@@ -270,7 +276,9 @@ static const unsigned int mt2712_mutex_mod[DDP_COMPONENT_ID_MAX] = {
 
 static const unsigned int mt8167_mutex_mod[DDP_COMPONENT_ID_MAX] = {
 	[DDP_COMPONENT_AAL0] = MT8167_MUTEX_MOD_DISP_AAL,
+	[DDP_COMPONENT_CCORR] = MT8167_MUTEX_MOD_DISP_CCORR,
 	[DDP_COMPONENT_COLOR0] = MT8167_MUTEX_MOD_DISP_COLOR,
+	[DDP_COMPONENT_DITHER] = MT8167_MUTEX_MOD_DISP_DITHER,
 	[DDP_COMPONENT_GAMMA] = MT8167_MUTEX_MOD_DISP_GAMMA,
 	[DDP_COMPONENT_OVL0] = MT8167_MUTEX_MOD_DISP_OVL0,
 	[DDP_COMPONENT_OVL1] = MT8167_MUTEX_MOD_DISP_OVL1,
@@ -375,11 +383,12 @@ static const struct mtk_ddp_data mt8183_ddp_driver_data = {
 };
 
 const struct mtk_mmsys_reg_data mt2701_mmsys_reg_data = {
-	.ovl0_mout_en = DISP_REG_CONFIG_DISP_OVL_MOUT_EN,
+	.ovl0_mout_en = DISP_REG_CONFIG_DISP_OVL0_MOUT_EN,
 	.dsi0_sel_in = DISP_REG_CONFIG_DSI_SEL,
 	.dsi0_sel_in_rdma1 = DSI_SEL_IN_RDMA,
 	.rdma1_sout_dpi1 = RDMA1_SOUT_DPI1,
 	.dpi1_sel_in = DISP_REG_CONFIG_DPI_SEL_IN,
+	.color0_sel_in = DISP_REG_CONFIG_DISP_COLOR0_SEL_IN,
 };
 
 const struct mtk_mmsys_reg_data mt8167_mmsys_reg_data = {
@@ -388,6 +397,10 @@ const struct mtk_mmsys_reg_data mt8167_mmsys_reg_data = {
 	.rdma1_sout_dpi1 = 0x2,
 	.dpi1_sel_in = 0x74,
 	.dpi1_sel_in_rdma1 = 0x2,
+
+	.dsi0_sel_in = 0x64,
+	.ovl0_mout_en = 0x30,
+	.color0_sel_in = 0x58,
 };
 
 const struct mtk_mmsys_reg_data mt8173_mmsys_reg_data = {
@@ -400,6 +413,7 @@ const struct mtk_mmsys_reg_data mt8173_mmsys_reg_data = {
 	.dsi0_sel_in_rdma1 = DSI0_SEL_IN_RDMA1,
 	.rdma1_sout_dpi1 = RDMA1_SOUT_DPI1,
 	.dpi1_sel_in = DISP_REG_CONFIG_DPI_SEL_IN,
+	.color0_sel_in = DISP_REG_CONFIG_DISP_COLOR0_SEL_IN,
 };
 
 const struct mtk_mmsys_reg_data mt8183_mmsys_reg_data = {
@@ -414,6 +428,7 @@ const struct mtk_mmsys_reg_data mt8183_mmsys_reg_data = {
 	.dsi0_sel_in_rdma1 = MT8183_DSI0_SEL_IN_RDMA1,
 	.rdma1_sout_dpi1 = RDMA1_SOUT_DPI1,
 	.dpi1_sel_in = DISP_REG_CONFIG_DPI_SEL_IN,
+	.color0_sel_in = DISP_REG_CONFIG_DISP_COLOR0_SEL_IN,
 };
 
 static unsigned int mtk_ddp_mout_en(const struct mtk_mmsys_reg_data *data,
@@ -429,6 +444,9 @@ static unsigned int mtk_ddp_mout_en(const struct mtk_mmsys_reg_data *data,
 	} else if (cur == DDP_COMPONENT_OVL0 && next == DDP_COMPONENT_RDMA0) {
 		*addr = data->ovl0_mout_en;
 		value = OVL_MOUT_EN_RDMA;
+	} else if (cur == DDP_COMPONENT_DITHER && next == DDP_COMPONENT_RDMA0) {
+		*addr = DISP_REG_CONFIG_DISP_DITHER_MOUT_EN;
+		value = DITHER_MOUT_EN_RDMA;
 	} else if (cur == DDP_COMPONENT_OD0 && next == DDP_COMPONENT_RDMA0) {
 		*addr = DISP_REG_CONFIG_DISP_OD_MOUT_EN;
 		value = OD_MOUT_EN_RDMA0;
@@ -473,7 +491,7 @@ static unsigned int mtk_ddp_sel_in(const struct mtk_mmsys_reg_data *data,
 	unsigned int value;
 
 	if (cur == DDP_COMPONENT_OVL0 && next == DDP_COMPONENT_COLOR0) {
-		*addr = DISP_REG_CONFIG_DISP_COLOR0_SEL_IN;
+		*addr = data->color0_sel_in;
 		value = COLOR0_SEL_IN_OVL0;
 	} else if (cur == DDP_COMPONENT_RDMA1 && next == DDP_COMPONENT_DPI0) {
 		*addr = data->dpi0_sel_in;
@@ -544,6 +562,9 @@ static unsigned int mtk_ddp_sout_sel(const struct mtk_mmsys_reg_data *data,
 	} else if (cur == DDP_COMPONENT_BLS && next == DDP_COMPONENT_DPI0) {
 		*addr = DISP_REG_CONFIG_OUT_SEL;
 		value = BLS_TO_DPI_RDMA1_TO_DSI;
+	} else if (cur == DDP_COMPONENT_RDMA0 && next == DDP_COMPONENT_DSI0) {
+		*addr = DISP_REG_CONFIG_DISP_RDMA0_SOUT_SEL_IN;
+		value = RDMA0_SOUT_SEL_IN_DSI0;
 	} else if (cur == DDP_COMPONENT_RDMA0 && next == DDP_COMPONENT_DPI0) {
 		*addr = DISP_REG_CONFIG_DISP_RDMA0_SOUT_EN;
 		value = RDMA0_SOUT_DPI0;
