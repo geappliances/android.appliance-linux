@@ -273,6 +273,13 @@ static void mtk_mipi_tx_power_off_signal(struct phy *phy)
 		mtk_mipi_tx_clear_bits(mipi_tx, reg, RG_DSI_LNTx_LDOOUT_EN);
 }
 
+const struct mtk_mipitx_data mt8167_mipitx_data = {
+	.mppll_preserve = (3 << 8),
+	.mipi_tx_clk_ops = &mtk_mipi_tx_pll_ops,
+	.mipi_tx_enable_signal = mtk_mipi_tx_power_on_signal,
+	.mipi_tx_disable_signal = mtk_mipi_tx_power_off_signal,
+};
+
 const struct mtk_mipitx_data mt2701_mipitx_data = {
 	.mppll_preserve = (3 << 8),
 	.mipi_tx_clk_ops = &mtk_mipi_tx_pll_ops,
