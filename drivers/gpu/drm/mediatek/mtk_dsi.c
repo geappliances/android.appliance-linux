@@ -193,6 +193,7 @@ struct mtk_dsi {
 
 	struct clk *engine_clk;
 	struct clk *digital_clk;
+	struct clk *mipi26mdbg;
 	struct clk *hs_clk;
 
 	u32 data_rate;
@@ -284,6 +285,9 @@ static void mtk_dsi_disable(struct mtk_dsi *dsi)
 
 static void mtk_dsi_reset_all(struct mtk_dsi *dsi)
 {
+	if (!dsi->mmsys_sw_rst_b)
+		return;
+
 	regmap_update_bits(dsi->mmsys_sw_rst_b, dsi->sw_rst_b,
 			   MMSYS_SW_RST_DSI_B, ~MMSYS_SW_RST_DSI_B);
 	usleep_range(1000, 1100);
@@ -646,6 +650,12 @@ static int mtk_dsi_poweron(struct mtk_dsi *dsi)
 
 	phy_power_on(dsi->phy);
 
+	ret = clk_prepare_enable(dsi->mipi26mdbg);
+	if (ret < 0) {
+		dev_err(dev, "Failed to enable mipi26mdbg clock: %d\n", ret);
+		goto err_phy_power_off;
+	}
+
 	ret = clk_prepare_enable(dsi->engine_clk);
 	if (ret < 0) {
 		dev_err(dev, "Failed to enable engine clock: %d\n", ret);
@@ -675,7 +685,7 @@ static int mtk_dsi_poweron(struct mtk_dsi *dsi)
 
 	mtk_dsi_clk_ulp_mode_leave(dsi);
 	mtk_dsi_lane0_ulp_mode_leave(dsi);
-	mtk_dsi_clk_hs_mode(dsi, 0);
+	mtk_dsi_clk_hs_mode(dsi, 1);
 
 	if (dsi->panel) {
 		if (drm_panel_prepare(dsi->panel)) {
@@ -730,6 +740,7 @@ static void mtk_dsi_poweroff(struct mtk_dsi *dsi)
 
 	clk_disable_unprepare(dsi->engine_clk);
 	clk_disable_unprepare(dsi->digital_clk);
+	clk_disable_unprepare(dsi->mipi26mdbg);
 
 	phy_power_off(dsi->phy);
 }
@@ -1205,6 +1216,13 @@ static int mtk_dsi_probe(struct platform_device *pdev)
 		goto err_unregister_host;
 	}
 
+	dsi->mipi26mdbg = devm_clk_get(dev, "mipi26mdbg");
+	if (IS_ERR(dsi->mipi26mdbg)) {
+		ret = PTR_ERR(dsi->mipi26mdbg);
+		dev_err(dev, "Failed to get mipi26mdbg clock: %d\n", ret);
+		goto err_unregister_host;
+	}
+
 	dsi->hs_clk = devm_clk_get(dev, "hs");
 	if (IS_ERR(dsi->hs_clk)) {
 		ret = PTR_ERR(dsi->hs_clk);
@@ -1238,10 +1256,9 @@ static int mtk_dsi_probe(struct platform_device *pdev)
 	if (ret) {
 		ret = PTR_ERR(regmap);
 		dev_err(dev, "Failed to get mmsys registers: %d\n", ret);
-		return ret;
+	} else {
+		dsi->mmsys_sw_rst_b = regmap;
 	}
-
-	dsi->mmsys_sw_rst_b = regmap;
 
 	comp_id = mtk_ddp_comp_get_id(dev->of_node, MTK_DSI);
 	if (comp_id < 0) {
@@ -1300,6 +1317,10 @@ static int mtk_dsi_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct mtk_dsi_driver_data mt8167_dsi_driver_data = {
+	.reg_cmdq_off = 0x180,
+};
+
 static const struct mtk_dsi_driver_data mt8173_dsi_driver_data = {
 	.reg_cmdq_off = 0x200,
 };
@@ -1317,6 +1338,8 @@ static const struct mtk_dsi_driver_data mt8183_dsi_driver_data = {
 static const struct of_device_id mtk_dsi_of_match[] = {
 	{ .compatible = "mediatek,mt2701-dsi",
 	  .data = &mt2701_dsi_driver_data },
+	{ .compatible = "mediatek,mt8167-dsi",
+	  .data = &mt8167_dsi_driver_data },
 	{ .compatible = "mediatek,mt8173-dsi",
 	  .data = &mt8173_dsi_driver_data },
 	{ .compatible = "mediatek,mt8183-dsi",
