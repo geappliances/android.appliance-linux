@@ -714,7 +714,7 @@ static unsigned int mt8167_calculate_factor(int clock)
 		return 16;
 	else if (clock <= 74250)
 		return 8;
-	else if (clock <= 150000)
+	else if (clock <= 160000)
 		return 4;
 	else
 		return 2;
