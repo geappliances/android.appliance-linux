@@ -703,6 +703,11 @@
 		compatible = "mediatek,mt8183-wifi",
 				  "mediatek,mt7668-wifi";
 	};
+
+	bluetooth: mt7668-bluetooth@0 {
+		compatible = "mediatek,mt8183-bluetooth",
+				  "mediatek,btmtksdio";
+	};
 };
 
 &i2c0 {
