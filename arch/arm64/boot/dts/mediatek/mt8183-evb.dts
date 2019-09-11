@@ -698,6 +698,11 @@
 	keep-power-in-suspend;
 	enable-sdio-wakeup;
 	non-removable;
+
+	wifi: mt7668-wifi@0 {
+		compatible = "mediatek,mt8183-wifi",
+				  "mediatek,mt7668-wifi";
+	};
 };
 
 &i2c0 {
