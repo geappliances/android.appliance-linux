@@ -651,7 +651,7 @@ static int mtk_dsi_poweron(struct mtk_dsi *dsi)
 	phy_power_on(dsi->phy);
 
 	ret = clk_prepare_enable(dsi->mipi26mdbg);
-	if (ret < 0) {
+	if (dsi->mipi26mdbg && ret < 0) {
 		dev_err(dev, "Failed to enable mipi26mdbg clock: %d\n", ret);
 		goto err_phy_power_off;
 	}
@@ -1216,12 +1216,7 @@ static int mtk_dsi_probe(struct platform_device *pdev)
 		goto err_unregister_host;
 	}
 
-	dsi->mipi26mdbg = devm_clk_get(dev, "mipi26mdbg");
-	if (IS_ERR(dsi->mipi26mdbg)) {
-		ret = PTR_ERR(dsi->mipi26mdbg);
-		dev_err(dev, "Failed to get mipi26mdbg clock: %d\n", ret);
-		goto err_unregister_host;
-	}
+	dsi->mipi26mdbg = devm_clk_get_optional(dev, "mipi26mdbg");
 
 	dsi->hs_clk = devm_clk_get(dev, "hs");
 	if (IS_ERR(dsi->hs_clk)) {
