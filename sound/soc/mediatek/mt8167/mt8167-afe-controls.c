@@ -1125,10 +1125,6 @@ static void spdif_rx_ctl_notify(void)
 		pr_err("%s() can not get name\n", __func__);
 		return;
 	}
-	if (!kctl->id.name) {
-		pr_err("%s() can not get name\n", __func__);
-		return;
-	}
 	snd_ctl_notify(card, SNDRV_CTL_EVENT_MASK_VALUE, &kctl->id);
 }
 
