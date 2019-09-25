@@ -449,17 +449,6 @@
 
 };
 
-&ssusb {
-	vusb33-supply = <&mt6358_vusb_reg>;
-	dr_mode = "host";
-	wakeup-source;
-	status = "okay";
-};
-
-&usb_host {
-	status = "okay";
-};
-
 &uart0 {
 	status = "okay";
 };
