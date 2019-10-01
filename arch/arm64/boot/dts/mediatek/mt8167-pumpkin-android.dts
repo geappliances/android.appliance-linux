@@ -1,6 +1,11 @@
 /dts-v1/;
 /plugin/;
 
+#include <dt-bindings/clock/mt8167-clk.h>
+
+#include "mt8516-pinfunc.h"
+#include "mt8167-pinfunc.h"
+
 &firmware {
 	android {
 		compatible = "android,firmware";
@@ -21,4 +26,70 @@
 			};
 		};
 	};
+};
+
+&pio {
+	i2c1_pins_a: i2c1@0 {
+		pins1 {
+			pinmux = <MT8167_PIN_52_SDA1__FUNC_SDA1_0>,
+				 <MT8167_PIN_53_SCL1__FUNC_SCL1_0>;
+			bias-disable;
+		};
+	};
+
+	panel_pins: panel_pins {
+		pins {
+			pinmux = <MT8167_PIN_66_LCM_RST__FUNC_GPIO66>,
+				 <MT8167_PIN_67_DSI_TE__FUNC_GPIO67>;
+			output-high;
+		};
+	};
+};
+
+&i2c1 {
+	clock-div = <2>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c1_pins_a>;
+	status = "okay";
+
+	touchscreen: touchscreen@0 {
+		compatible = "pumpkin,7inch-touchscreen-panel";
+		reg = <0x45>;
+		status = "okay";
+		pinctrl-0 = <&panel_pins>;
+		pinctrl-names = "default";
+		power-supply = <&mt6392_vgp2_reg>;
+	};
+};
+
+&dsi {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	ports {
+		port@0 {
+			reg = <0>;
+
+			dsi_out: endpoint {
+				remote-endpoint = <&panel_in>;
+			};
+		};
+	};
+
+	panel@0 {
+		compatible = "pumpkin,7inch-touchscreen-panel-dsi";
+		reg = <0>;
+		pumpkin,touchscreen = <&touchscreen>;
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+	};
+};
+
+&mipi_tx {
+	status = "okay";
 };
