@@ -31,6 +31,21 @@ module_param(mtk_mdp_dbg_level, int, 0644);
 
 static const struct of_device_id mtk_mdp_comp_dt_ids[] = {
 	{
+		.compatible = "mediatek,mt8167-mdp-rdma",
+		.data = (void *)MTK_MDP_RDMA
+	}, {
+		.compatible = "mediatek,mt8167-mdp-rsz",
+		.data = (void *)MTK_MDP_RSZ
+	}, {
+		.compatible = "mediatek,mt8167-mdp-wdma",
+		.data = (void *)MTK_MDP_WDMA
+	}, {
+		.compatible = "mediatek,mt8167-mdp-wrot",
+		.data = (void *)MTK_MDP_WROT
+	}, {
+		.compatible = "mediatek,mt8167-mdp-tdshp",
+		.data = (void *)MTK_MDP_TDSHP
+	}, {
 		.compatible = "mediatek,mt8173-mdp-rdma",
 		.data = (void *)MTK_MDP_RDMA
 	}, {
@@ -48,6 +63,7 @@ static const struct of_device_id mtk_mdp_comp_dt_ids[] = {
 
 static const struct of_device_id mtk_mdp_of_ids[] = {
 	{ .compatible = "mediatek,mt8173-mdp", },
+	{ .compatible = "mediatek,mt8167-mdp", },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, mtk_mdp_of_ids);
