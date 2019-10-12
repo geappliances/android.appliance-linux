@@ -333,6 +333,16 @@
 			#mbox-cells = <3>;
 			#subsys-cells = <3>;
 		};
+
+		vcu: vcu@0 {
+			compatible = "mediatek,mt8167-vcu";
+			mediatek,vcuid = <0>;
+			mediatek,vcuname = "vpu";
+			reg = <0 0x16000000 0 0x40000>,	/* VDEC_BASE */
+			      <0 0x15009000 0 0x1000>,	/* VENC_BASE */
+			      <0 0x19002000 0 0x1000>;	/* VENC_LT_BASE */
+			iommus = <&iommu M4U_PORT_HW_VDEC_MC_EXT>;
+		};
 	};
 };
 
