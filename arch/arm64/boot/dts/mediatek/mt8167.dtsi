@@ -29,6 +29,13 @@
 		dsi0 = &dsi;
 
 		pwm0 = &disp_pwm;
+
+		mdp_rdma0 = &mdp_rdma;
+		mdp_rsz0 = &mdp_rsz0;
+		mdp_rsz1 = &mdp_rsz1;
+		mdp_tdshp0 = &mdp_tdshp;
+		mdp_wdma0 = &mdp_wdma;
+		mdp_wrot0 = &mdp_wrot;
 	};
 
 	soc {
@@ -342,6 +349,67 @@
 			      <0 0x15009000 0 0x1000>,	/* VENC_BASE */
 			      <0 0x19002000 0 0x1000>;	/* VENC_LT_BASE */
 			iommus = <&iommu M4U_PORT_HW_VDEC_MC_EXT>;
+		};
+
+		mdp_vcu: vcu@1 {
+			compatible = "mediatek,mt8167-vcu";
+			mediatek,vcuid = <1>;
+			mediatek,vcuname = "vpu1";
+			iommus = <&iommu M4U_PORT_HW_VDEC_MC_EXT>;
+		};
+
+		mdp_rdma: rdma@14001000 {
+			compatible = "mediatek,mt8167-mdp-rdma",
+				     "mediatek,mt8167-mdp";
+			reg = <0 0x14001000 0 0x1000>;
+			mediatek,mdpid = <0>;
+			clocks = <&mmsys CLK_MM_MDP_RDMA>,
+				 <&mmsys CLK_MM_MDP_RDMA>;
+			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
+			iommus = <&iommu M4U_PORT_MDP_RDMA>;
+			mediatek,larb = <&larb0>;
+			mediatek,vpu = <&mdp_vcu>;
+			mediatek,gce = <&gce>;
+			mboxes = <&gce 0 0 1>;
+		};
+
+		mdp_rsz0: rsz@14002000 {
+			compatible = "mediatek,mt8167-mdp-rsz";
+			reg = <0 14002000 0 0x1000>;
+			clocks = <&mmsys CLK_MM_MDP_RSZ0>;
+			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
+		};
+
+		mdp_rsz1: rsz@14003000 {
+			compatible = "mediatek,mt8167-mdp-rsz";
+			reg = <0 14003000 0 0x1000>;
+			clocks = <&mmsys CLK_MM_MDP_RSZ1>;
+			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
+		};
+
+		mdp_wdma: wdma@14004000 {
+			compatible = "mediatek,mt8167-mdp-wdma";
+			reg = <0 14004000 0 0x1000>;
+			clocks = <&mmsys CLK_MM_MDP_WDMA>;
+			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
+			iommus = <&iommu M4U_PORT_MDP_WDMA>;
+			mediatek,larb = <&larb0>;
+		};
+
+		mdp_wrot: wrot@14005000 {
+			compatible = "mediatek,mt8167-mdp-wrot";
+			reg = <0 14005000 0 0x1000>;
+			clocks = <&mmsys CLK_MM_MDP_WROT>;
+			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
+			iommus = <&iommu M4U_PORT_MDP_WROT>;
+			mediatek,larb = <&larb0>;
+		};
+
+		mdp_tdshp: tdshp@14006000 {
+			compatible = "mediatek,mt8167-mdp-tdshp";
+			reg = <0 14006000 0 0x1000>;
+			clocks = <&mmsys CLK_MM_MDP_TDSHP>;
+			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
 		};
 	};
 };
