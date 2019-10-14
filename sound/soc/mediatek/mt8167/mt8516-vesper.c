@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * mt8516-vesper.c  --  MT8516-Vesper ALSA SoC machine driver
  *
@@ -89,6 +90,12 @@ struct mt8516_vesper_priv {
 	struct soc_ctlx_res ctlx_res;
 };
 
+struct adc_config {
+	char *name;
+	unsigned int tdm_mask;
+};
+
+
 static const char * const mt8516_vesper_pinctrl_pin_str[PIN_STATE_MAX] = {
 	"default",
 };
@@ -96,7 +103,8 @@ static const char * const mt8516_vesper_pinctrl_pin_str[PIN_STATE_MAX] = {
 static SOC_ENUM_SINGLE_EXT_DECL(pcm_state_enums, pcm_state_func);
 
 /* ctrl resource manager */
-static inline int soc_ctlx_init(struct soc_ctlx_res *ctlx_res, struct snd_soc_card *soc_card)
+static inline int soc_ctlx_init(struct soc_ctlx_res *ctlx_res,
+				struct snd_soc_card *soc_card)
 {
 	int i;
 	struct snd_card *card = soc_card->snd_card;
@@ -110,7 +118,8 @@ static inline int soc_ctlx_init(struct soc_ctlx_res *ctlx_res, struct snd_soc_ca
 
 	for (i = 0; i < CTRL_NOTIFY_NUM; i++) {
 		list_for_each_entry(control, &card->controls, list) {
-			if (strncmp(control->id.name, nfy_ctl_names[i], sizeof(control->id.name)))
+			if (strncmp(control->id.name, nfy_ctl_names[i],
+				    sizeof(control->id.name)))
 				continue;
 			ctlx_res->nfy_ids[i] = control->id;
 		}
@@ -202,12 +211,14 @@ static int soc_ctlx_put(struct snd_kcontrol *kctl,
 	}
 	if (value != NULL) {
 		*value = ucontrol->value.integer.value[0];
-		snd_ctl_notify(card->snd_card, SNDRV_CTL_EVENT_MASK_VALUE, &(res_mgr->nfy_ids[nfy_type]));
+		snd_ctl_notify(card->snd_card, SNDRV_CTL_EVENT_MASK_VALUE,
+			       &(res_mgr->nfy_ids[nfy_type]));
 	} else {
 		nfy_type = CTRL_NOTIFY_INVAL;
 	}
 	if (need_notify_self) {
-		snd_ctl_notify(card->snd_card, SNDRV_CTL_EVENT_MASK_VALUE, &(kctl->id));
+		snd_ctl_notify(card->snd_card, SNDRV_CTL_EVENT_MASK_VALUE,
+			       &(kctl->id));
 	}
 	mutex_unlock(&res_mgr->res_mutex);
 
@@ -240,7 +251,8 @@ static int soc_pcm_state_put(struct snd_kcontrol *kctl,
 	spin_lock_irqsave(&res_mgr->res_lock, flags);
 	if (ucontrol->value.integer.value[0] != res_mgr->pcm_state) {
 		res_mgr->pcm_state = ucontrol->value.integer.value[0];
-		snd_ctl_notify(card->snd_card, SNDRV_CTL_EVENT_MASK_VALUE, &(res_mgr->nfy_ids[PCM_STATEX_ID]));
+		snd_ctl_notify(card->snd_card, SNDRV_CTL_EVENT_MASK_VALUE,
+			       &(res_mgr->nfy_ids[PCM_STATEX_ID]));
 	}
 	spin_unlock_irqrestore(&res_mgr->res_lock, flags);
 
@@ -281,30 +293,78 @@ static const struct snd_kcontrol_new mt8516_vesper_soc_controls[] = {
 		     0),
 };
 
+static struct adc_config vesper_config[] = {
+	{.name = "pcm186x.2-004a", .tdm_mask = 0x0f},
+	{.name = "pcm186x.2-004b", .tdm_mask = 0xf0},
+	{.name = "tlv320adc3101.2-0018", .tdm_mask = 0x30},
+};
+
 static int tdmin_capture_startup(struct snd_pcm_substream *substream)
 {
-    pr_notice("%s\n", __func__);
-    return 0;
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	int i, j;
+
+	for (i = 0; i < rtd->num_codecs; i++) {
+		if (rtd->codec_dais[i]->active) {
+			pr_notice("ycodec %d is active %d\n",
+				  i, rtd->codec_dais[i]->active);
+			return -EBUSY;
+		}
+	}
+
+	for (i = 0; i < rtd->num_codecs; i++) {
+		for (j = 0; j < ARRAY_SIZE(vesper_config); j++) {
+			if (!strcmp(rtd->codec_dais[i]->component->name,
+			vesper_config[j].name)) {
+				snd_soc_dai_set_tdm_slot(rtd->codec_dais[i],
+				vesper_config[j].tdm_mask, 0, 8, 32);
+				break;
+			}
+		}
+	}
+
+	return 0;
 }
 
 static void tdmin_capture_shutdown(struct snd_pcm_substream *substream)
 {
-    pr_notice("%s\n", __func__);
+	pr_notice("%s\n", __func__);
 }
 
 static int tdmin_hw_params(struct snd_pcm_substream *substream,
-                               struct snd_pcm_hw_params *params)
+			   struct snd_pcm_hw_params *params)
 {
-    pr_notice("%s\n", __func__);
-    return 0;
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	//struct snd_soc_dai *codec_dai = rtd->codec_dai;
+	unsigned int rate = params_rate(params);
+	unsigned int mclk_rate = rate * 256;
+	int i;
+
+	pr_notice("%s setting mclk to %u Hz\n", __func__, mclk_rate);
+
+	/* codec mclk */
+	for (i = 0; i < rtd->num_codecs; i++)
+		snd_soc_dai_set_sysclk(rtd->codec_dais[i], 0, mclk_rate,
+				       SND_SOC_CLOCK_IN);
+
+	return 0;
 }
 
 static struct snd_soc_ops tdmin_capture_ops = {
-       .startup = tdmin_capture_startup,
-       .shutdown = tdmin_capture_shutdown,
-       .hw_params = tdmin_hw_params,
+	   .startup = tdmin_capture_startup,
+	   .shutdown = tdmin_capture_shutdown,
+	   .hw_params = tdmin_hw_params,
 };
 
+static struct snd_soc_dai_link_component tdm_in_codecs[] = {
+	{.name = "pcm186x.2-004a", .dai_name = "pcm1865-aif" },
+	{.name = "tlv320adc3101.2-0018", .dai_name = "tlv320adc3101-aif" },
+};
+
+static struct snd_soc_dai_link_component tdm_in_6_1_codecs[] = {
+	{.name = "pcm186x.2-004a", .dai_name = "pcm1865-aif" },
+	{.name = "pcm186x.2-004b", .dai_name = "pcm1865-aif" },
+};
 
 /* Digital audio interface glue - connects codec <---> CPU */
 static struct snd_soc_dai_link mt8516_vesper_dais[] = {
@@ -313,10 +373,26 @@ static struct snd_soc_dai_link mt8516_vesper_dais[] = {
 		.name = "TDM Capture",
 		.stream_name = "TDM_Capture",
 		.cpu_dai_name = "TDM_IN",
-		.codec_name = "snd-soc-dummy",
-		.codec_dai_name = "snd-soc-dummy-dai",
-        .dai_fmt = SND_SOC_DAIFMT_DSP_B | SND_SOC_DAIFMT_NB_NF |
-                               SND_SOC_DAIFMT_CBS_CFS,
+		.codecs = tdm_in_codecs,
+		.num_codecs = 2,
+		.dai_fmt = SND_SOC_DAIFMT_DSP_B | SND_SOC_DAIFMT_NB_NF |
+				SND_SOC_DAIFMT_CBS_CFS,
+		.trigger = {
+			SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST
+		},
+		.dynamic = 1,
+		.dpcm_capture = 1,
+		.ops = &tdmin_capture_ops,
+	},
+	{
+		.name = "TDM Capture 6.1",
+		.stream_name = "TDM_Capture_6_1",
+		.cpu_dai_name = "TDM_IN",
+		.codecs = tdm_in_6_1_codecs,
+		.num_codecs = 2,
+		.dai_fmt = SND_SOC_DAIFMT_DSP_B | SND_SOC_DAIFMT_NB_NF |
+				SND_SOC_DAIFMT_CBS_CFS,
 		.trigger = {
 			SND_SOC_DPCM_TRIGGER_POST,
 			SND_SOC_DPCM_TRIGGER_POST
@@ -346,15 +422,15 @@ static struct snd_soc_dai_link mt8516_vesper_dais[] = {
 		.no_pcm = 1,
 		.codec_name = "snd-soc-dummy",
 		.codec_dai_name = "snd-soc-dummy-dai",
-        .dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
-                               SND_SOC_DAIFMT_CBS_CFS,
+		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
+				SND_SOC_DAIFMT_CBS_CFS,
 		.dpcm_capture = 1,
 	},
 	{
 		.name = "I2S BE",
 		.cpu_dai_name = "I2S",
 		.no_pcm = 1,
-		.codec_name = "pcm512x.1-004c",
+		.codec_name = "pcm512x.2-004c",
 		.codec_dai_name = "pcm512x-hifi",
 		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
 				SND_SOC_DAIFMT_CBS_CFS,
@@ -375,7 +451,6 @@ static struct snd_soc_card mt8516_vesper_card = {
 static int mt8516_vesper_gpio_probe(struct snd_soc_card *card)
 {
 	struct mt8516_vesper_priv *card_data;
-	//struct device_node *np = card->dev->of_node;
 	int ret = 0;
 	int i;
 
@@ -396,7 +471,8 @@ static int mt8516_vesper_gpio_probe(struct snd_soc_card *card)
 		if (IS_ERR(card_data->pin_states[i])) {
 			ret = PTR_ERR(card_data->pin_states[i]);
 			dev_warn(card->dev, "%s Can't find pinctrl state %s %d\n",
-				__func__, mt8516_vesper_pinctrl_pin_str[i], ret);
+				__func__,
+				mt8516_vesper_pinctrl_pin_str[i], ret);
 		}
 	}
 
@@ -418,11 +494,10 @@ static int mt8516_vesper_dev_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Property 'platform' missing or invalid\n");
 		return -EINVAL;
 	}
-
 	codec_node = of_parse_phandle(pdev->dev.of_node,
 					 "mediatek,audio-codec", 0);
 	if (!codec_node) {
-		dev_err(&pdev->dev, "Property 'platform' missing or invalid\n");
+		dev_err(&pdev->dev, "Property 'audio-codec' missing or invalid\n");
 		return -EINVAL;
 	}
 
@@ -430,12 +505,6 @@ static int mt8516_vesper_dev_probe(struct platform_device *pdev)
 		if (mt8516_vesper_dais[i].platform_name)
 			continue;
 		mt8516_vesper_dais[i].platform_of_node = platform_node;
-	}
-
-	for (i = 0; i < card->num_links; i++) {
-		if (mt8516_vesper_dais[i].codec_name)
-			continue;
-		mt8516_vesper_dais[i].codec_of_node = codec_node;
 	}
 
 	card->dev = &pdev->dev;
