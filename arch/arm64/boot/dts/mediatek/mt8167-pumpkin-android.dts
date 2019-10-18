@@ -2,6 +2,8 @@
 /plugin/;
 
 #include <dt-bindings/clock/mt8167-clk.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/interrupt-controller/irq.h>
 
 #include "mt8516-pinfunc.h"
 #include "mt8167-pinfunc.h"
@@ -44,6 +46,14 @@
 			output-high;
 		};
 	};
+
+	ts_pins: ts_pins {
+		pins {
+			pinmux = <MT8167_PIN_2_EINT2__FUNC_GPIO2>;
+			input-enable;
+			bias-pull-up;
+		};
+	};
 };
 
 &i2c1 {
@@ -59,6 +69,20 @@
 		pinctrl-0 = <&panel_pins>;
 		pinctrl-names = "default";
 		power-supply = <&mt6392_vgp2_reg>;
+	};
+
+	touch: ft5x06@38 {
+		compatible = "focaltech,ft6236";
+		reg = <0x38>;
+		status = "okay";
+		pinctrl-0 = <&ts_pins>;
+		pinctrl-names = "default";
+		interrupt-parent = <&pio>;
+		interrupts = <2 IRQ_TYPE_EDGE_FALLING>;
+		touchscreen-size-y = <480>;
+		touchscreen-size-x = <800>;
+		touchscreen-inverted-y = <1>;
+		touchscreen-inverted-x = <1>;
 	};
 };
 
