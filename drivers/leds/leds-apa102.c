@@ -115,7 +115,7 @@ static int apa102_set_sync(struct led_classdev *ldev,
 
 static int apa102_probe_dt(struct apa102 *priv)
 {
-	int			i = 0;
+	u32			i = 0;
 	int			j = 0;
 	struct apa102_led	*led;
 	struct fwnode_handle	*child;
@@ -133,6 +133,13 @@ static int apa102_probe_dt(struct apa102 *priv)
 		 * the 4 components: red, green, blue and global luma.
 		 */
 		for (j = 0; j < CH_NUM; j++) {
+			ret = fwnode_property_read_u32(child, "reg", &i);
+			if (ret)
+				return ret;
+
+			if (i >= priv->led_count)
+				return -EINVAL;
+
 			led = &priv->leds[i * CH_NUM + j];
 			ret = fwnode_property_read_string(child, "label", &str);
 			if (ret)
@@ -172,7 +179,6 @@ static int apa102_probe_dt(struct apa102 *priv)
 			led->ldev.dev->of_node = np;
 
 		}
-		i++;
 	}
 
 	return 0;
