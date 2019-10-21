@@ -11,6 +11,8 @@ Property rules described in Documentation/devicetree/bindings/spi/spi-bus.txt
 apply. In particular, "reg" and "spi-max-frequency" properties must be given.
 
 LED sub-node properties:
+- reg :
+	the led number. Must be contiguously allocated between 0 and the maximum number of led minus 1
 - label :
 	see Documentation/devicetree/bindings/leds/common.txt
 - linux,default-trigger : (optional)
