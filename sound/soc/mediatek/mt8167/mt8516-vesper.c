@@ -294,9 +294,9 @@ static const struct snd_kcontrol_new mt8516_vesper_soc_controls[] = {
 };
 
 static struct adc_config vesper_config[] = {
-	{.name = "pcm186x.2-004a", .tdm_mask = 0x0f},
-	{.name = "pcm186x.2-004b", .tdm_mask = 0xf0},
-	{.name = "tlv320adc3101.2-0018", .tdm_mask = 0x30},
+	{.name = "pcm186x.1-004a", .tdm_mask = 0x0f},
+	{.name = "pcm186x.1-004b", .tdm_mask = 0xf0},
+	{.name = "tlv320adc3101.1-0018", .tdm_mask = 0x30},
 };
 
 static int tdmin_capture_startup(struct snd_pcm_substream *substream)
@@ -357,13 +357,13 @@ static struct snd_soc_ops tdmin_capture_ops = {
 };
 
 static struct snd_soc_dai_link_component tdm_in_codecs[] = {
-	{.name = "pcm186x.2-004a", .dai_name = "pcm1865-aif" },
-	{.name = "tlv320adc3101.2-0018", .dai_name = "tlv320adc3101-aif" },
+	{.name = "pcm186x.1-004a", .dai_name = "pcm1865-aif" },
+	{.name = "tlv320adc3101.1-0018", .dai_name = "tlv320adc3101-aif" },
 };
 
 static struct snd_soc_dai_link_component tdm_in_6_1_codecs[] = {
-	{.name = "pcm186x.2-004a", .dai_name = "pcm1865-aif" },
-	{.name = "pcm186x.2-004b", .dai_name = "pcm1865-aif" },
+	{.name = "pcm186x.1-004a", .dai_name = "pcm1865-aif" },
+	{.name = "pcm186x.1-004b", .dai_name = "pcm1865-aif" },
 };
 
 /* Digital audio interface glue - connects codec <---> CPU */
@@ -430,7 +430,7 @@ static struct snd_soc_dai_link mt8516_vesper_dais[] = {
 		.name = "I2S BE",
 		.cpu_dai_name = "I2S",
 		.no_pcm = 1,
-		.codec_name = "pcm512x.2-004c",
+		.codec_name = "pcm512x.1-004c",
 		.codec_dai_name = "pcm512x-hifi",
 		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
 				SND_SOC_DAIFMT_CBS_CFS,
