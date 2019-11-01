@@ -58,7 +58,8 @@ static void mtk_mdp_clock_on(struct mtk_mdp_dev *mdp)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(mdp->comp); i++)
-		mtk_mdp_comp_clock_on(dev, mdp->comp[i]);
+		if (mdp->comp[i])
+			mtk_mdp_comp_clock_on(dev, mdp->comp[i]);
 }
 
 static void mtk_mdp_clock_off(struct mtk_mdp_dev *mdp)
@@ -67,7 +68,8 @@ static void mtk_mdp_clock_off(struct mtk_mdp_dev *mdp)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(mdp->comp); i++)
-		mtk_mdp_comp_clock_off(dev, mdp->comp[i]);
+		if (mdp->comp[i])
+			mtk_mdp_comp_clock_off(dev, mdp->comp[i]);
 }
 
 static void mtk_mdp_wdt_worker(struct work_struct *work)
