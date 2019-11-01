@@ -94,6 +94,9 @@ static int mtk_plane_atomic_check(struct drm_plane *plane,
 	if (!fb)
 		return 0;
 
+	if (fb->format->is_yuv && (state->rotation & ~DRM_MODE_ROTATE_0) != 0)
+		return -EINVAL;
+
 	if (!state->crtc)
 		return 0;
 
@@ -153,6 +156,7 @@ static void mtk_plane_atomic_update(struct drm_plane *plane,
 	state->pending.y = plane->state->dst.y1;
 	state->pending.width = drm_rect_width(&plane->state->dst);
 	state->pending.height = drm_rect_height(&plane->state->dst);
+	state->pending.rotation = plane->state->rotation;
 	wmb(); /* Make sure the above parameters are set before update */
 	state->pending.dirty = true;
 }
@@ -177,7 +181,12 @@ int mtk_plane_init(struct drm_device *dev, struct drm_plane *plane,
 		return err;
 	}
 
-	drm_plane_helper_add(plane, &mtk_plane_helper_funcs);
+	err = drm_plane_create_rotation_property(plane, 0,
+						 DRM_MODE_ROTATE_0 |
+						 DRM_MODE_REFLECT_Y);
+	if (err)
+		DRM_INFO("Create rotation property failed, continuing...\n");
 
+	drm_plane_helper_add(plane, &mtk_plane_helper_funcs);
 	return 0;
 }
