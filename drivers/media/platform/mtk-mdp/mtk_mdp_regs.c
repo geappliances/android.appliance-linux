@@ -9,40 +9,57 @@
 
 #include "mtk_mdp_core.h"
 #include "mtk_mdp_regs.h"
-
-
-#define MDP_COLORFMT_PACK(VIDEO, PLANE, COPLANE, HF, VF, BITS, GROUP, SWAP, ID)\
-	(((VIDEO) << 27) | ((PLANE) << 24) | ((COPLANE) << 22) |\
-	((HF) << 20) | ((VF) << 18) | ((BITS) << 8) | ((GROUP) << 6) |\
-	((SWAP) << 5) | ((ID) << 0))
-
-enum MDP_COLOR_ENUM {
-	MDP_COLOR_UNKNOWN = 0,
-	MDP_COLOR_NV12 = MDP_COLORFMT_PACK(0, 2, 1, 1, 1, 8, 1, 0, 12),
-	MDP_COLOR_I420 = MDP_COLORFMT_PACK(0, 3, 0, 1, 1, 8, 1, 0, 8),
-	MDP_COLOR_YV12 = MDP_COLORFMT_PACK(0, 3, 0, 1, 1, 8, 1, 1, 8),
-	/* Mediatek proprietary format */
-	MDP_COLOR_420_MT21 = MDP_COLORFMT_PACK(5, 2, 1, 1, 1, 256, 1, 0, 12),
-};
+#include "mtk_mdp_type.h"
 
 static int32_t mtk_mdp_map_color_format(int v4l2_format)
 {
 	switch (v4l2_format) {
 	case V4L2_PIX_FMT_NV12M:
 	case V4L2_PIX_FMT_NV12:
-		return MDP_COLOR_NV12;
+		return DP_COLOR_NV12;
+	case V4L2_PIX_FMT_NV21M:
+	case V4L2_PIX_FMT_NV21:
+		return DP_COLOR_NV21;
 	case V4L2_PIX_FMT_MT21C:
-		return MDP_COLOR_420_MT21;
+		return DP_COLOR_420_BLKP_UFO;
 	case V4L2_PIX_FMT_YUV420M:
 	case V4L2_PIX_FMT_YUV420:
-		return MDP_COLOR_I420;
+		return DP_COLOR_I420;
+	case V4L2_PIX_FMT_YVU420M:
 	case V4L2_PIX_FMT_YVU420:
-		return MDP_COLOR_YV12;
+		return DP_COLOR_YV12;
+	case V4L2_PIX_FMT_YUV422P:
+		return DP_COLOR_I422;
+	case V4L2_PIX_FMT_NV16:
+	case V4L2_PIX_FMT_NV16M:
+		return DP_COLOR_NV16;
+	case V4L2_PIX_FMT_YUYV:
+		return DP_COLOR_YUYV;
+	case V4L2_PIX_FMT_UYVY:
+		return DP_COLOR_UYVY;
+	case V4L2_PIX_FMT_YVYU:
+		return DP_COLOR_YVYU;
+	case V4L2_PIX_FMT_VYUY:
+		return DP_COLOR_VYUY;
+	case V4L2_PIX_FMT_ARGB32:
+		return DP_COLOR_RGBA8888;
+	case V4L2_PIX_FMT_ABGR32:
+		return DP_COLOR_BGRA8888;
+	case V4L2_PIX_FMT_XRGB32:
+		return DP_COLOR_RGBA8888;
+	case V4L2_PIX_FMT_XBGR32:
+		return DP_COLOR_BGRA8888;
+	case V4L2_PIX_FMT_RGB565:
+		return DP_COLOR_RGB565;
+	case V4L2_PIX_FMT_RGB24:
+		return DP_COLOR_RGB888;
+	case V4L2_PIX_FMT_BGR24:
+		return DP_COLOR_BGR888;
 	}
 
 	mtk_mdp_err("Unknown format 0x%x", v4l2_format);
 
-	return MDP_COLOR_UNKNOWN;
+	return DP_COLOR_UNKNOWN;
 }
 
 void mtk_mdp_hw_set_input_addr(struct mtk_mdp_ctx *ctx,

@@ -50,7 +50,7 @@ static const struct mtk_mdp_fmt mtk_mdp_formats[] = {
 	{
 		.pixelformat	= V4L2_PIX_FMT_MT21C,
 		.depth		= { 8, 4 },
-		.row_depth	= { 8, 8 },
+		.row_depth	= { 8, 4 },
 		.num_planes	= 2,
 		.num_comp	= 2,
 		.align		= &mtk_mdp_size_align,
@@ -58,15 +58,47 @@ static const struct mtk_mdp_fmt mtk_mdp_formats[] = {
 	}, {
 		.pixelformat	= V4L2_PIX_FMT_NV12M,
 		.depth		= { 8, 4 },
-		.row_depth	= { 8, 8 },
+		.row_depth	= { 8, 4 },
 		.num_planes	= 2,
 		.num_comp	= 2,
 		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
 				  MTK_MDP_FMT_FLAG_CAPTURE,
 	}, {
+		.pixelformat	= V4L2_PIX_FMT_NV12,
+		.depth		= { 12 },
+		.row_depth	= { 8, 4 },
+		.num_planes	= 1,
+		.num_comp	= 2,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_NV21M,
+		.depth		= { 8, 4 },
+		.row_depth	= { 8, 4 },
+		.num_planes	= 2,
+		.num_comp	= 2,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_NV21,
+		.depth		= { 12 },
+		.row_depth	= { 8, 4 },
+		.num_planes	= 1,
+		.num_comp	= 2,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_YVU420M,
+		.depth		= { 8, 2, 2 },
+		.row_depth	= { 8, 2, 2 },
+		.num_planes	= 3,
+		.num_comp	= 3,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
 		.pixelformat	= V4L2_PIX_FMT_YUV420M,
 		.depth		= { 8, 2, 2 },
-		.row_depth	= { 8, 4, 4 },
+		.row_depth	= { 8, 2, 2 },
 		.num_planes	= 3,
 		.num_comp	= 3,
 		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
@@ -74,9 +106,129 @@ static const struct mtk_mdp_fmt mtk_mdp_formats[] = {
 	}, {
 		.pixelformat	= V4L2_PIX_FMT_YVU420,
 		.depth		= { 12 },
-		.row_depth	= { 8 },
+		.row_depth	= { 8, 2, 2 },
 		.num_planes	= 1,
 		.num_comp	= 3,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_YUV420,
+		.depth		= { 12 },
+		.row_depth	= { 8, 2, 2 },
+		.num_planes	= 1,
+		.num_comp	= 3,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_YUV422P,
+		.depth		= { 16 },
+		.row_depth	= { 8, 4, 4 },
+		.num_planes	= 1,
+		.num_comp	= 3,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_NV16,
+		.depth		= { 16 },
+		.row_depth	= { 8, 8 },
+		.num_planes	= 1,
+		.num_comp	= 2,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_NV16M,
+		.depth		= { 8, 8 },
+		.row_depth	= { 8, 8 },
+		.num_planes	= 2,
+		.num_comp	= 2,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_YUYV,
+		.depth		= { 16 },
+		.row_depth	= { 16 },
+		.num_planes	= 1,
+		.num_comp	= 1,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_UYVY,
+		.depth		= { 16 },
+		.row_depth	= { 16 },
+		.num_planes	= 1,
+		.num_comp	= 1,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_YVYU,
+		.depth		= { 16 },
+		.row_depth	= { 16 },
+		.num_planes	= 1,
+		.num_comp	= 1,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_VYUY,
+		.depth		= { 16 },
+		.row_depth	= { 16 },
+		.num_planes	= 1,
+		.num_comp	= 1,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_ARGB32,
+		.depth		= { 32 },
+		.row_depth	= { 32 },
+		.num_planes	= 1,
+		.num_comp	= 1,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_ABGR32,
+		.depth		= { 32 },
+		.row_depth	= { 32 },
+		.num_planes	= 1,
+		.num_comp	= 1,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_XRGB32,
+		.depth		= { 32 },
+		.row_depth	= { 32 },
+		.num_planes	= 1,
+		.num_comp	= 1,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_XBGR32,
+		.depth		= { 32 },
+		.row_depth	= { 32 },
+		.num_planes	= 1,
+		.num_comp	= 1,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_RGB565,
+		.depth		= { 16 },
+		.row_depth	= { 16 },
+		.num_planes	= 1,
+		.num_comp	= 1,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_RGB24,
+		.depth		= { 24 },
+		.row_depth	= { 24 },
+		.num_planes	= 1,
+		.num_comp	= 1,
+		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
+				  MTK_MDP_FMT_FLAG_CAPTURE,
+	}, {
+		.pixelformat	= V4L2_PIX_FMT_BGR24,
+		.depth		= { 24 },
+		.row_depth	= { 24 },
+		.num_planes	= 1,
+		.num_comp	= 1,
 		.flags		= MTK_MDP_FMT_FLAG_OUTPUT |
 				  MTK_MDP_FMT_FLAG_CAPTURE,
 	}
