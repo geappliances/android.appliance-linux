@@ -108,8 +108,25 @@ static int mtk_mdp_probe(struct platform_device *pdev)
 	struct mtk_mdp_dev *mdp;
 	struct device *dev = &pdev->dev;
 	struct device_node *node, *parent;
+	struct platform_device *cmdq_dev;
 	struct mtk_mdp_comp *comp, *comp_temp;
 	int ret = 0;
+
+	//mtk_mdp_dbg_level = 3;
+
+	/* Check whether cmdq driver is ready */
+	node = of_parse_phandle(dev->of_node, "mediatek,gce", 0);
+	if (!node) {
+		dev_err(dev, "cannot get gce node handle\n");
+		return -EINVAL;
+	}
+
+	cmdq_dev = of_find_device_by_node(node);
+	if (!cmdq_dev || !cmdq_dev->dev.driver) {
+		dev_err(dev, "Waiting cmdq driver ready...\n");
+		of_node_put(node);
+		return -EPROBE_DEFER;
+	}
 
 	mdp = devm_kzalloc(dev, sizeof(*mdp), GFP_KERNEL);
 	if (!mdp)
@@ -211,6 +228,9 @@ static int mtk_mdp_probe(struct platform_device *pdev)
 	}
 
 	pm_runtime_enable(dev);
+
+	mdp->cmdq_client = cmdq_mbox_create(dev, 0, CMDQ_NO_TIMEOUT);
+
 	dev_dbg(dev, "mdp-%d registered successfully\n", mdp->id);
 
 	return 0;
@@ -256,6 +276,8 @@ static int mtk_mdp_remove(struct platform_device *pdev)
 		mtk_mdp_unregister_component(mdp, comp);
 		mtk_mdp_comp_deinit(&pdev->dev, comp);
 	}
+
+	cmdq_mbox_destroy(mdp->cmdq_client);
 
 	dev_dbg(&pdev->dev, "%s driver unloaded\n", pdev->name);
 	return 0;
