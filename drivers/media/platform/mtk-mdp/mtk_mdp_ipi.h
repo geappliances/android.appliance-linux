@@ -47,7 +47,7 @@ struct mdp_ipi_comm {
 	uint32_t msg_id;
 	uint32_t ipi_id;
 	uint64_t ap_inst;
-	uint32_t vpu_inst_addr;
+	uint64_t vpu_inst_addr;
 };
 
 /**
@@ -62,7 +62,7 @@ struct mdp_ipi_comm_ack {
 	uint32_t msg_id;
 	uint32_t ipi_id;
 	uint64_t ap_inst;
-	uint32_t vpu_inst_addr;
+	uint64_t vpu_inst_addr;
 	int32_t status;
 };
 
@@ -72,26 +72,24 @@ struct mdp_ipi_comm_ack {
  * @y        : top
  * @w        : width
  * @h        : height
- * @w_stride : bytes in horizontal
- * @h_stride : bytes in vertical
  * @crop_x   : cropped left
  * @crop_y   : cropped top
  * @crop_w   : cropped width
  * @crop_h   : cropped height
  * @format   : color format
+ * @pitch    : bytes per line for each plane
  */
 struct mdp_config {
 	int32_t x;
 	int32_t y;
 	int32_t w;
 	int32_t h;
-	int32_t w_stride;
-	int32_t h_stride;
 	int32_t crop_x;
 	int32_t crop_y;
 	int32_t crop_w;
 	int32_t crop_h;
 	int32_t format;
+	uint32_t pitch[MTK_MDP_MAX_NUM_PLANE];
 };
 
 struct mdp_buffer {

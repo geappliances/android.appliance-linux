@@ -87,18 +87,36 @@ void mtk_mdp_hw_set_in_size(struct mtk_mdp_ctx *ctx)
 
 void mtk_mdp_hw_set_in_image_format(struct mtk_mdp_ctx *ctx)
 {
-	unsigned int i;
+	unsigned int i, num_comp;
 	struct mtk_mdp_frame *frame = &ctx->s_frame;
 	struct mdp_config *config = &ctx->vpu.vsi->src_config;
 	struct mdp_buffer *src_buf = &ctx->vpu.vsi->src_buffer;
 
-	src_buf->plane_num = frame->fmt->num_comp;
+	num_comp = frame->fmt->num_comp;
+	src_buf->plane_num = num_comp;
 	config->format = mtk_mdp_map_color_format(frame->fmt->pixelformat);
-	config->w_stride = 0; /* MDP will calculate it by color format. */
-	config->h_stride = 0; /* MDP will calculate it by color format. */
-
-	for (i = 0; i < src_buf->plane_num; i++)
-		src_buf->plane_size[i] = frame->payload[i];
+	if (frame->fmt->num_planes == 1 && num_comp > 1) {
+		config->pitch[0] = frame->pitch[0];
+		config->pitch[1] = frame->pitch[1];
+		config->pitch[2] = frame->pitch[2];
+		src_buf->plane_size[0] =
+			(int32_t)(frame->addr.addr[1] - frame->addr.addr[0]);
+		if (num_comp > 2) {
+			src_buf->plane_size[1] =
+				(int32_t)(frame->addr.addr[2] -
+				frame->addr.addr[1]);
+			src_buf->plane_size[2] = frame->payload[0] -
+				src_buf->plane_size[0] -
+				src_buf->plane_size[1];
+		} else
+			src_buf->plane_size[1] = frame->payload[0] -
+				src_buf->plane_size[0];
+	} else {
+		for (i = 0; i < src_buf->plane_num; i++) {
+			config->pitch[i] = frame->pitch[i];
+			src_buf->plane_size[i] = (int32_t)frame->payload[i];
+		}
+	}
 }
 
 void mtk_mdp_hw_set_out_size(struct mtk_mdp_ctx *ctx)
@@ -118,17 +136,36 @@ void mtk_mdp_hw_set_out_size(struct mtk_mdp_ctx *ctx)
 
 void mtk_mdp_hw_set_out_image_format(struct mtk_mdp_ctx *ctx)
 {
-	unsigned int i;
+	unsigned int i, num_comp;
 	struct mtk_mdp_frame *frame = &ctx->d_frame;
 	struct mdp_config *config = &ctx->vpu.vsi->dst_config;
 	struct mdp_buffer *dst_buf = &ctx->vpu.vsi->dst_buffer;
 
-	dst_buf->plane_num = frame->fmt->num_comp;
+	num_comp = frame->fmt->num_comp;
+	dst_buf->plane_num = num_comp;
 	config->format = mtk_mdp_map_color_format(frame->fmt->pixelformat);
-	config->w_stride = 0; /* MDP will calculate it by color format. */
-	config->h_stride = 0; /* MDP will calculate it by color format. */
-	for (i = 0; i < dst_buf->plane_num; i++)
-		dst_buf->plane_size[i] = frame->payload[i];
+	if (frame->fmt->num_planes == 1 && num_comp > 1) {
+		config->pitch[0] = frame->pitch[0];
+		config->pitch[1] = frame->pitch[1];
+		config->pitch[2] = frame->pitch[2];
+		dst_buf->plane_size[0] =
+			(int32_t)(frame->addr.addr[1] - frame->addr.addr[0]);
+		if (num_comp > 2) {
+			dst_buf->plane_size[1] =
+				(int32_t)(frame->addr.addr[2] -
+				frame->addr.addr[1]);
+			dst_buf->plane_size[2] = frame->payload[0] -
+				dst_buf->plane_size[0] -
+				dst_buf->plane_size[1];
+		} else
+			dst_buf->plane_size[1] = frame->payload[0] -
+				dst_buf->plane_size[0];
+	} else {
+		for (i = 0; i < dst_buf->plane_num; i++) {
+			config->pitch[i] = frame->pitch[i];
+			dst_buf->plane_size[i] = (int32_t)frame->payload[i];
+		}
+	}
 }
 
 void mtk_mdp_hw_set_rotation(struct mtk_mdp_ctx *ctx)

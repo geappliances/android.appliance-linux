@@ -441,26 +441,54 @@ static void mtk_mdp_prepare_addr(struct mtk_mdp_ctx *ctx,
 				 struct mtk_mdp_addr *addr)
 {
 	u32 pix_size, planes, i;
+	u32 pix_size_tmp;
 
 	pix_size = frame->width * frame->height;
 	planes = min_t(u32, frame->fmt->num_planes, ARRAY_SIZE(addr->addr));
 	for (i = 0; i < planes; i++)
 		addr->addr[i] = vb2_dma_contig_plane_dma_addr(vb, i);
 
-	if (planes == 1) {
-		if (frame->fmt->pixelformat == V4L2_PIX_FMT_YVU420) {
+	if (planes == 1 && frame->fmt->num_comp > 1) {
+		pix_size_tmp = pix_size;
+		if (frame->width < frame->pitch[0])
+			pix_size = frame->pitch[0]*frame->height;
+
+		if ((frame->fmt->pixelformat == V4L2_PIX_FMT_YVU420) ||
+			(frame->fmt->pixelformat == V4L2_PIX_FMT_YUV420)) {
 			addr->addr[1] = (dma_addr_t)(addr->addr[0] + pix_size);
 			addr->addr[2] = (dma_addr_t)(addr->addr[1] +
 					(pix_size >> 2));
+			frame->pitch[1] = frame->pitch[0]>>1;
+			frame->pitch[2] = frame->pitch[0]>>1;
+		} else if (frame->fmt->pixelformat == V4L2_PIX_FMT_YUV422P) {
+			addr->addr[1] = (dma_addr_t)(addr->addr[0] + pix_size);
+			addr->addr[2] = (dma_addr_t)(addr->addr[1] +
+					(pix_size >> 1));
+			frame->pitch[1] = frame->pitch[0]>>1;
+			frame->pitch[2] = frame->pitch[0]>>1;
+		} else if (frame->fmt->pixelformat == V4L2_PIX_FMT_NV12 ||
+			frame->fmt->pixelformat == V4L2_PIX_FMT_NV21) {
+			addr->addr[1] = (dma_addr_t)(addr->addr[0] + pix_size);
+			addr->addr[2] = 0;
+			frame->pitch[1] = frame->pitch[0];
+			frame->pitch[2] = 0;
+		} else if (frame->fmt->pixelformat == V4L2_PIX_FMT_NV16) {
+			addr->addr[1] = (dma_addr_t)(addr->addr[0] + pix_size);
+			addr->addr[2] = 0;
+			frame->pitch[1] = frame->pitch[0];
+			frame->pitch[2] = 0;
 		} else {
 			dev_err(&ctx->mdp_dev->pdev->dev,
 				"Invalid pixelformat:0x%x\n",
 				frame->fmt->pixelformat);
 		}
+
+		pix_size = pix_size_tmp;
 	}
-	mtk_mdp_dbg(3, "[%d] planes:%d, size:%d, addr:%p,%p,%p",
-		    ctx->id, planes, pix_size, (void *)addr->addr[0],
-		    (void *)addr->addr[1], (void *)addr->addr[2]);
+	mtk_mdp_dbg(3, "[%d] planes:%d, size%u, pitch:%u,%u,%u, addr:%p,%p,%p",
+		ctx->id, planes, pix_size, frame->pitch[0], frame->pitch[1],
+		frame->pitch[2], (void *)addr->addr[0],
+		(void *)addr->addr[1], (void *)addr->addr[2]);
 }
 
 static void mtk_mdp_m2m_get_bufs(struct mtk_mdp_ctx *ctx)
