@@ -322,6 +322,17 @@
 			clocks = <&mmsys CLK_MM_DISP_DITHER>;
 		};
 
+		gce: gce@1020a000 {
+			compatible = "mediatek,mt8167-gce",
+				     "mediatek,mt8173-gce";
+			reg = <0 0x1020a000 0 0x900>;
+			interrupts = <GIC_SPI 125 IRQ_TYPE_LEVEL_LOW>;
+			clocks = <&topckgen CLK_TOP_GCE>;
+			clock-names = "gce";
+
+			#mbox-cells = <3>;
+			#subsys-cells = <3>;
+		};
 	};
 };
 
