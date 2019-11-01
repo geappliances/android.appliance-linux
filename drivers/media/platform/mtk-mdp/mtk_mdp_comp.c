@@ -17,6 +17,7 @@
 static const char * const mtk_mdp_comp_stem[MTK_MDP_COMP_TYPE_MAX] = {
 	"mdp_rdma",
 	"mdp_rsz",
+	"mdp_tdshp",
 	"mdp_wdma",
 	"mdp_wrot",
 };
@@ -32,6 +33,7 @@ static const struct mtk_mdp_comp_match mtk_mdp_matches[MTK_MDP_COMP_ID_MAX] = {
 	{ MTK_MDP_RSZ,	0 },
 	{ MTK_MDP_RSZ,	1 },
 	{ MTK_MDP_RSZ,	2 },
+	{ MTK_MDP_TDSHP, 0 },
 	{ MTK_MDP_WDMA,	0 },
 	{ MTK_MDP_WROT,	0 },
 	{ MTK_MDP_WROT,	1 },

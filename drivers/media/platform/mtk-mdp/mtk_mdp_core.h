@@ -88,6 +88,8 @@ struct mtk_mdp_ctrls {
 	struct v4l2_ctrl *hflip;
 	struct v4l2_ctrl *vflip;
 	struct v4l2_ctrl *global_alpha;
+	struct v4l2_ctrl *sharpness;
+	struct v4l2_ctrl *contrast_auto;
 };
 
 /**
@@ -207,6 +209,8 @@ struct mtk_mdp_ctx {
 	int				rotation;
 	u32				hflip:1;
 	u32				vflip:1;
+	u32				contrast_auto:1;
+	int				sharpness;
 	struct mtk_mdp_dev		*mdp_dev;
 	struct v4l2_m2m_ctx		*m2m_ctx;
 	struct v4l2_fh			fh;

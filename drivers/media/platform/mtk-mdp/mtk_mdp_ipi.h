@@ -134,6 +134,19 @@ struct mdp_cmdq_info {
 	uint32_t reserved;
 };
 
+/**
+ * struct mdp_pq_info - picture quality information
+ * @sharpness_enable : sharpness enable.
+ * @sharpness_level  : sharpness level.
+ * @dc_enable        : dynamic contrast enable.
+ */
+struct mdp_pq_info {
+	uint32_t sharpness_enable;
+	uint32_t sharpness_level;
+	uint32_t dynamic_contrast_enable;
+	uint32_t reserved;
+};
+
 struct mdp_process_vsi {
 	struct mdp_config src_config;
 	struct mdp_buffer src_buffer;
@@ -141,6 +154,7 @@ struct mdp_process_vsi {
 	struct mdp_buffer dst_buffer;
 	struct mdp_config_misc misc;
 	struct mdp_cmdq_info cmdq;
+	struct mdp_pq_info pq;
 };
 
 #pragma pack(pop)

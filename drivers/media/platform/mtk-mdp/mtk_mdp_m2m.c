@@ -19,6 +19,7 @@
 #include "mtk_mdp_regs.h"
 #include "mtk_vpu.h"
 
+#define V4L2_CID_MTK_MDP_CONTRAST_AUTO (V4L2_CID_USER_BASE | 0x1000)
 
 /**
  *  struct mtk_mdp_pix_limit - image pixel size limits
@@ -529,6 +530,8 @@ static void mtk_mdp_m2m_worker(struct work_struct *work)
 	mtk_mdp_hw_set_rotation(ctx);
 	mtk_mdp_hw_set_global_alpha(ctx);
 
+	mtk_mdp_hw_set_pq_info(ctx);
+
 	ret = mtk_mdp_vpu_process(&ctx->vpu);
 	if (ret) {
 		dev_err(&mdp->pdev->dev, "processing failed: %d", ret);
@@ -1020,6 +1023,12 @@ static int mtk_mdp_s_ctrl(struct v4l2_ctrl *ctrl)
 	case V4L2_CID_ALPHA_COMPONENT:
 		ctx->d_frame.alpha = ctrl->val;
 		break;
+	case V4L2_CID_SHARPNESS:
+		ctx->sharpness = ctrl->val;
+		break;
+	case V4L2_CID_MTK_MDP_CONTRAST_AUTO:
+		ctx->contrast_auto = ctrl->val;
+		break;
 	}
 
 	return 0;
@@ -1027,6 +1036,16 @@ static int mtk_mdp_s_ctrl(struct v4l2_ctrl *ctrl)
 
 static const struct v4l2_ctrl_ops mtk_mdp_ctrl_ops = {
 	.s_ctrl = mtk_mdp_s_ctrl,
+};
+
+static const struct v4l2_ctrl_config mtk_mdp_ctrl_contrast_auto_config = {
+	.ops = &mtk_mdp_ctrl_ops,
+	.id = V4L2_CID_MTK_MDP_CONTRAST_AUTO,
+	.name = "Contrast, Automatic",
+	.type = V4L2_CTRL_TYPE_BOOLEAN,
+	.min = 0,
+	.max = 1,
+	.step = 1,
 };
 
 static int mtk_mdp_ctrls_create(struct mtk_mdp_ctx *ctx)
@@ -1047,6 +1066,13 @@ static int mtk_mdp_ctrls_create(struct mtk_mdp_ctx *ctx)
 						    &mtk_mdp_ctrl_ops,
 						    V4L2_CID_ALPHA_COMPONENT,
 						    0, 255, 1, 0);
+	ctx->ctrls.sharpness = v4l2_ctrl_new_std(&ctx->ctrl_handler,
+						 &mtk_mdp_ctrl_ops,
+						 V4L2_CID_SHARPNESS,
+						 0, 4096, 1, 0);
+	ctx->ctrls.contrast_auto = v4l2_ctrl_new_custom(&ctx->ctrl_handler,
+					&mtk_mdp_ctrl_contrast_auto_config,
+					NULL);
 	ctx->ctrls_rdy = ctx->ctrl_handler.error == 0;
 
 	if (ctx->ctrl_handler.error) {
