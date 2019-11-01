@@ -930,6 +930,11 @@ static int mtk_mdp_m2m_reqbufs(struct file *file, void *fh,
 			mtk_mdp_ctx_state_lock_clear(ctx, MTK_MDP_SRC_FMT);
 		else
 			mtk_mdp_ctx_state_lock_clear(ctx, MTK_MDP_DST_FMT);
+	} else {
+		if (reqbufs->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
+			mtk_mdp_ctx_state_lock_set(ctx, MTK_MDP_SRC_FMT);
+		else
+			mtk_mdp_ctx_state_lock_set(ctx, MTK_MDP_DST_FMT);
 	}
 
 	return v4l2_m2m_reqbufs(file, ctx->m2m_ctx, reqbufs);
