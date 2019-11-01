@@ -146,3 +146,12 @@ void mtk_mdp_hw_set_global_alpha(struct mtk_mdp_ctx *ctx)
 
 	misc->alpha = ctx->ctrls.global_alpha->val;
 }
+
+void mtk_mdp_hw_set_pq_info(struct mtk_mdp_ctx *ctx)
+{
+	struct mdp_pq_info *vsi_pq = &ctx->vpu.vsi->pq;
+
+	vsi_pq->sharpness_enable = !!ctx->sharpness;
+	vsi_pq->sharpness_level = ctx->sharpness;
+	vsi_pq->dynamic_contrast_enable = ctx->contrast_auto;
+}
