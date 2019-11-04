@@ -103,6 +103,21 @@ void mtk_mdp_unregister_component(struct mtk_mdp_dev *mdp,
 	list_del(&comp->node);
 }
 
+static const struct of_device_id mtk_mdp_comp_of_match[] = {
+	{ .compatible = "mediatek,mt8167-mdp-wdma" },
+	{ .compatible = "mediatek,mt8167-mdp-wrot" },
+	{},
+};
+MODULE_DEVICE_TABLE(of, mtk_mdp_comp_of_match);
+
+struct platform_driver mtk_mdp_comp = {
+	.driver		= {
+		.name	= "mediatek-mdp-comp",
+		.owner	= THIS_MODULE,
+		.of_match_table = mtk_mdp_comp_of_match,
+	},
+};
+
 static int mtk_mdp_probe(struct platform_device *pdev)
 {
 	struct mtk_mdp_dev *mdp;
@@ -182,6 +197,8 @@ static int mtk_mdp_probe(struct platform_device *pdev)
 
 		mtk_mdp_register_component(mdp, comp);
 	}
+
+	platform_driver_register(&mtk_mdp_comp);
 
 	mdp->job_wq = create_singlethread_workqueue(MTK_MDP_MODULE_NAME);
 	if (!mdp->job_wq) {
