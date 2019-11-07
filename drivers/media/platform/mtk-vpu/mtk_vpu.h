@@ -182,5 +182,5 @@ int vpu_load_firmware(struct platform_device *pdev);
  * otherwise the mapped kernel virtual address
  **/
 void *vpu_mapping_dm_addr(struct platform_device *pdev,
-			  u32 dtcm_dmem_addr);
+			  uintptr_t u32 dtcm_dmem_addr);
 #endif /* _MTK_VPU_H */
