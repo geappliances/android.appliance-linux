@@ -429,7 +429,7 @@ unsigned int vpu_get_venc_hw_capa(struct platform_device *pdev)
 EXPORT_SYMBOL_GPL(vpu_get_venc_hw_capa);
 
 void *vpu_mapping_dm_addr(struct platform_device *pdev,
-			  u32 dtcm_dmem_addr)
+			  uintptr_t dtcm_dmem_addr)
 {
 	struct mtk_vpu *vpu = platform_get_drvdata(pdev);
 
