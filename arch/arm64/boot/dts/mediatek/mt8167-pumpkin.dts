@@ -28,6 +28,11 @@
 		};
 	};
 
+
+	/* reserved for android overlay */
+	reserved_memory: reserved-memory {
+	};
+
 	firmware: firmware {
 		compatible = "android,firmware";
 		/* reserved for android overlay */
