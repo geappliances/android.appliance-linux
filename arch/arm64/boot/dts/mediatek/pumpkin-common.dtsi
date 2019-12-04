@@ -6,6 +6,8 @@
 
 #include <dt-bindings/gpio/gpio.h>
 
+#include "mt6392.dtsi"
+
 / {
 	aliases {
 		serial0 = &uart0;
@@ -45,6 +47,22 @@
 			debounce-interval = <15>;
 		};
 	};
+};
+
+&cpu0 {
+	proc-supply = <&mt6392_vproc_reg>;
+};
+
+&cpu1 {
+	proc-supply = <&mt6392_vproc_reg>;
+};
+
+&cpu2 {
+	proc-supply = <&mt6392_vproc_reg>;
+};
+
+&cpu3 {
+	proc-supply = <&mt6392_vproc_reg>;
 };
 
 &i2c0 {
@@ -163,6 +181,13 @@
 	status = "okay";
 };
 
+&mt6392_pmic {
+	interrupt-parent = <&pio>;
+	interrupts = <28 IRQ_TYPE_LEVEL_HIGH>;
+	interrupt-controller;
+	#interrupt-cells = <2>;
+};
+
 &uart0 {
 	status = "okay";
 };
@@ -197,6 +222,21 @@
 
 &usb_phy {
 	status = "okay";
+};
+
+&mmc0 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc0_pins_default>;
+	pinctrl-1 = <&mmc0_pins_uhs>;
+	status = "okay";
+	bus-width = <8>;
+	max-frequency = <200000000>;
+	cap-mmc-highspeed;
+	mmc-hs200-1_8v;
+	cap-mmc-hw-reset;
+	vmmc-supply = <&mt6392_vemc3v3_reg>;
+	vqmmc-supply = <&mt6392_vio18_reg>;
+	non-removable;
 };
 
 &pio {
@@ -250,6 +290,60 @@
 				 <MT8516_PIN_12_EINT12__FUNC_EXT_TXEN>,
 				 <MT8516_PIN_38_MRG_DI__FUNC_EXT_MDIO>,
 				 <MT8516_PIN_39_MRG_DO__FUNC_EXT_MDC>;
+		};
+	};
+
+	mmc0_pins_default: mmc0default {
+		pins_cmd_dat {
+			pinmux = <MT8516_PIN_120_MSDC0_DAT0__FUNC_MSDC0_DAT0>,
+				<MT8516_PIN_119_MSDC0_DAT1__FUNC_MSDC0_DAT1>,
+				<MT8516_PIN_118_MSDC0_DAT2__FUNC_MSDC0_DAT2>,
+				<MT8516_PIN_117_MSDC0_DAT3__FUNC_MSDC0_DAT3>,
+				<MT8516_PIN_113_MSDC0_DAT4__FUNC_MSDC0_DAT4>,
+				<MT8516_PIN_112_MSDC0_DAT5__FUNC_MSDC0_DAT5>,
+				<MT8516_PIN_111_MSDC0_DAT6__FUNC_MSDC0_DAT6>,
+				<MT8516_PIN_110_MSDC0_DAT7__FUNC_MSDC0_DAT7>,
+				<MT8516_PIN_115_MSDC0_CMD__FUNC_MSDC0_CMD>;
+			input-enable;
+			bias-pull-up;
+		};
+
+		pins_clk {
+			pinmux = <MT8516_PIN_116_MSDC0_CLK__FUNC_MSDC0_CLK>;
+			bias-pull-down;
+		};
+
+		pins_rst {
+			pinmux = <MT8516_PIN_114_MSDC0_RSTB__FUNC_MSDC0_RSTB>;
+			bias-pull-up;
+		};
+	};
+
+	mmc0_pins_uhs: mmc0@0{
+		pins_cmd_dat {
+			pinmux = <MT8516_PIN_120_MSDC0_DAT0__FUNC_MSDC0_DAT0>,
+				<MT8516_PIN_119_MSDC0_DAT1__FUNC_MSDC0_DAT1>,
+				<MT8516_PIN_118_MSDC0_DAT2__FUNC_MSDC0_DAT2>,
+				<MT8516_PIN_117_MSDC0_DAT3__FUNC_MSDC0_DAT3>,
+				<MT8516_PIN_113_MSDC0_DAT4__FUNC_MSDC0_DAT4>,
+				<MT8516_PIN_112_MSDC0_DAT5__FUNC_MSDC0_DAT5>,
+				<MT8516_PIN_111_MSDC0_DAT6__FUNC_MSDC0_DAT6>,
+				<MT8516_PIN_110_MSDC0_DAT7__FUNC_MSDC0_DAT7>,
+				<MT8516_PIN_115_MSDC0_CMD__FUNC_MSDC0_CMD>;
+			input-enable;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_clk {
+			pinmux = <MT8516_PIN_116_MSDC0_CLK__FUNC_MSDC0_CLK>;
+			drive-strength = <MTK_DRIVE_8mA>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+
+		pins_rst {
+			pinmux = <MT8516_PIN_114_MSDC0_RSTB__FUNC_MSDC0_RSTB>;
+			bias-pull-up;
 		};
 	};
 };
