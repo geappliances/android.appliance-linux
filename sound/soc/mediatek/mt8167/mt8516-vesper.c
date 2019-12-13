@@ -352,13 +352,34 @@ static struct snd_soc_dai_link_component tdm_in_codecs[] = {
 	{.name = "tlv320adc3101.1-0018", .dai_name = "tlv320adc3101-aif" },
 };
 
+/* FE */
+SND_SOC_DAILINK_DEFS(playback1,
+	DAILINK_COMP_ARRAY(COMP_CPU("DL1")),
+	DAILINK_COMP_ARRAY(COMP_DUMMY()),
+	DAILINK_COMP_ARRAY(COMP_EMPTY()));
+
+SND_SOC_DAILINK_DEFS(tdm_capture,
+	DAILINK_COMP_ARRAY(COMP_CPU("TDM_IN")),
+	DAILINK_COMP_ARRAY(COMP_DUMMY()),
+	DAILINK_COMP_ARRAY(COMP_EMPTY()));
+
+/* BE */
+SND_SOC_DAILINK_DEFS(tdm_in_io,
+	DAILINK_COMP_ARRAY(COMP_CPU("TDM_IN_IO")),
+	DAILINK_COMP_ARRAY(COMP_DUMMY()),
+	DAILINK_COMP_ARRAY(COMP_EMPTY()));
+
+SND_SOC_DAILINK_DEFS(i2s,
+	DAILINK_COMP_ARRAY(COMP_CPU("I2S")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("pcm512x.1-004c", "pcm512x-hifi")),
+	DAILINK_COMP_ARRAY(COMP_EMPTY()));
+
 /* Digital audio interface glue - connects codec <---> CPU */
 static struct snd_soc_dai_link mt8516_vesper_dais[] = {
 	/* Front End DAI links */
 	{
 		.name = "TDM Capture",
 		.stream_name = "TDM_Capture",
-		.cpu_dai_name = "TDM_IN",
 		.codecs = tdm_in_codecs,
 		.num_codecs = 2,
 		.dai_fmt = SND_SOC_DAIFMT_DSP_B | SND_SOC_DAIFMT_NB_NF |
@@ -370,42 +391,37 @@ static struct snd_soc_dai_link mt8516_vesper_dais[] = {
 		.dynamic = 1,
 		.dpcm_capture = 1,
 		.ops = &tdmin_capture_ops,
+		SND_SOC_DAILINK_REG(tdm_capture),
 	},
 	{
 		.name = "DL1 Playback",
 		.stream_name = "DL1_Playback",
-		.cpu_dai_name = "DL1",
-		.codec_name = "snd-soc-dummy",
-		.codec_dai_name = "snd-soc-dummy-dai",
 		.trigger = {
 			SND_SOC_DPCM_TRIGGER_POST,
 			SND_SOC_DPCM_TRIGGER_POST
 		},
 		.dynamic = 1,
 		.dpcm_playback = 1,
+		SND_SOC_DAILINK_REG(playback1),
 	},
 
 	/* Backend End DAI links */
 	{
 		.name = "TDM IN BE",
-		.cpu_dai_name = "TDM_IN_IO",
 		.no_pcm = 1,
-		.codec_name = "snd-soc-dummy",
-		.codec_dai_name = "snd-soc-dummy-dai",
 		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
 				SND_SOC_DAIFMT_CBS_CFS,
 		.dpcm_capture = 1,
+		SND_SOC_DAILINK_REG(tdm_in_io),
 	},
 	{
 		.name = "I2S BE",
-		.cpu_dai_name = "I2S",
 		.no_pcm = 1,
-		.codec_name = "pcm512x.1-004c",
-		.codec_dai_name = "pcm512x-hifi",
 		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
 				SND_SOC_DAIFMT_CBS_CFS,
 		.dpcm_playback = 1,
 		.dpcm_capture = 1,
+		SND_SOC_DAILINK_REG(i2s),
 	},
 };
 
@@ -472,9 +488,9 @@ static int mt8516_vesper_dev_probe(struct platform_device *pdev)
 	}
 
 	for (i = 0; i < card->num_links; i++) {
-		if (mt8516_vesper_dais[i].platform_name)
+		if (mt8516_vesper_dais[i].platforms->name)
 			continue;
-		mt8516_vesper_dais[i].platform_of_node = platform_node;
+		mt8516_vesper_dais[i].platforms->of_node = platform_node;
 	}
 
 	card->dev = &pdev->dev;
