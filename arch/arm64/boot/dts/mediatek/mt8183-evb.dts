@@ -544,6 +544,10 @@
 	vgpu-spply = <&mt6358_vgpu_reg>;
 };
 
+&scpsys {
+	mfg-supply = <&mt6358_vgpu_reg>;
+};
+
 &uart0 {
 	status = "okay";
 };
