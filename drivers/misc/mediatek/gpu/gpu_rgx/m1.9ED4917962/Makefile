@@ -225,4 +225,4 @@ ccflags-y += \
 	-I$(srctree)/drivers/misc/mediatek/gpu/ged/include \
 	-I$(srctree)/drivers/misc/mediatek/include/mt-plat
 
-obj-y += pvrsrvkm.o
+obj-$(CONFIG_RGX_M1_9ED4917962) += pvrsrvkm.o
