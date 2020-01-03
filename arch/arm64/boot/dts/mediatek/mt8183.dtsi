@@ -311,6 +311,7 @@
 				 <&topckgen CLK_TOP_ARMPLL_DIV_PLL1>;
 			clock-names = "cpu", "intermediate";
 			operating-points-v2 = <&cluster0_opp>;
+			dynamic-power-coefficient = <84>;
 		};
 
 		cpu1: cpu@1 {
@@ -323,6 +324,7 @@
 				 <&topckgen CLK_TOP_ARMPLL_DIV_PLL1>;
 			clock-names = "cpu", "intermediate";
 			operating-points-v2 = <&cluster0_opp>;
+			dynamic-power-coefficient = <84>;
 		};
 
 		cpu2: cpu@2 {
@@ -335,6 +337,7 @@
 				 <&topckgen CLK_TOP_ARMPLL_DIV_PLL1>;
 			clock-names = "cpu", "intermediate";
 			operating-points-v2 = <&cluster0_opp>;
+			dynamic-power-coefficient = <84>;
 		};
 
 		cpu3: cpu@3 {
@@ -347,6 +350,7 @@
 				 <&topckgen CLK_TOP_ARMPLL_DIV_PLL1>;
 			clock-names = "cpu", "intermediate";
 			operating-points-v2 = <&cluster0_opp>;
+			dynamic-power-coefficient = <84>;
 		};
 
 		cpu4: cpu@100 {
@@ -359,6 +363,7 @@
 				 <&topckgen CLK_TOP_ARMPLL_DIV_PLL1>;
 			clock-names = "cpu", "intermediate";
 			operating-points-v2 = <&cluster1_opp>;
+			dynamic-power-coefficient = <211>;
 		};
 
 		cpu5: cpu@101 {
@@ -371,6 +376,7 @@
 				 <&topckgen CLK_TOP_ARMPLL_DIV_PLL1>;
 			clock-names = "cpu", "intermediate";
 			operating-points-v2 = <&cluster1_opp>;
+			dynamic-power-coefficient = <211>;
 		};
 
 		cpu6: cpu@102 {
@@ -383,6 +389,7 @@
 				 <&topckgen CLK_TOP_ARMPLL_DIV_PLL1>;
 			clock-names = "cpu", "intermediate";
 			operating-points-v2 = <&cluster1_opp>;
+			dynamic-power-coefficient = <211>;
 		};
 
 		cpu7: cpu@103 {
@@ -395,6 +402,7 @@
 				 <&topckgen CLK_TOP_ARMPLL_DIV_PLL1>;
 			clock-names = "cpu", "intermediate";
 			operating-points-v2 = <&cluster1_opp>;
+			dynamic-power-coefficient = <211>;
 		};
 	};
 
