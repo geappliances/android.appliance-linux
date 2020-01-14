@@ -296,6 +296,7 @@ static const struct snd_kcontrol_new mt8516_vesper_soc_controls[] = {
 static struct adc_config vesper_config[] = {
 	{.name = "pcm186x.1-004a", .tdm_mask = 0x0f},
 	{.name = "tlv320adc3101.1-0018", .tdm_mask = 0x30},
+	{.name = "pcm186x.1-004b", .tdm_mask = 0xc0},
 };
 
 static int tdmin_capture_startup(struct snd_pcm_substream *substream)
@@ -350,6 +351,7 @@ static struct snd_soc_ops tdmin_capture_ops = {
 static struct snd_soc_dai_link_component tdm_in_codecs[] = {
 	{.name = "pcm186x.1-004a", .dai_name = "pcm1865-aif" },
 	{.name = "tlv320adc3101.1-0018", .dai_name = "tlv320adc3101-aif" },
+	{.name = "pcm186x.1-004b", .dai_name = "pcm1865-aif" },
 };
 
 /* FE */
@@ -362,7 +364,8 @@ SND_SOC_DAILINK_DEFS(tdm_capture,
 	DAILINK_COMP_ARRAY(COMP_CPU("TDM_IN")),
 	DAILINK_COMP_ARRAY(
 		COMP_CODEC("pcm186x.1-004a", "pcm1865-aif"),
-		COMP_CODEC("tlv320adc3101.1-0018", "tlv320adc3101-aif")),
+		COMP_CODEC("tlv320adc3101.1-0018", "tlv320adc3101-aif"),
+		COMP_CODEC("pcm186x.1-004b", "pcm1865-aif")),
 	DAILINK_COMP_ARRAY(COMP_EMPTY()));
 
 /* BE */
@@ -383,7 +386,7 @@ static struct snd_soc_dai_link mt8516_vesper_dais[] = {
 		.name = "TDM Capture",
 		.stream_name = "TDM_Capture",
 		.codecs = tdm_in_codecs,
-		.num_codecs = 2,
+		.num_codecs = ARRAY_SIZE(tdm_in_codecs),
 		.dai_fmt = SND_SOC_DAIFMT_DSP_B | SND_SOC_DAIFMT_NB_NF |
 				SND_SOC_DAIFMT_CBS_CFS,
 		.trigger = {
