@@ -117,6 +117,8 @@ int adc3101_remove(struct device *dev);
 
 /* ADC3101_PGAPIN */
 #define ADC3101_PGAPIN_SEL_MASK			GENMASK(1, 0)
+#define ADC3101_PGAPIN_6DB_MASK			0x55
+#define ADC3101_PGAPIN2_6DB_MASK		0x15
 
 /* ADC3101_APGAVOL */
 #define ADC3101_APGA_MUTE				BIT(7)
