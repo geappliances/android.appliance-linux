@@ -67,8 +67,76 @@ struct adc3101_priv {
 	struct regulator *supply_iov;
 	struct regulator *supply_dv;
 	struct regulator *supply_av;
+	unsigned int minus6db_left_input;
+	unsigned int minus6db_right_input;
 	struct device *dev;
 };
+
+static int adc3101_get_adc_left_input_switch(struct snd_kcontrol *kcontrol,
+			     struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component =
+				snd_soc_kcontrol_component(kcontrol);
+	struct adc3101_priv *adc3101 = snd_soc_component_get_drvdata(component);
+
+	ucontrol->value.integer.value[0] = adc3101->minus6db_left_input;
+	return 0;
+}
+
+static int adc3101_put_adc_left_input_switch(struct snd_kcontrol *kcontrol,
+			      struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component =
+				snd_soc_kcontrol_component(kcontrol);
+	struct adc3101_priv *adc3101 = snd_soc_component_get_drvdata(component);
+	unsigned int minus6db_left_input = ucontrol->value.integer.value[0];
+
+	if (minus6db_left_input > 1)
+		return -EINVAL;
+
+	adc3101->minus6db_left_input = minus6db_left_input;
+	snd_soc_component_update_bits(component, ADC3101_LPGAPIN,
+		ADC3101_PGAPIN_6DB_MASK,
+		minus6db_left_input ? ADC3101_PGAPIN_6DB_MASK : 0);
+	snd_soc_component_update_bits(component, ADC3101_LPGAPIN2,
+		ADC3101_PGAPIN2_6DB_MASK,
+		minus6db_left_input ? ADC3101_PGAPIN2_6DB_MASK : 0);
+
+	return 0;
+}
+
+static int adc3101_get_adc_right_input_switch(struct snd_kcontrol *kcontrol,
+			     struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component =
+				snd_soc_kcontrol_component(kcontrol);
+	struct adc3101_priv *adc3101 = snd_soc_component_get_drvdata(component);
+
+	ucontrol->value.integer.value[0] = adc3101->minus6db_right_input;
+	return 0;
+}
+
+static int adc3101_put_adc_right_input_switch(struct snd_kcontrol *kcontrol,
+			      struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component =
+				snd_soc_kcontrol_component(kcontrol);
+	struct adc3101_priv *adc3101 = snd_soc_component_get_drvdata(component);
+	unsigned int minus6db_right_input = ucontrol->value.integer.value[0];
+
+	if (minus6db_right_input > 1)
+		return -EINVAL;
+
+	adc3101->minus6db_right_input = minus6db_right_input;
+	snd_soc_component_update_bits(component, ADC3101_RPGAPIN,
+		ADC3101_PGAPIN_6DB_MASK,
+		minus6db_right_input ? ADC3101_PGAPIN_6DB_MASK : 0);
+	snd_soc_component_update_bits(component, ADC3101_RPGAPIN2,
+		ADC3101_PGAPIN2_6DB_MASK,
+		minus6db_right_input ? ADC3101_PGAPIN2_6DB_MASK : 0);
+
+	return 0;
+}
 
 /* 0dB min, 0.5dB steps */
 static DECLARE_TLV_DB_SCALE(tlv_step_0_5, 0, 50, 0);
@@ -82,6 +150,12 @@ static const struct snd_kcontrol_new adc3101_snd_controls[] = {
 			ADC3101_RADCVOL, 0, -0x18, 0x28, 6, 0, tlv_adc_vol),
 	SOC_DOUBLE_R_TLV("PGA Level Volume", ADC3101_LAPGAVOL,
 			ADC3101_RAPGAVOL, 0, 0x50, 0, tlv_step_0_5),
+	SOC_SINGLE_BOOL_EXT("Minus 6dB ADC Left input Switch", 0,
+			    adc3101_get_adc_left_input_switch,
+			    adc3101_put_adc_left_input_switch),
+	SOC_SINGLE_BOOL_EXT("Minus 6dB ADC Right input Switch", 0,
+			    adc3101_get_adc_right_input_switch,
+			    adc3101_put_adc_right_input_switch),
 };
 
 static const struct adc3101_rate_divs adc3101_divs[] = {
@@ -448,14 +522,16 @@ static int adc3101_component_probe(struct snd_soc_component *component)
 	case CH_SEL4:
 		snd_soc_component_update_bits(component, ADC3101_LPGAPIN,
 			ADC3101_PGAPIN_SEL_MASK <<
-			(2 * adc3101->left_pin_select), 0);
+			(2 * adc3101->left_pin_select),
+			adc3101->minus6db_left_input);
 		break;
 	case CH_SEL1X:
 	case CH_SEL2X:
 	case CH_SEL3X:
 		snd_soc_component_update_bits(component, ADC3101_LPGAPIN2,
 			ADC3101_PGAPIN_SEL_MASK <<
-			(2 * adc3101->left_pin_select - 8), 0);
+			(2 * adc3101->left_pin_select - 8),
+			adc3101->minus6db_left_input);
 		break;
 	default:
 		dev_err(component->dev, "wrong left pin selection\n");
@@ -470,14 +546,16 @@ static int adc3101_component_probe(struct snd_soc_component *component)
 	case CH_SEL4:
 		snd_soc_component_update_bits(component, ADC3101_RPGAPIN,
 			ADC3101_PGAPIN_SEL_MASK <<
-			(2 * adc3101->right_pin_select), 0);
+			(2 * adc3101->right_pin_select),
+			adc3101->minus6db_right_input);
 		break;
 	case CH_SEL1X:
 	case CH_SEL2X:
 	case CH_SEL3X:
 		snd_soc_component_update_bits(component, ADC3101_RPGAPIN2,
 			ADC3101_PGAPIN_SEL_MASK <<
-			(2 * adc3101->right_pin_select - 8), 0);
+			(2 * adc3101->right_pin_select - 8),
+			adc3101->minus6db_right_input);
 		break;
 	default:
 		dev_err(component->dev, "wrong right pin selection\n");
@@ -657,6 +735,8 @@ int adc3101_probe(struct device *dev, struct regmap *regmap)
 	adc3101->sysclk = 0;
 	adc3101->tdm_offset = 0;
 	adc3101->tdm_additional_offset = 0;
+	adc3101->minus6db_left_input = 1;
+	adc3101->minus6db_right_input = 1;
 
 	if (gpio_is_valid(adc3101->rstn_gpio)) {
 		ret = devm_gpio_request_one(dev, adc3101->rstn_gpio,
