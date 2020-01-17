@@ -253,7 +253,7 @@ static int adc3101_set_dai_sysclk(struct snd_soc_dai *codec_dai,
 	struct snd_soc_component *component = codec_dai->component;
 	struct adc3101_priv *adc3101 = snd_soc_component_get_drvdata(component);
 
-	dev_err(component->dev, "frequency to set DAI system clock=%d\n", freq);
+	dev_dbg(component->dev, "frequency to set DAI system clock=%d\n", freq);
 	adc3101->sysclk = freq;
 	return 0;
 }
@@ -265,7 +265,7 @@ static int adc3101_set_tdm_slot(struct snd_soc_dai *dai, unsigned int tx_mask,
 	struct adc3101_priv *adc3101 = snd_soc_component_get_drvdata(component);
 	unsigned int first_slot, last_slot, tdm_offset;
 
-	dev_info(component->dev,
+	dev_dbg(component->dev,
 		"%s() tx_mask=0x%x rx_mask=0x%x slots=%d slot_width=%d\n",
 		__func__, tx_mask, rx_mask, slots, slot_width);
 
@@ -292,7 +292,7 @@ static int adc3101_set_tdm_slot(struct snd_soc_dai *dai, unsigned int tx_mask,
 	}
 
 	adc3101->tdm_offset = tdm_offset;
-	dev_err(component->dev, "tdm offset is %d\n", adc3101->tdm_offset);
+	dev_dbg(component->dev, "tdm offset is %d\n", adc3101->tdm_offset);
 
 	/* tdm offset */
 	snd_soc_component_write(component, ADC3101_CH_OFFSET_1, tdm_offset);
@@ -308,7 +308,7 @@ static int adc3101_set_dai_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
 	struct snd_soc_component *component = codec_dai->component;
 	struct adc3101_priv *adc3101 = snd_soc_component_get_drvdata(component);
 
-	dev_err(component->dev,
+	dev_dbg(component->dev,
 		"adc3101: fmt to set DAI fmt=0x%x\n",
 		fmt);
 
@@ -357,8 +357,6 @@ static int adc3101_hw_params(struct snd_pcm_substream *substream,
 	u8 i2s_tdm_reg = 0;
 	int i;
 	struct device *dev = adc3101->dev;
-
-	dev_info(dev, "entering hw_params\n");
 
 	i = adc3101_get_divs(adc3101->sysclk, params_rate(params));
 	if (i < 0) {
@@ -493,8 +491,6 @@ static int adc3101_component_probe(struct snd_soc_component *component)
 	struct adc3101_priv *adc3101 = snd_soc_component_get_drvdata(component);
 	struct device *dev = adc3101->dev;
 	u8 clk_mux = 0;
-
-	dev_info(dev, "entering component_probe\n");
 
 	if (gpio_is_valid(adc3101->rstn_gpio)) {
 		gpio_set_value(adc3101->rstn_gpio, 0);
