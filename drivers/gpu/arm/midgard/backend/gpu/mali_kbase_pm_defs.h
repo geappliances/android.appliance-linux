@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2014-2018 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014-2019 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -29,15 +29,18 @@
 
 #include "mali_kbase_pm_always_on.h"
 #include "mali_kbase_pm_coarse_demand.h"
-#include "mali_kbase_pm_demand.h"
 #if !MALI_CUSTOMER_RELEASE
-#include "mali_kbase_pm_demand_always_powered.h"
-#include "mali_kbase_pm_fast_start.h"
+#include "mali_kbase_pm_always_on_demand.h"
 #endif
 
 /* Forward definition - see mali_kbase.h */
 struct kbase_device;
 struct kbase_jd_atom;
+
+/**
+ * Maximum number of PM policies that may be active on a device.
+ */
+#define KBASE_PM_MAX_NUM_POLICIES (10)
 
 /**
  * enum kbase_pm_core_type - The types of core in a GPU.
@@ -62,6 +65,71 @@ enum kbase_pm_core_type {
 	KBASE_PM_CORE_SHADER = SHADER_PRESENT_LO,
 	KBASE_PM_CORE_TILER = TILER_PRESENT_LO,
 	KBASE_PM_CORE_STACK = STACK_PRESENT_LO
+};
+
+/**
+ * enum kbase_l2_core_state - The states used for the L2 cache & tiler power
+ *                            state machine.
+ *
+ * @KBASE_L2_OFF: The L2 cache and tiler are off
+ * @KBASE_L2_PEND_ON: The L2 cache and tiler are powering on
+ * @KBASE_L2_RESTORE_CLOCKS: The GPU clock is restored. Conditionally used.
+ * @KBASE_L2_ON_HWCNT_ENABLE: The L2 cache and tiler are on, and hwcnt is being
+ *                            enabled
+ * @KBASE_L2_ON: The L2 cache and tiler are on, and hwcnt is enabled
+ * @KBASE_L2_ON_HWCNT_DISABLE: The L2 cache and tiler are on, and hwcnt is being
+ *                             disabled
+ * @KBASE_L2_SLOW_DOWN_CLOCKS: The GPU clock is set to appropriate or lowest
+ *                             clock. Conditionally used.
+ * @KBASE_L2_POWER_DOWN: The L2 cache and tiler are about to be powered off
+ * @KBASE_L2_PEND_OFF: The L2 cache and tiler are powering off
+ * @KBASE_L2_RESET_WAIT: The GPU is resetting, L2 cache and tiler power state
+ *                       are unknown
+ */
+enum kbase_l2_core_state {
+#define KBASEP_L2_STATE(n) KBASE_L2_ ## n,
+#include "mali_kbase_pm_l2_states.h"
+#undef KBASEP_L2_STATE
+};
+
+/**
+ * enum kbase_shader_core_state - The states used for the shaders' state machine.
+ *
+ * @KBASE_SHADERS_OFF_CORESTACK_OFF: The shaders and core stacks are off
+ * @KBASE_SHADERS_OFF_CORESTACK_PEND_ON: The shaders are off, core stacks have
+ *                                       been requested to power on and hwcnt
+ *                                       is being disabled
+ * @KBASE_SHADERS_PEND_ON_CORESTACK_ON: Core stacks are on, shaders have been
+ *                                      requested to power on.
+ * @KBASE_SHADERS_ON_CORESTACK_ON: The shaders and core stacks are on, and hwcnt
+ *					already enabled.
+ * @KBASE_SHADERS_ON_CORESTACK_ON_RECHECK: The shaders and core stacks
+ *                                      are on, hwcnt disabled, and checks
+ *                                      to powering down or re-enabling
+ *                                      hwcnt.
+ * @KBASE_SHADERS_WAIT_OFF_CORESTACK_ON: The shaders have been requested to
+ *                                       power off, but they remain on for the
+ *                                       duration of the hysteresis timer
+ * @KBASE_SHADERS_WAIT_FINISHED_CORESTACK_ON: The hysteresis timer has expired
+ * @KBASE_SHADERS_L2_FLUSHING_CORESTACK_ON: The core stacks are on and the
+ *                                          level 2 cache is being flushed.
+ * @KBASE_SHADERS_READY_OFF_CORESTACK_ON: The core stacks are on and the shaders
+ *                                        are ready to be powered off.
+ * @KBASE_SHADERS_PEND_OFF_CORESTACK_ON: The core stacks are on, and the shaders
+ *                                       have been requested to power off
+ * @KBASE_SHADERS_OFF_CORESTACK_PEND_OFF: The shaders are off, and the core stacks
+ *                                        have been requested to power off
+ * @KBASE_SHADERS_OFF_CORESTACK_OFF_TIMER_PEND_OFF: Shaders and corestacks are
+ *                                                  off, but the tick timer
+ *                                                  cancellation is still
+ *                                                  pending.
+ * @KBASE_SHADERS_RESET_WAIT: The GPU is resetting, shader and core stack power
+ *                            states are unknown
+ */
+enum kbase_shader_core_state {
+#define KBASEP_SHADER_STATE(n) KBASE_SHADERS_ ## n,
+#include "mali_kbase_pm_shader_states.h"
+#undef KBASEP_SHADER_STATE
 };
 
 /**
@@ -94,8 +162,7 @@ struct kbasep_pm_metrics {
  *           not. Updated when the job scheduler informs us a job in submitted
  *           or removed from a GPU slot.
  *  @active_cl_ctx: number of CL jobs active on the GPU. Array is per-device.
- *  @active_gl_ctx: number of GL jobs active on the GPU. Array is per-slot. As
- *           GL jobs never run on slot 2 this slot is not recorded.
+ *  @active_gl_ctx: number of GL jobs active on the GPU. Array is per-slot.
  *  @lock: spinlock protecting the kbasep_pm_metrics_data structure
  *  @platform_data: pointer to data controlled by platform specific code
  *  @kbdev: pointer to kbase device for which metrics are collected
@@ -112,7 +179,7 @@ struct kbasep_pm_metrics_state {
 	ktime_t time_period_start;
 	bool gpu_active;
 	u32 active_cl_ctx[2];
-	u32 active_gl_ctx[2]; /* GL jobs can only run on 2 of the 3 job slots */
+	u32 active_gl_ctx[3];
 	spinlock_t lock;
 
 	void *platform_data;
@@ -128,13 +195,39 @@ struct kbasep_pm_metrics_state {
 #endif
 };
 
+/**
+ * struct kbasep_pm_tick_timer_state - State for the shader hysteresis timer
+ * @wq: Work queue to wait for the timer to stopped
+ * @work: Work item which cancels the timer
+ * @timer: Timer for powering off the shader cores
+ * @configured_interval: Period of GPU poweroff timer
+ * @configured_ticks: User-configured number of ticks to wait after the shader
+ *                    power down request is received before turning off the cores
+ * @remaining_ticks: Number of remaining timer ticks until shaders are powered off
+ * @cancel_queued: True if the cancellation work item has been queued. This is
+ *                 required to ensure that it is not queued twice, e.g. after
+ *                 a reset, which could cause the timer to be incorrectly
+ *                 cancelled later by a delayed workitem.
+ * @needed: Whether the timer should restart itself
+ */
+struct kbasep_pm_tick_timer_state {
+	struct workqueue_struct *wq;
+	struct work_struct work;
+	struct hrtimer timer;
+
+	ktime_t configured_interval;
+	unsigned int configured_ticks;
+	unsigned int remaining_ticks;
+
+	bool cancel_queued;
+	bool needed;
+};
+
 union kbase_pm_policy_data {
 	struct kbasep_pm_policy_always_on always_on;
 	struct kbasep_pm_policy_coarse_demand coarse_demand;
-	struct kbasep_pm_policy_demand demand;
 #if !MALI_CUSTOMER_RELEASE
-	struct kbasep_pm_policy_demand_always_powered demand_always_powered;
-	struct kbasep_pm_policy_fast_start fast_start;
+	struct kbasep_pm_policy_always_on_demand always_on_demand;
 #endif
 };
 
@@ -147,71 +240,35 @@ union kbase_pm_policy_data {
  * @pm_current_policy: The policy that is currently actively controlling the
  *                     power state.
  * @pm_policy_data:    Private data for current PM policy
- * @ca_in_transition:  Flag indicating when core availability policy is
- *                     transitioning cores. The core availability policy must
- *                     set this when a change in core availability is occurring.
- *                     power_change_lock must be held when accessing this.
  * @reset_done:        Flag when a reset is complete
  * @reset_done_wait:   Wait queue to wait for changes to @reset_done
- * @l2_powered_wait:   Wait queue for whether the l2 cache has been powered as
- *                     requested
- * @l2_powered:        State indicating whether all the l2 caches are powered.
- *                     Non-zero indicates they're *all* powered
- *                     Zero indicates that some (or all) are not powered
  * @gpu_cycle_counter_requests: The reference count of active gpu cycle counter
  *                              users
  * @gpu_cycle_counter_requests_lock: Lock to protect @gpu_cycle_counter_requests
- * @desired_shader_state: A bit mask identifying the shader cores that the
- *                        power policy would like to be on. The current state
- *                        of the cores may be different, but there should be
- *                        transitions in progress that will eventually achieve
- *                        this state (assuming that the policy doesn't change
- *                        its mind in the mean time).
- * @powering_on_shader_state: A bit mask indicating which shader cores are
- *                            currently in a power-on transition
- * @desired_tiler_state: A bit mask identifying the tiler cores that the power
- *                       policy would like to be on. See @desired_shader_state
- * @powering_on_tiler_state: A bit mask indicating which tiler core are
- *                           currently in a power-on transition
- * @powering_on_l2_state: A bit mask indicating which l2-caches are currently
- *                        in a power-on transition
- * @powering_on_stack_state: A bit mask indicating which core stacks are
- *                           currently in a power-on transition
- * @gpu_in_desired_state: This flag is set if the GPU is powered as requested
- *                        by the desired_xxx_state variables
- * @gpu_in_desired_state_wait: Wait queue set when @gpu_in_desired_state != 0
+ * @gpu_in_desired_state_wait: Wait queue set when the GPU is in the desired
+ *                             state according to the L2 and shader power state
+ *                             machines
  * @gpu_powered:       Set to true when the GPU is powered and register
- *                     accesses are possible, false otherwise
- * @instr_enabled:     Set to true when instrumentation is enabled,
- *                     false otherwise
+ *                     accesses are possible, false otherwise. Access to this
+ *                     variable should be protected by: both the hwaccess_lock
+ *                     spinlock and the pm.lock mutex for writes; or at least
+ *                     one of either lock for reads.
+ * @pm_shaders_core_mask: Shader PM state synchronised shaders core mask. It
+ *                     holds the cores enabled in a hardware counters dump,
+ *                     and may differ from @shaders_avail when under different
+ *                     states and transitions.
  * @cg1_disabled:      Set if the policy wants to keep the second core group
  *                     powered off
  * @driver_ready_for_irqs: Debug state indicating whether sufficient
  *                         initialization of the driver has occurred to handle
  *                         IRQs
- * @gpu_powered_lock:  Spinlock that must be held when writing @gpu_powered or
- *                     accessing @driver_ready_for_irqs
  * @metrics:           Structure to hold metrics for the GPU
- * @gpu_poweroff_pending: number of poweroff timer ticks until the GPU is
- *                        powered off
- * @shader_poweroff_pending_time: number of poweroff timer ticks until shaders
- *                        and/or timers are powered off
- * @gpu_poweroff_timer: Timer for powering off GPU
- * @gpu_poweroff_wq:   Workqueue to power off GPU on when timer fires
- * @gpu_poweroff_work: Workitem used on @gpu_poweroff_wq
- * @shader_poweroff_pending: Bit mask of shaders to be powered off on next
- *                           timer callback
- * @tiler_poweroff_pending: Bit mask of tilers to be powered off on next timer
- *                          callback
- * @poweroff_timer_needed: true if the poweroff timer is currently required,
- *                         false otherwise
- * @poweroff_timer_running: true if the poweroff timer is currently running,
- *                          false otherwise
- *                          power_change_lock should be held when accessing,
- *                          unless there is no way the timer can be running (eg
- *                          hrtimer_cancel() was called immediately before)
+ * @shader_tick_timer: Structure to hold the shader poweroff tick timer state
  * @poweroff_wait_in_progress: true if a wait for GPU power off is in progress.
  *                             hwaccess_lock must be held when accessing
+ * @invoke_poweroff_wait_wq_when_l2_off: flag indicating that the L2 power state
+ *                                       machine should invoke the poweroff
+ *                                       worker after the L2 has turned off.
  * @poweron_required: true if a GPU power on is required. Should only be set
  *                    when poweroff_wait_in_progress is true, and therefore the
  *                    GPU can not immediately be powered on. pm.lock must be
@@ -236,40 +293,75 @@ union kbase_pm_policy_data {
  * @callback_power_runtime_idle: Optional callback when the GPU may be idle. See
  *                              &struct kbase_pm_callback_conf
  * @ca_cores_enabled: Cores that are currently available
+ * @l2_state:     The current state of the L2 cache state machine. See
+ *                &enum kbase_l2_core_state
+ * @l2_desired:   True if the L2 cache should be powered on by the L2 cache state
+ *                machine
+ * @l2_always_on: If true, disable powering down of l2 cache.
+ * @shaders_state: The current state of the shader state machine.
+ * @shaders_avail: This is updated by the state machine when it is in a state
+ *                 where it can handle changes to the core availability. This
+ *                 is internal to the shader state machine and should *not* be
+ *                 modified elsewhere.
+ * @shaders_desired: True if the PM active count or power policy requires the
+ *                   shader cores to be on. This is used as an input to the
+ *                   shader power state machine.  The current state of the
+ *                   cores may be different, but there should be transitions in
+ *                   progress that will eventually achieve this state (assuming
+ *                   that the policy doesn't change its mind in the mean time).
+ * @in_reset: True if a GPU is resetting and normal power manager operation is
+ *            suspended
+ * @protected_entry_transition_override : True if GPU reset is being used
+ *                                  before entering the protected mode and so
+ *                                  the reset handling behaviour is being
+ *                                  overridden.
+ * @protected_transition_override : True if a protected mode transition is in
+ *                                  progress and is overriding power manager
+ *                                  behaviour.
+ * @protected_l2_override : Non-zero if the L2 cache is required during a
+ *                          protected mode transition. Has no effect if not
+ *                          transitioning.
+ * @hwcnt_desired: True if we want GPU hardware counters to be enabled.
+ * @hwcnt_disabled: True if GPU hardware counters are not enabled.
+ * @hwcnt_disable_work: Work item to disable GPU hardware counters, used if
+ *                      atomic disable is not possible.
+ * @gpu_clock_suspend_freq: 'opp-mali-errata-1485982' clock in opp table
+ *                          for safe L2 power cycle.
+ *                          If no opp-mali-errata-1485982 specified,
+ *                          the slowest clock will be taken.
+ * @gpu_clock_slow_down_wa: If true, slow down GPU clock during L2 power cycle.
+ * @gpu_clock_slow_down_desired: True if we want lower GPU clock
+ *                             for safe L2 power cycle. False if want GPU clock
+ *                             to back to normalized one. This is updated only
+ *                             in L2 state machine, kbase_pm_l2_update_state.
+ * @gpu_clock_slowed_down: During L2 power cycle,
+ *                         True if gpu clock is set at lower frequency
+ *                         for safe L2 power down, False if gpu clock gets
+ *                         restored to previous speed. This is updated only in
+ *                         work function, kbase_pm_gpu_clock_control_worker.
+ * @gpu_clock_control_work: work item to set GPU clock during L2 power cycle
+ *                          using gpu_clock_control
  *
  * Note:
  * During an IRQ, @pm_current_policy can be NULL when the policy is being
  * changed with kbase_pm_set_policy(). The change is protected under
- * kbase_device.pm.power_change_lock. Direct access to this from IRQ context
+ * kbase_device.pm.pcower_change_lock. Direct access to this from IRQ context
  * must therefore check for NULL. If NULL, then kbase_pm_set_policy() will
  * re-issue the policy functions that would have been done under IRQ.
  */
 struct kbase_pm_backend_data {
 	const struct kbase_pm_policy *pm_current_policy;
 	union kbase_pm_policy_data pm_policy_data;
-	bool ca_in_transition;
 	bool reset_done;
 	wait_queue_head_t reset_done_wait;
-	wait_queue_head_t l2_powered_wait;
-	int l2_powered;
 	int gpu_cycle_counter_requests;
 	spinlock_t gpu_cycle_counter_requests_lock;
 
-	u64 desired_shader_state;
-	u64 powering_on_shader_state;
-	u64 desired_tiler_state;
-	u64 powering_on_tiler_state;
-	u64 powering_on_l2_state;
-#ifdef CONFIG_MALI_CORESTACK
-	u64 powering_on_stack_state;
-#endif /* CONFIG_MALI_CORESTACK */
-
-	bool gpu_in_desired_state;
 	wait_queue_head_t gpu_in_desired_state_wait;
 
 	bool gpu_powered;
 
-	bool instr_enabled;
+	u64 pm_shaders_core_mask;
 
 	bool cg1_disabled;
 
@@ -277,25 +369,12 @@ struct kbase_pm_backend_data {
 	bool driver_ready_for_irqs;
 #endif /* CONFIG_MALI_DEBUG */
 
-	spinlock_t gpu_powered_lock;
-
-
 	struct kbasep_pm_metrics_state metrics;
 
-	int gpu_poweroff_pending;
-	int shader_poweroff_pending_time;
-
-	struct hrtimer gpu_poweroff_timer;
-	struct workqueue_struct *gpu_poweroff_wq;
-	struct work_struct gpu_poweroff_work;
-
-	u64 shader_poweroff_pending;
-	u64 tiler_poweroff_pending;
-
-	bool poweroff_timer_needed;
-	bool poweroff_timer_running;
+	struct kbasep_pm_tick_timer_state shader_tick_timer;
 
 	bool poweroff_wait_in_progress;
+	bool invoke_poweroff_wait_wq_when_l2_off;
 	bool poweron_required;
 	bool poweroff_is_suspend;
 
@@ -312,24 +391,45 @@ struct kbase_pm_backend_data {
 	void (*callback_power_runtime_off)(struct kbase_device *kbdev);
 	int (*callback_power_runtime_idle)(struct kbase_device *kbdev);
 
-#ifdef CONFIG_MALI_DEVFREQ
 	u64 ca_cores_enabled;
-#endif
+
+	enum kbase_l2_core_state l2_state;
+	enum kbase_shader_core_state shaders_state;
+	u64 shaders_avail;
+	bool l2_desired;
+	bool l2_always_on;
+	bool shaders_desired;
+
+	bool in_reset;
+
+	bool protected_entry_transition_override;
+	bool protected_transition_override;
+	int protected_l2_override;
+
+	bool hwcnt_desired;
+	bool hwcnt_disabled;
+	struct work_struct hwcnt_disable_work;
+
+	u64 gpu_clock_suspend_freq;
+	bool gpu_clock_slow_down_wa;
+	bool gpu_clock_slow_down_desired;
+	bool gpu_clock_slowed_down;
+	struct work_struct gpu_clock_control_work;
 };
 
 
 /* List of policy IDs */
 enum kbase_pm_policy_id {
-	KBASE_PM_POLICY_ID_DEMAND = 1,
-	KBASE_PM_POLICY_ID_ALWAYS_ON,
 	KBASE_PM_POLICY_ID_COARSE_DEMAND,
 #if !MALI_CUSTOMER_RELEASE
-	KBASE_PM_POLICY_ID_DEMAND_ALWAYS_POWERED,
-	KBASE_PM_POLICY_ID_FAST_START
+	KBASE_PM_POLICY_ID_ALWAYS_ON_DEMAND,
 #endif
+	KBASE_PM_POLICY_ID_ALWAYS_ON
 };
 
 typedef u32 kbase_pm_policy_flags;
+
+#define KBASE_PM_POLICY_FLAG_DISABLED_WITH_POWER_DOWN_ONLY (1u)
 
 /**
  * struct kbase_pm_policy - Power policy structure.
@@ -377,13 +477,8 @@ struct kbase_pm_policy {
 	/**
 	 * Function called to find out if shader cores are needed
 	 *
-	 * This needs to at least satisfy kbdev->shader_needed_cnt, and so must
-	 * never return false when kbdev->shader_needed_cnt > 0.
-	 *
-	 * Note that kbdev->pm.active_count being 0 is not a good indicator
-	 * that kbdev->shader_needed_cnt is also 0 - refer to the documentation
-	 * on the active_count member in struct kbase_pm_device_data and
-	 * kbase_pm_is_active().
+	 * This needs to at least satisfy kbdev->pm.backend.shaders_desired,
+	 * and so must never return false when shaders_desired is true.
 	 *
 	 * @kbdev: The kbase device structure for the device (must be a
 	 *         valid pointer)
