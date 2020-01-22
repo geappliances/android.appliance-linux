@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2010, 2012-2018 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010, 2012-2019 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -129,15 +129,15 @@ int kbase_mem_flags_change(struct kbase_context *kctx, u64 gpu_addr, unsigned in
 int kbase_mem_commit(struct kbase_context *kctx, u64 gpu_addr, u64 new_pages);
 
 /**
- * kbase_mmap - Mmap method, gets invoked when mmap system call is issued on
- *              device file /dev/malixx.
- * @file: Pointer to the device file /dev/malixx instance.
+ * kbase_context_mmap - Memory map method, gets invoked when mmap system call is
+ *                      issued on device file /dev/malixx.
+ * @kctx: The kernel context
  * @vma:  Pointer to the struct containing the info where the GPU allocation
  *        will be mapped in virtual address space of CPU.
  *
  * Return: 0 on success or error code
  */
-int kbase_mmap(struct file *file, struct vm_area_struct *vma);
+int kbase_context_mmap(struct kbase_context *kctx, struct vm_area_struct *vma);
 
 /**
  * kbase_mem_evictable_init - Initialize the Ephemeral memory eviction
@@ -303,22 +303,6 @@ void *kbase_vmap(struct kbase_context *kctx, u64 gpu_addr, size_t size,
  */
 void kbase_vunmap(struct kbase_context *kctx, struct kbase_vmap_struct *map);
 
-/** @brief Allocate memory from kernel space and map it onto the GPU
- *
- * @param kctx   The context used for the allocation/mapping
- * @param size   The size of the allocation in bytes
- * @param handle An opaque structure used to contain the state needed to free the memory
- * @return the VA for kernel space and GPU MMU
- */
-void *kbase_va_alloc(struct kbase_context *kctx, u32 size, struct kbase_hwc_dma_mapping *handle);
-
-/** @brief Free/unmap memory allocated by kbase_va_alloc
- *
- * @param kctx   The context used for the allocation/mapping
- * @param handle An opaque structure returned by the kbase_va_alloc function.
- */
-void kbase_va_free(struct kbase_context *kctx, struct kbase_hwc_dma_mapping *handle);
-
 extern const struct vm_operations_struct kbase_vm_ops;
 
 /**
@@ -443,5 +427,43 @@ void *kbase_phy_alloc_mapping_get(struct kbase_context *kctx, u64 gpu_addr,
  */
 void kbase_phy_alloc_mapping_put(struct kbase_context *kctx,
 		struct kbase_vmap_struct *kern_mapping);
+
+/**
+ * kbase_get_cache_line_alignment - Return cache line alignment
+ *
+ * Helper function to return the maximum cache line alignment considering
+ * both CPU and GPU cache sizes.
+ *
+ * Return: CPU and GPU cache line alignment, in bytes.
+ *
+ * @kbdev: Device pointer.
+ */
+u32 kbase_get_cache_line_alignment(struct kbase_device *kbdev);
+
+#if (KERNEL_VERSION(4, 20, 0) > LINUX_VERSION_CODE)
+static inline vm_fault_t vmf_insert_pfn_prot(struct vm_area_struct *vma,
+			unsigned long addr, unsigned long pfn, pgprot_t pgprot)
+{
+	int err;
+
+#if ((KERNEL_VERSION(4, 4, 147) >= LINUX_VERSION_CODE) || \
+		((KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE) && \
+		 (KERNEL_VERSION(4, 5, 0) <= LINUX_VERSION_CODE)))
+	if (pgprot_val(pgprot) != pgprot_val(vma->vm_page_prot))
+		return VM_FAULT_SIGBUS;
+
+	err = vm_insert_pfn(vma, addr, pfn);
+#else
+	err = vm_insert_pfn_prot(vma, addr, pfn, pgprot);
+#endif
+
+	if (unlikely(err == -ENOMEM))
+		return VM_FAULT_OOM;
+	if (unlikely(err < 0 && err != -EBUSY))
+		return VM_FAULT_SIGBUS;
+
+	return VM_FAULT_NOPAGE;
+}
+#endif
 
 #endif				/* _KBASE_MEM_LINUX_H_ */

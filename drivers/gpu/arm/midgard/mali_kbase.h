@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2010-2018 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2019 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -68,7 +68,7 @@
 #include "mali_kbase_jd_debugfs.h"
 #include "mali_kbase_gpuprops.h"
 #include "mali_kbase_jm.h"
-#include "mali_kbase_vinstr.h"
+#include "mali_kbase_ioctl.h"
 
 #include "ipa/mali_kbase_ipa.h"
 
@@ -81,6 +81,11 @@
 /* Introduced in Linux v4.6 */
 #define u64_to_user_ptr(x) ((void __user *)(uintptr_t)x)
 #endif
+
+
+/* Physical memory group ID for a special page which can alias several regions.
+ */
+#define KBASE_MEM_GROUP_SINK BASE_MEM_GROUP_DEFAULT
 
 /*
  * Kernel-side Base (KBase) APIs
@@ -109,13 +114,10 @@ int kbase_device_has_feature(struct kbase_device *kbdev, u32 feature);
 struct kbase_device *kbase_find_device(int minor);
 void kbase_release_device(struct kbase_device *kbdev);
 
-void kbase_set_profiling_control(struct kbase_device *kbdev, u32 control, u32 value);
-
-
 /**
- * kbase_get_unmapped_area() - get an address range which is currently
- *                             unmapped.
- * @filp: File operations associated with kbase device.
+ * kbase_context_get_unmapped_area() - get an address range which is currently
+ *                                     unmapped.
+ * @kctx: A kernel base context (which has its own GPU address space).
  * @addr: CPU mapped address (set to 0 since MAP_FIXED mapping is not allowed
  *        as Mali GPU driver decides about the mapping).
  * @len: Length of the address range.
@@ -150,7 +152,7 @@ void kbase_set_profiling_control(struct kbase_device *kbdev, u32 control, u32 va
  * Return: if successful, address of the unmapped area aligned as required;
  *         error code (negative) in case of failure;
  */
-unsigned long kbase_get_unmapped_area(struct file *filp,
+unsigned long kbase_context_get_unmapped_area(struct kbase_context *kctx,
 		const unsigned long addr, const unsigned long len,
 		const unsigned long pgoff, const unsigned long flags);
 
@@ -203,6 +205,16 @@ bool jd_submit_atom(struct kbase_context *kctx,
 			 struct kbase_jd_atom *katom);
 void kbase_jd_dep_clear_locked(struct kbase_jd_atom *katom);
 
+/**
+ * kbase_job_done - Process completed jobs from job interrupt
+ * @kbdev: Pointer to the kbase device.
+ * @done: Bitmask of done or failed jobs, from JOB_IRQ_STAT register
+ *
+ * This function processes the completed, or failed, jobs from the GPU job
+ * slots, for the bits set in the @done bitmask.
+ *
+ * The hwaccess_lock must be held when calling this function.
+ */
 void kbase_job_done(struct kbase_device *kbdev, u32 done);
 
 /**
@@ -251,6 +263,32 @@ void kbase_event_wakeup(struct kbase_context *kctx);
 int kbasep_jit_alloc_validate(struct kbase_context *kctx,
 					struct base_jit_alloc_info *info);
 /**
+ * kbase_free_user_buffer() - Free memory allocated for struct
+ *		@kbase_debug_copy_buffer.
+ *
+ * @buffer:	Pointer to the memory location allocated for the object
+ *		of the type struct @kbase_debug_copy_buffer.
+ */
+static inline void kbase_free_user_buffer(
+		struct kbase_debug_copy_buffer *buffer)
+{
+	struct page **pages = buffer->extres_pages;
+	int nr_pages = buffer->nr_extres_pages;
+
+	if (pages) {
+		int i;
+
+		for (i = 0; i < nr_pages; i++) {
+			struct page *pg = pages[i];
+
+			if (pg)
+				put_page(pg);
+		}
+		kfree(pages);
+	}
+}
+
+/**
  * kbase_mem_copy_from_extres_page() - Copy pages from external resources.
  *
  * @kctx:		kbase context within which the copying is to take place.
@@ -261,8 +299,8 @@ int kbasep_jit_alloc_validate(struct kbase_context *kctx,
  * @nr_pages:		Number of pages to copy.
  * @target_page_nr:	Number of target pages which will be used for copying.
  * @offset:		Offset into the target pages from which the copying
- *			is to be performed. 
- * @to_copy:		Size of the chunk to be copied, in bytes. 
+ *			is to be performed.
+ * @to_copy:		Size of the chunk to be copied, in bytes.
  */
 void kbase_mem_copy_from_extres_page(struct kbase_context *kctx,
 		void *extres_page, struct page **pages, unsigned int nr_pages,
@@ -289,8 +327,6 @@ void kbase_soft_event_wait_callback(struct kbase_jd_atom *katom);
 int kbase_soft_event_update(struct kbase_context *kctx,
 			    u64 event,
 			    unsigned char new_status);
-
-bool kbase_replay_process(struct kbase_jd_atom *katom);
 
 void kbasep_soft_job_timeout_worker(struct timer_list *timer);
 void kbasep_complete_triggered_soft_events(struct kbase_context *kctx, u64 evt);
@@ -329,23 +365,32 @@ static inline bool kbase_pm_is_suspending(struct kbase_device *kbdev)
  *
  * @kbdev: The kbase device structure for the device (must be a valid pointer)
  *
- * This takes into account the following
- *
- * - whether there is an active context reference
- *
- * - whether any of the shader cores or the tiler are needed
- *
- * It should generally be preferred against checking just
- * kbdev->pm.active_count on its own, because some code paths drop their
- * reference on this whilst still having the shader cores/tiler in use.
+ * This takes into account whether there is an active context reference.
  *
  * Return: true if the GPU is active, false otherwise
  */
 static inline bool kbase_pm_is_active(struct kbase_device *kbdev)
 {
-	return (kbdev->pm.active_count > 0 || kbdev->shader_needed_cnt ||
-			kbdev->tiler_needed_cnt);
+	return kbdev->pm.active_count > 0;
 }
+
+/**
+ * kbase_pm_metrics_start - Start the utilization metrics timer
+ * @kbdev: Pointer to the kbase device for which to start the utilization
+ *         metrics calculation thread.
+ *
+ * Start the timer that drives the metrics calculation, runs the custom DVFS.
+ */
+void kbase_pm_metrics_start(struct kbase_device *kbdev);
+
+/**
+ * kbase_pm_metrics_stop - Stop the utilization metrics timer
+ * @kbdev: Pointer to the kbase device for which to stop the utilization
+ *         metrics calculation thread.
+ *
+ * Stop the timer that drives the metrics calculation, runs the custom DVFS.
+ */
+void kbase_pm_metrics_stop(struct kbase_device *kbdev);
 
 /**
  * Return the atom's ID, as was originally supplied by userspace in
@@ -390,9 +435,8 @@ static inline struct kbase_jd_atom *kbase_jd_atom_from_id(
  * the counter during disjoint events we also increment the counter when jobs may be affected
  * by what the GPU is currently doing. To facilitate this we have the concept of disjoint state.
  *
- * Disjoint state is entered during GPU reset and for the entire time that an atom is replaying
- * (as part of the replay workaround). Increasing the disjoint state also increases the count of
- * disjoint events.
+ * Disjoint state is entered during GPU reset. Increasing the disjoint state also increases
+ * the count of disjoint events.
  *
  * The disjoint state is then used to increase the count of disjoint events during job submission
  * and job completion. Any atom submitted or completed while the disjoint state is greater than
@@ -689,6 +733,3 @@ int kbase_io_history_resize(struct kbase_io_history *h, u16 new_size);
 
 
 #endif
-
-
-

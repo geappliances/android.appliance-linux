@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2010-2018 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2019 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -39,8 +39,6 @@
 #include <mali_kbase_hw.h>
 #include <mali_kbase_config_defaults.h>
 
-#include <mali_kbase_profiling_gator_api.h>
-
 /* NOTE: Magic - 0x45435254 (TRCE in ASCII).
  * Supports tracing feature provided in the base module.
  * Please keep it in sync with the value of base module.
@@ -70,20 +68,11 @@ struct kbase_device *kbase_device_alloc(void)
 
 static int kbase_device_as_init(struct kbase_device *kbdev, int i)
 {
-	const char format[] = "mali_mmu%d";
-	char name[sizeof(format)];
-	const char poke_format[] = "mali_mmu%d_poker";
-	char poke_name[sizeof(poke_format)];
-
-	if (kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_8316))
-		snprintf(poke_name, sizeof(poke_name), poke_format, i);
-
-	snprintf(name, sizeof(name), format, i);
-
 	kbdev->as[i].number = i;
-	kbdev->as[i].fault_addr = 0ULL;
+	kbdev->as[i].bf_data.addr = 0ULL;
+	kbdev->as[i].pf_data.addr = 0ULL;
 
-	kbdev->as[i].pf_wq = alloc_workqueue(name, 0, 1);
+	kbdev->as[i].pf_wq = alloc_workqueue("mali_mmu%d", 0, 1, i);
 	if (!kbdev->as[i].pf_wq)
 		return -EINVAL;
 
@@ -94,7 +83,8 @@ static int kbase_device_as_init(struct kbase_device *kbdev, int i)
 		struct hrtimer *poke_timer = &kbdev->as[i].poke_timer;
 		struct work_struct *poke_work = &kbdev->as[i].poke_work;
 
-		kbdev->as[i].poke_wq = alloc_workqueue(poke_name, 0, 1);
+		kbdev->as[i].poke_wq =
+			alloc_workqueue("mali_mmu%d_poker", 0, 1, i);
 		if (!kbdev->as[i].poke_wq) {
 			destroy_workqueue(kbdev->as[i].pf_wq);
 			return -EINVAL;
@@ -148,7 +138,7 @@ static void kbase_device_all_as_term(struct kbase_device *kbdev)
 
 int kbase_device_init(struct kbase_device * const kbdev)
 {
-	int i, err;
+	int err;
 #ifdef CONFIG_ARM64
 	struct device_node *np = NULL;
 #endif /* CONFIG_ARM64 */
@@ -211,19 +201,6 @@ int kbase_device_init(struct kbase_device * const kbdev)
 	if (err)
 		goto dma_set_mask_failed;
 
-	if (!kbdev->dev->dma_parms) {
-		kbdev->dev->dma_parms = devm_kzalloc(kbdev->dev,
-				sizeof(*kbdev->dev->dma_parms), GFP_KERNEL);
-		if (!kbdev->dev->dma_parms) {
-			err = -ENOMEM;
-			goto dma_set_mask_failed;
-		}
-	}
-	err = dma_set_max_seg_size(kbdev->dev,
-			DMA_BIT_MASK(kbdev->gpu_props.mmu.pa_bits));
-	if (err)
-		goto dma_set_mask_failed;
-
 	kbdev->nr_hw_address_spaces = kbdev->gpu_props.num_address_spaces;
 
 	err = kbase_device_all_as_init(kbdev);
@@ -236,11 +213,7 @@ int kbase_device_init(struct kbase_device * const kbdev)
 	if (err)
 		goto term_as;
 
-	mutex_init(&kbdev->cacheclean_lock);
-
-	/* fbdump profiling controls set to 0 - fbdump not enabled until changed by gator */
-	for (i = 0; i < FBDUMP_CONTROL_MAX; i++)
-		kbdev->kbase_profiling_controls[i] = 0;
+	init_waitqueue_head(&kbdev->cache_clean_wait);
 
 	kbase_debug_assert_register_hook(&kbasep_trace_hook_wrapper, kbdev);
 
@@ -259,6 +232,9 @@ int kbase_device_init(struct kbase_device * const kbdev)
 	else
 		kbdev->mmu_mode = kbase_mmu_mode_get_lpae();
 
+	mutex_init(&kbdev->kctx_list_lock);
+	INIT_LIST_HEAD(&kbdev->kctx_list);
+
 	return 0;
 term_trace:
 	kbasep_trace_term(kbdev);
@@ -273,6 +249,8 @@ fail:
 void kbase_device_term(struct kbase_device *kbdev)
 {
 	KBASE_DEBUG_ASSERT(kbdev);
+
+	WARN_ON(!list_empty(&kbdev->kctx_list));
 
 #if KBASE_TRACE_ENABLE
 	kbase_debug_assert_register_hook(NULL, NULL);
@@ -515,6 +493,7 @@ static int kbasep_trace_debugfs_open(struct inode *inode, struct file *file)
 }
 
 static const struct file_operations kbasep_trace_debugfs_fops = {
+	.owner = THIS_MODULE,
 	.open = kbasep_trace_debugfs_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
@@ -556,39 +535,3 @@ void kbasep_trace_dump(struct kbase_device *kbdev)
 	CSTD_UNUSED(kbdev);
 }
 #endif				/* KBASE_TRACE_ENABLE  */
-
-void kbase_set_profiling_control(struct kbase_device *kbdev, u32 control, u32 value)
-{
-	switch (control) {
-	case FBDUMP_CONTROL_ENABLE:
-		/* fall through */
-	case FBDUMP_CONTROL_RATE:
-		/* fall through */
-	case SW_COUNTER_ENABLE:
-		/* fall through */
-	case FBDUMP_CONTROL_RESIZE_FACTOR:
-		kbdev->kbase_profiling_controls[control] = value;
-		break;
-	default:
-		dev_err(kbdev->dev, "Profiling control %d not found\n", control);
-		break;
-	}
-}
-
-/*
- * Called by gator to control the production of
- * profiling information at runtime
- * */
-
-void _mali_profiling_control(u32 action, u32 value)
-{
-	struct kbase_device *kbdev = NULL;
-
-	/* find the first i.e. call with -1 */
-	kbdev = kbase_find_device(-1);
-
-	if (NULL != kbdev)
-		kbase_set_profiling_control(kbdev, action, value);
-}
-KBASE_EXPORT_SYMBOL(_mali_profiling_control);
-

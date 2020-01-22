@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2014-2018 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014-2019 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -25,7 +25,7 @@
 #include <mali_kbase.h>
 #include <mali_kbase_mem.h>
 #include <mali_kbase_mmu_hw.h>
-#include <mali_kbase_tlstream.h>
+#include <mali_kbase_tracepoints.h>
 #include <backend/gpu/mali_kbase_device_internal.h>
 #include <mali_kbase_as_fault_debugfs.h>
 
@@ -77,7 +77,7 @@ static int wait_ready(struct kbase_device *kbdev,
 		val = kbase_reg_read(kbdev, MMU_AS_REG(as_nr, AS_STATUS));
 
 	if (max_loops == 0) {
-		dev_err(kbdev->dev, "AS_ACTIVE bit stuck\n");
+		dev_err(kbdev->dev, "AS_ACTIVE bit stuck, might be caused by slow/unstable GPU clock or possible faulty FPGA connector\n");
 		return -1;
 	}
 
@@ -150,6 +150,7 @@ void kbase_mmu_interrupt(struct kbase_device *kbdev, u32 irq_stat)
 		struct kbase_as *as;
 		int as_no;
 		struct kbase_context *kctx;
+		struct kbase_fault *fault;
 
 		/*
 		 * the while logic ensures we have a bit set, no need to check
@@ -157,6 +158,12 @@ void kbase_mmu_interrupt(struct kbase_device *kbdev, u32 irq_stat)
 		 */
 		as_no = ffs(bf_bits | pf_bits) - 1;
 		as = &kbdev->as[as_no];
+
+		/* find the fault type */
+		if (bf_bits & (1 << as_no))
+			fault = &as->bf_data;
+		else
+			fault = &as->pf_data;
 
 		/*
 		 * Refcount the kctx ASAP - it shouldn't disappear anyway, since
@@ -167,18 +174,15 @@ void kbase_mmu_interrupt(struct kbase_device *kbdev, u32 irq_stat)
 		kctx = kbasep_js_runpool_lookup_ctx(kbdev, as_no);
 
 		/* find faulting address */
-		as->fault_addr = kbase_reg_read(kbdev,
-						MMU_AS_REG(as_no,
-							AS_FAULTADDRESS_HI));
-		as->fault_addr <<= 32;
-		as->fault_addr |= kbase_reg_read(kbdev,
-						MMU_AS_REG(as_no,
-							AS_FAULTADDRESS_LO));
-
+		fault->addr = kbase_reg_read(kbdev, MMU_AS_REG(as_no,
+				AS_FAULTADDRESS_HI));
+		fault->addr <<= 32;
+		fault->addr |= kbase_reg_read(kbdev, MMU_AS_REG(as_no,
+				AS_FAULTADDRESS_LO));
 		/* Mark the fault protected or not */
-		as->protected_mode = kbdev->protected_mode;
+		fault->protected_mode = kbdev->protected_mode;
 
-		if (kbdev->protected_mode && as->fault_addr) {
+		if (kbdev->protected_mode && fault->addr) {
 			/* check if address reporting is allowed */
 			validate_protected_page_fault(kbdev);
 		}
@@ -187,24 +191,18 @@ void kbase_mmu_interrupt(struct kbase_device *kbdev, u32 irq_stat)
 		kbase_as_fault_debugfs_new(kbdev, as_no);
 
 		/* record the fault status */
-		as->fault_status = kbase_reg_read(kbdev,
-						  MMU_AS_REG(as_no,
-							AS_FAULTSTATUS));
-
-		/* find the fault type */
-		as->fault_type = (bf_bits & (1 << as_no)) ?
-				KBASE_MMU_FAULT_TYPE_BUS :
-				KBASE_MMU_FAULT_TYPE_PAGE;
+		fault->status = kbase_reg_read(kbdev, MMU_AS_REG(as_no,
+				AS_FAULTSTATUS));
 
 		if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_AARCH64_MMU)) {
-			as->fault_extra_addr = kbase_reg_read(kbdev,
+			fault->extra_addr = kbase_reg_read(kbdev,
 					MMU_AS_REG(as_no, AS_FAULTEXTRA_HI));
-			as->fault_extra_addr <<= 32;
-			as->fault_extra_addr |= kbase_reg_read(kbdev,
+			fault->extra_addr <<= 32;
+			fault->extra_addr |= kbase_reg_read(kbdev,
 					MMU_AS_REG(as_no, AS_FAULTEXTRA_LO));
 		}
 
-		if (kbase_as_has_bus_fault(as)) {
+		if (kbase_as_has_bus_fault(as, fault)) {
 			/* Mark bus fault as handled.
 			 * Note that a bus fault is processed first in case
 			 * where both a bus fault and page fault occur.
@@ -224,7 +222,7 @@ void kbase_mmu_interrupt(struct kbase_device *kbdev, u32 irq_stat)
 
 		/* Process the interrupt for this address space */
 		spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
-		kbase_mmu_interrupt_process(kbdev, kctx, as);
+		kbase_mmu_interrupt_process(kbdev, kctx, as, fault);
 		spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 	}
 
@@ -239,16 +237,20 @@ void kbase_mmu_interrupt(struct kbase_device *kbdev, u32 irq_stat)
 void kbase_mmu_hw_configure(struct kbase_device *kbdev, struct kbase_as *as)
 {
 	struct kbase_mmu_setup *current_setup = &as->current_setup;
-	u32 transcfg = 0;
+	u64 transcfg = 0;
 
 	if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_AARCH64_MMU)) {
-		transcfg = current_setup->transcfg & 0xFFFFFFFFUL;
+		transcfg = current_setup->transcfg;
 
 		/* Set flag AS_TRANSCFG_PTW_MEMATTR_WRITE_BACK */
 		/* Clear PTW_MEMATTR bits */
 		transcfg &= ~AS_TRANSCFG_PTW_MEMATTR_MASK;
 		/* Enable correct PTW_MEMATTR bits */
 		transcfg |= AS_TRANSCFG_PTW_MEMATTR_WRITE_BACK;
+		/* Ensure page-tables reads use read-allocate cache-policy in
+		 * the L2
+		 */
+		transcfg |= AS_TRANSCFG_R_ALLOCATE;
 
 		if (kbdev->system_coherency == COHERENCY_ACE) {
 			/* Set flag AS_TRANSCFG_PTW_SH_OS (outer shareable) */
@@ -261,7 +263,7 @@ void kbase_mmu_hw_configure(struct kbase_device *kbdev, struct kbase_as *as)
 		kbase_reg_write(kbdev, MMU_AS_REG(as->number, AS_TRANSCFG_LO),
 				transcfg);
 		kbase_reg_write(kbdev, MMU_AS_REG(as->number, AS_TRANSCFG_HI),
-				(current_setup->transcfg >> 32) & 0xFFFFFFFFUL);
+				(transcfg >> 32) & 0xFFFFFFFFUL);
 	} else {
 		if (kbdev->system_coherency == COHERENCY_ACE)
 			current_setup->transtab |= AS_TRANSTAB_LPAE_SHARE_OUTER;
@@ -277,7 +279,7 @@ void kbase_mmu_hw_configure(struct kbase_device *kbdev, struct kbase_as *as)
 	kbase_reg_write(kbdev, MMU_AS_REG(as->number, AS_MEMATTR_HI),
 			(current_setup->memattr >> 32) & 0xFFFFFFFFUL);
 
-	KBASE_TLSTREAM_TL_ATTRIB_AS_CONFIG(as,
+	KBASE_TLSTREAM_TL_ATTRIB_AS_CONFIG(kbdev, as,
 			current_setup->transtab,
 			current_setup->memattr,
 			transcfg);
