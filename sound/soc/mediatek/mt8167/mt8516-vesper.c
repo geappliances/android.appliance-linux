@@ -387,7 +387,7 @@ static struct snd_soc_dai_link mt8516_vesper_dais[] = {
 		.stream_name = "TDM_Capture",
 		.codecs = tdm_in_codecs,
 		.num_codecs = ARRAY_SIZE(tdm_in_codecs),
-		.dai_fmt = SND_SOC_DAIFMT_DSP_B | SND_SOC_DAIFMT_NB_NF |
+		.dai_fmt = SND_SOC_DAIFMT_DSP_A | SND_SOC_DAIFMT_NB_NF |
 				SND_SOC_DAIFMT_CBS_CFS,
 		.trigger = {
 			SND_SOC_DPCM_TRIGGER_POST,
