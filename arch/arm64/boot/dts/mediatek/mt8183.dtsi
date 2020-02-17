@@ -621,6 +621,15 @@
 			clock-names = "spi", "wrap";
 		};
 
+		keypad: kp@10010000 {
+			compatible = "mediatek,mt6779-keypad";
+			reg = <0 0x10010000 0 0x1000>;
+			wakeup-source;
+			interrupts = <GIC_SPI 186 IRQ_TYPE_EDGE_FALLING>;
+			clocks = <&clk26m>;
+			clock-names = "kpd";
+		};
+
 		iommu: iommu@10205000 {
 			compatible = "mediatek,mt8183-m4u";
 			reg = <0 0x10205000 0 0x1000>;
