@@ -42,7 +42,7 @@
 #include <linux/dma-buf.h>
 #include <linux/shrinker.h>
 #include <linux/cache.h>
-#include <linux/memory_group_manager.h>
+#include "memory_group_manager.h"
 
 #include <mali_kbase.h>
 #include <mali_kbase_mem_linux.h>

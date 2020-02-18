@@ -22,7 +22,7 @@
 
 #include <linux/gfp.h>
 #include <linux/mm.h>
-#include <linux/memory_group_manager.h>
+#include "memory_group_manager.h"
 
 #include <mali_kbase.h>
 #include <mali_kbase_native_mgm.h>

@@ -69,7 +69,7 @@
 
 #include <linux/clk.h>
 #include <linux/regulator/consumer.h>
-#include <linux/memory_group_manager.h>
+#include "memory_group_manager.h"
 
 #if defined(CONFIG_PM_RUNTIME) || \
 	(defined(CONFIG_PM) && LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0))
