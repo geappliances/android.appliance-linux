@@ -84,10 +84,3 @@ extern struct kbase_platform_funcs_conf platform_funcs;
  * Attached value: pointer to @ref kbase_secure_ops
  */
 #define SECURE_CALLBACKS (NULL)
-
-/*
- * Both rk3288 and rk3399 get really unhappy unless you do this.
- * See https://crrev.com/c/1325749 for some context.
- */
-#define PLATFORM_POWER_DOWN_ONLY (1)
-
