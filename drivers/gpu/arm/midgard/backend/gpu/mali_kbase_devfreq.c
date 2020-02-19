@@ -92,6 +92,83 @@ static void opp_translate(struct kbase_device *kbdev, unsigned long freq,
 }
 
 static int
+default_set_freqs_volts(struct kbase_device *kbdev,
+			unsigned long *freqs, unsigned long *volts)
+{
+	unsigned int i;
+
+#ifdef CONFIG_REGULATOR
+	/* Regulators and clocks work in pairs: every clock has a regulator,
+	 * and we never expect to have more regulators than clocks.
+	 *
+	 * We always need to increase the voltage before increasing
+	 * the frequency of a regulator/clock pair, otherwise the clock
+	 * wouldn't have enough power to perform the transition.
+	 *
+	 * It's always safer to decrease the frequency before decreasing
+	 * voltage of a regulator/clock pair, otherwise the clock could have
+	 * problems operating if it is deprived of the necessary power
+	 * to sustain its current frequency (even if that happens for a short
+	 * transition interval).
+	 */
+	for (i = 0; i < kbdev->nr_clocks; i++) {
+		if (kbdev->regulators[i] &&
+				kbdev->current_voltages[i] != volts[i] &&
+				kbdev->current_freqs[i] < freqs[i]) {
+			int err;
+
+			err = regulator_set_voltage(kbdev->regulators[i],
+				volts[i], volts[i]);
+			if (!err) {
+				kbdev->current_voltages[i] = volts[i];
+			} else {
+				dev_err(kbdev->dev, "Failed to increase voltage (%d) (target %lu)\n",
+					err, volts[i]);
+				return err;
+			}
+		}
+	}
+#endif
+
+	for (i = 0; i < kbdev->nr_clocks; i++) {
+		if (kbdev->clocks[i]) {
+			int err;
+
+			err = clk_set_rate(kbdev->clocks[i], freqs[i]);
+			if (!err) {
+				kbdev->current_freqs[i] = freqs[i];
+			} else {
+				dev_err(kbdev->dev, "Failed to set clock %d to %lu\n",
+					i, freqs[i]);
+				return err;
+			}
+		}
+	}
+
+#ifdef CONFIG_REGULATOR
+	for (i = 0; i < kbdev->nr_clocks; i++) {
+		if (kbdev->regulators[i] &&
+				kbdev->current_voltages[i] != volts[i] &&
+				kbdev->current_freqs[i] > freqs[i]) {
+			int err;
+
+			err = regulator_set_voltage(kbdev->regulators[i],
+				volts[i], volts[i]);
+			if (!err) {
+				kbdev->current_voltages[i] = volts[i];
+			} else {
+				dev_err(kbdev->dev, "Failed to decrease voltage (%d) (target %lu)\n",
+					err, volts[i]);
+				return err;
+			}
+		}
+	}
+#endif
+
+	return 0;
+}
+
+static int
 kbase_devfreq_target(struct device *dev, unsigned long *target_freq, u32 flags)
 {
 	struct kbase_device *kbdev = dev_get_drvdata(dev);
@@ -99,7 +176,7 @@ kbase_devfreq_target(struct device *dev, unsigned long *target_freq, u32 flags)
 	unsigned long nominal_freq;
 	unsigned long freqs[BASE_MAX_NR_CLOCKS_REGULATORS] = {0};
 	unsigned long volts[BASE_MAX_NR_CLOCKS_REGULATORS] = {0};
-	unsigned int i;
+	int err;
 	u64 core_mask;
 
 	nominal_freq = *target_freq;
@@ -129,73 +206,12 @@ kbase_devfreq_target(struct device *dev, unsigned long *target_freq, u32 flags)
 
 	opp_translate(kbdev, nominal_freq, &core_mask, freqs, volts);
 
-#ifdef CONFIG_REGULATOR
-	/* Regulators and clocks work in pairs: every clock has a regulator,
-	 * and we never expect to have more regulators than clocks.
-	 *
-	 * We always need to increase the voltage before increasing
-	 * the frequency of a regulator/clock pair, otherwise the clock
-	 * wouldn't have enough power to perform the transition.
-	 *
-	 * It's always safer to decrease the frequency before decreasing
-	 * voltage of a regulator/clock pair, otherwise the clock could have
-	 * problems operating if it is deprived of the necessary power
-	 * to sustain its current frequency (even if that happens for a short
-	 * transition interval).
-	 */
-	for (i = 0; i < kbdev->nr_clocks; i++) {
-		if (kbdev->regulators[i] &&
-				kbdev->current_voltages[i] != volts[i] &&
-				kbdev->current_freqs[i] < freqs[i]) {
-			int err;
-
-			err = regulator_set_voltage(kbdev->regulators[i],
-				volts[i], volts[i]);
-			if (!err) {
-				kbdev->current_voltages[i] = volts[i];
-			} else {
-				dev_err(dev, "Failed to increase voltage (%d) (target %lu)\n",
-					err, volts[i]);
-				return err;
-			}
-		}
-	}
-#endif
-
-	for (i = 0; i < kbdev->nr_clocks; i++) {
-		if (kbdev->clocks[i]) {
-			int err;
-
-			err = clk_set_rate(kbdev->clocks[i], freqs[i]);
-			if (!err) {
-				kbdev->current_freqs[i] = freqs[i];
-			} else {
-				dev_err(dev, "Failed to set clock %lu (target %lu)\n",
-					freqs[i], *target_freq);
-				return err;
-			}
-		}
-	}
-
-#ifdef CONFIG_REGULATOR
-	for (i = 0; i < kbdev->nr_clocks; i++) {
-		if (kbdev->regulators[i] &&
-				kbdev->current_voltages[i] != volts[i] &&
-				kbdev->current_freqs[i] > freqs[i]) {
-			int err;
-
-			err = regulator_set_voltage(kbdev->regulators[i],
-				volts[i], volts[i]);
-			if (!err) {
-				kbdev->current_voltages[i] = volts[i];
-			} else {
-				dev_err(dev, "Failed to decrease voltage (%d) (target %lu)\n",
-					err, volts[i]);
-				return err;
-			}
-		}
-	}
-#endif
+	if (kbdev->devfreq_set_freqs_volts)
+		err = kbdev->devfreq_set_freqs_volts(kbdev, freqs, volts);
+	else
+		err = default_set_freqs_volts(kbdev, freqs, volts);
+	if (err < 0)
+		return err;
 
 	kbase_devfreq_set_core_mask(kbdev, core_mask);
 

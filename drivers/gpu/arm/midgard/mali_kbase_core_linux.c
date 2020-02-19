@@ -3471,7 +3471,8 @@ static int power_control_init(struct platform_device *pdev)
 #endif
 
 	/* Having more clocks than regulators is acceptable, while the
-	 * opposite shall not happen.
+	 * opposite shall not happen, unless the platform code has
+	 * a special handler for devfreq.
 	 *
 	 * Since the error code EPROBE_DEFER causes the entire probing
 	 * procedure to be restarted from scratch at a later time,
