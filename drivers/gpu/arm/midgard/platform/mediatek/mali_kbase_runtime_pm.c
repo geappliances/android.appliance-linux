@@ -324,6 +324,170 @@ int mali_mfgsys_init(struct kbase_device *kbdev, struct mfg_base *mfg)
 	return 0;
 }
 
+static void voltage_range_check(struct kbase_device *kbdev,
+				unsigned long *voltages)
+{
+	if (voltages[1] - voltages[0] < MIN_VOLT_BIAS ||
+	    voltages[1] - voltages[0] > MAX_VOLT_BIAS)
+		voltages[1] = voltages[0] + MIN_VOLT_BIAS;
+	voltages[1] = clamp_t(unsigned long, voltages[1], VSRAM_GPU_MIN_VOLT,
+			      VSRAM_GPU_MAX_VOLT);
+}
+
+#ifdef CONFIG_REGULATOR
+static bool get_step_volt(unsigned long *step_volt, unsigned long *target_volt,
+			  int count, bool inc)
+{
+	unsigned long regulator_min_volt;
+	unsigned long regulator_max_volt;
+	unsigned long current_bias;
+	long adjust_step;
+	int i;
+
+	if (inc) {
+		current_bias = target_volt[1] - step_volt[0];
+		adjust_step = MIN_VOLT_BIAS;
+	} else {
+		current_bias = step_volt[1] - target_volt[0];
+		adjust_step = -MIN_VOLT_BIAS;
+	}
+
+	for (i = 0; i < count; ++i)
+		if (step_volt[i] != target_volt[i])
+			break;
+
+	if (i == count)
+		return 0;
+
+	for (i = 0; i < count; i++) {
+		if (i) {
+			regulator_min_volt = VSRAM_GPU_MIN_VOLT;
+			regulator_max_volt = VSRAM_GPU_MAX_VOLT;
+		} else {
+			regulator_min_volt = VGPU_MIN_VOLT;
+			regulator_max_volt = VGPU_MAX_VOLT;
+		}
+
+		if (current_bias > MAX_VOLT_BIAS) {
+			step_volt[i] = clamp_val(step_volt[0] + adjust_step,
+						 regulator_min_volt,
+						 regulator_max_volt);
+		} else {
+			step_volt[i] = target_volt[i];
+		}
+	}
+	return 1;
+}
+
+static int set_voltages(struct kbase_device *kbdev, unsigned long *voltages,
+			bool inc)
+{
+	unsigned long step_volt[BASE_MAX_NR_CLOCKS_REGULATORS];
+	int first, step;
+	int i;
+	int err;
+
+	for (i = 0; i < kbdev->nr_regulators; ++i)
+		step_volt[i] = kbdev->current_voltages[i];
+
+	if (inc) {
+		first = kbdev->nr_regulators - 1;
+		step = -1;
+	} else {
+		first = 0;
+		step = 1;
+	}
+
+	while (get_step_volt(step_volt, voltages, kbdev->nr_regulators, inc)) {
+		for (i = first; i >= 0 && i < kbdev->nr_regulators; i += step) {
+			if (kbdev->current_voltages[i] == step_volt[i])
+				continue;
+
+			err = regulator_set_voltage(kbdev->regulators[i],
+						    step_volt[i],
+						    step_volt[i] + VOLT_TOL);
+
+			if (err) {
+				dev_err(kbdev->dev,
+					"Failed to set reg %d voltage err:(%d)\n",
+					i, err);
+				return err;
+			}
+
+			kbdev->current_voltages[i] = step_volt[i];
+		}
+	}
+
+	return 0;
+}
+#endif
+
+static int set_frequency(struct kbase_device *kbdev, unsigned long freq)
+{
+	int err;
+	struct mfg_base *mfg = kbdev->platform_context;
+
+	if (kbdev->current_freqs[0] != freq) {
+		err = clk_set_parent(mfg->clk_mux, mfg->clk_sub_parent);
+		if (err) {
+			dev_err(kbdev->dev, "Failed to select sub clock src\n");
+			return err;
+		}
+
+		err = clk_set_rate(kbdev->clocks[0], freq);
+		if (err)
+			return err;
+
+		err = clk_set_parent(mfg->clk_mux, mfg->clk_main_parent);
+		if (err) {
+			dev_err(kbdev->dev,
+				"Failed to select main clock src\n");
+			return err;
+		}
+
+		kbdev->current_freqs[0] = freq;
+	}
+
+	return 0;
+}
+
+static int
+set_freqs_volts(struct kbase_device *kbdev,
+			unsigned long *freqs, unsigned long *volts)
+{
+	int err;
+
+	voltage_range_check(kbdev, volts);
+
+#ifdef CONFIG_REGULATOR
+        if (kbdev->current_voltages[0] < volts[0]) {
+                err = set_voltages(kbdev, volts, true);
+                if (err) {
+                        dev_err(kbdev->dev, "Failed to increase voltage\n");
+                        return err;
+                }
+        }
+#endif
+
+        err = set_frequency(kbdev, freqs[0]);
+        if (err) {
+                dev_err(kbdev->dev, "Failed to set clock %lu\n", freqs[0]);
+                return err;
+        }
+
+#ifdef CONFIG_REGULATOR
+        if (kbdev->current_voltages[0] > volts[0]) {
+                err = set_voltages(kbdev, volts, false);
+                if (err) {
+                        dev_err(kbdev->dev, "Failed to decrease voltage\n");
+                        return err;
+                }
+        }
+#endif
+
+	return 0;
+}
+
 static int platform_init(struct kbase_device *kbdev)
 {
 	int err;
@@ -360,6 +524,8 @@ static int platform_init(struct kbase_device *kbdev)
 		dev_err(kbdev->dev, "Failed to select main clock src\n");
 		goto platform_init_err;
 	}
+
+	kbdev->devfreq_set_freqs_volts = set_freqs_volts;
 
 	return 0;
 
