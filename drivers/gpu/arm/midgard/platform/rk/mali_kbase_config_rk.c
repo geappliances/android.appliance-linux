@@ -77,8 +77,8 @@ static int rk_pm_enable_regulator(struct kbase_device *kbdev)
 
 	dev_dbg(kbdev->dev, "Enabling regulator.");
 
-	for (i = 0; i < kbdev->regulator_num; i++) {
-		error = regulator_enable(kbdev->regulator[i]);
+	for (i = 0; i < kbdev->nr_regulators; i++) {
+		error = regulator_enable(kbdev->regulators[i]);
 		if (error < 0) {
 			dev_err(kbdev->dev,
 				"Power on reg %d failed error = %d\n",
@@ -95,8 +95,8 @@ static void rk_pm_disable_regulator(struct kbase_device *kbdev)
 	int error;
 	int i;
 
-	for (i = 0; i < kbdev->regulator_num; i++) {
-		error = regulator_disable(kbdev->regulator[i]);
+	for (i = 0; i < kbdev->nr_regulators; i++) {
+		error = regulator_disable(kbdev->regulators[i]);
 		if (error < 0) {
 			dev_err(kbdev->dev,
 				"Power off reg %d failed error = %d\n",
@@ -109,11 +109,11 @@ static int rk_pm_enable_clk(struct kbase_device *kbdev)
 {
 	int ret = 0;
 
-	if (!(kbdev->clock)) {
+	if (!(kbdev->clocks[0])) {
 		dev_dbg(kbdev->dev, "Continuing without Mali clock control\n");
 		/* Allow probe to continue without clock. */
 	} else {
-		ret = clk_prepare_enable(kbdev->clock);
+		ret = clk_prepare_enable(kbdev->clocks[0]);
 		if (ret)
 			dev_err(kbdev->dev, "failed to enable clk: %d\n", ret);
 	}
@@ -123,11 +123,11 @@ static int rk_pm_enable_clk(struct kbase_device *kbdev)
 
 static void rk_pm_disable_clk(struct kbase_device *kbdev)
 {
-	if (!(kbdev->clock))
+	if (!(kbdev->clocks[0]))
 		dev_dbg(kbdev->dev, "Continuing without Mali clock control\n");
 		/* Allow probe to continue without clock. */
 	else
-		clk_disable_unprepare(kbdev->clock);
+		clk_disable_unprepare(kbdev->clocks[0]);
 }
 
 static int rk_pm_callback_power_on(struct kbase_device *kbdev)
