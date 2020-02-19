@@ -3418,36 +3418,52 @@ static int power_control_init(struct platform_device *pdev)
 	int err = 0;
 	unsigned int i;
 #if defined(CONFIG_REGULATOR)
-	static const char *regulator_names[] = {
-		"mali", "shadercores"
-	};
-	BUILD_BUG_ON(ARRAY_SIZE(regulator_names) < BASE_MAX_NR_CLOCKS_REGULATORS);
+	const char *regulator_names[BASE_MAX_NR_CLOCKS_REGULATORS];
 #endif /* CONFIG_REGULATOR */
 
 	if (!kbdev)
 		return -ENODEV;
 
+        kbdev->nr_regulators = of_property_count_strings(kbdev->dev->of_node,
+                "supply-names");
+
+        if (kbdev->nr_regulators > BASE_MAX_NR_CLOCKS_REGULATORS) {
+                dev_err(&pdev->dev, "Too many regulators: %d > %d\n",
+                        kbdev->nr_regulators, BASE_MAX_NR_CLOCKS_REGULATORS);
+                return -EINVAL;
+        } else if (kbdev->nr_regulators == -EINVAL) {
+                /* The 'supply-names' is optional; if not there assume "mali" */
+                kbdev->nr_regulators = 1;
+                regulator_names[0] = "mali";
+        } else if (kbdev->nr_regulators < 0) {
+                err = kbdev->nr_regulators;
+        } else {
+                err = of_property_read_string_array(kbdev->dev->of_node,
+                                                    "supply-names",
+						    regulator_names,
+                                                    kbdev->nr_regulators);
+        }
+
+        if (err < 0) {
+                dev_err(&pdev->dev, "Error reading supply-names: %d\n", err);
+                return err;
+        }
+
 #if defined(CONFIG_REGULATOR)
 	/* Since the error code EPROBE_DEFER causes the entire probing
 	 * procedure to be restarted from scratch at a later time,
 	 * all regulators will be released before returning.
-	 *
-	 * Any other error is ignored and the driver will continue
-	 * operating with a partial initialization of regulators.
 	 */
-	for (i = 0; i < BASE_MAX_NR_CLOCKS_REGULATORS; i++) {
-		kbdev->regulators[i] = regulator_get_optional(kbdev->dev,
+	for (i = 0; i < kbdev->nr_regulators; i++) {
+		kbdev->regulators[i] = regulator_get(kbdev->dev,
 			regulator_names[i]);
-		if (IS_ERR_OR_NULL(kbdev->regulators[i])) {
+		if (IS_ERR(kbdev->regulators[i])) {
 			err = PTR_ERR(kbdev->regulators[i]);
 			kbdev->regulators[i] = NULL;
-			break;
+			if (err != -EPROBE_DEFER)
+				dev_err(&pdev->dev, "Failed to get regulator\n");
+			goto fail;
 		}
-	}
-	if (err == -EPROBE_DEFER) {
-		while ((i > 0) && (i < BASE_MAX_NR_CLOCKS_REGULATORS))
-			regulator_put(kbdev->regulators[--i]);
-		return err;
 	}
 
 	kbdev->nr_regulators = i;
@@ -3476,7 +3492,7 @@ static int power_control_init(struct platform_device *pdev)
 		while ((i > 0) && (i < BASE_MAX_NR_CLOCKS_REGULATORS)) {
 			clk_put(kbdev->clocks[i]);
 		}
-		goto clocks_probe_defer;
+		goto fail;
 	}
 
 	kbdev->nr_clocks = i;
@@ -3499,6 +3515,12 @@ static int power_control_init(struct platform_device *pdev)
 	if (kbdev->nr_regulators > 0) {
 		kbdev->opp_table = dev_pm_opp_set_regulators(kbdev->dev,
 			regulator_names, BASE_MAX_NR_CLOCKS_REGULATORS);
+
+		if (IS_ERR(kbdev->opp_table)) {
+			kbdev->opp_table = NULL;
+			dev_err(kbdev->dev, "Failed to init devfreq opp table: %d\n",
+				PTR_ERR(kbdev->opp_table));
+		}
 	}
 #endif /* (KERNEL_VERSION(4, 10, 0) <= LINUX_VERSION_CODE */
 	err = dev_pm_opp_of_add_table(kbdev->dev);
@@ -3508,7 +3530,7 @@ static int power_control_init(struct platform_device *pdev)
 #endif /* KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE */
 	return 0;
 
-clocks_probe_defer:
+fail:
 #if defined(CONFIG_REGULATOR)
 	for (i = 0; i < BASE_MAX_NR_CLOCKS_REGULATORS; i++)
 		regulator_put(kbdev->regulators[i]);
