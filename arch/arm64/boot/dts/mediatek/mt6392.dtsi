@@ -222,5 +222,9 @@
 				wakeup-source;
 			};
 		};
+
+		mt6392rtc: mt6392rtc {
+			compatible = "mediatek,mt6392-rtc", "mediatek,mt6397-rtc";
+		};
 	};
 };
