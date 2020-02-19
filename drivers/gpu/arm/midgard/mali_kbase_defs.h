@@ -1627,6 +1627,15 @@ struct kbase_device {
 	struct kbase_devfreq_queue_info devfreq_queue;
 #endif
 
+	/*
+	 * An optional callback to set frequencies and voltages, if a custom
+	 * implementation is required by the chip.
+	 *
+	 * This function needs to update kbdev->current_voltages/freqs.
+	 */
+	int (*devfreq_set_freqs_volts)(struct kbase_device *kbdev,
+				unsigned long *freqs, unsigned long *volts);
+
 #ifdef CONFIG_DEVFREQ_THERMAL
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0)
 	struct devfreq_cooling_device *devfreq_cooling;
