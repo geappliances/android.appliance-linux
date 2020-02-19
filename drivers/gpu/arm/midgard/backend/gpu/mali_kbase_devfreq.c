@@ -432,7 +432,13 @@ static int kbase_devfreq_init_core_mask_table(struct kbase_device *kbdev)
 		err = of_property_read_u64(node, "opp-hz-real", real_freqs);
 #endif
 		if (err < 0) {
-			if (kbdev->nr_clocks == 1) {
+			/*
+			 * TODO(b:149806107): MT8183 actually has multiple
+			 * clocks in the dts, but only the first one really
+			 * matters (the others are used for switching, and the
+			 * code should be moved to clock core).
+			 */
+			if (kbdev->nr_clocks == 1 || true) {
 				/* Single clock, fall back to using opp-hz. */
 				real_freqs[0] = opp_freq;
 			} else {
