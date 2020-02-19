@@ -7,4 +7,3 @@ snd-soc-mt8167-pcm-objs := \
 obj-$(CONFIG_SND_SOC_MT8167) += snd-soc-mt8167-pcm.o
 obj-$(CONFIG_SND_SOC_MT8516_PUMPKIN_MACH) += mt8516-pumpkin.o
 obj-$(CONFIG_SND_SOC_MT8516_VESPER) += mt8516-vesper.o
-obj-$(CONFIG_SND_SOC_MT8516_VESPER_6_1) += mt8516-vesper-6-1.o
