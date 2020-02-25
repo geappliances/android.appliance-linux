@@ -1096,7 +1096,7 @@ allocate_instance(struct device *dev, struct musbfsh_hdrc_config *config, void _
 
 	INFO("++\n");
 
-	musbfsh_hc_driver.flags = HCD_USB11 | HCD_MEMORY;
+	musbfsh_hc_driver.flags = HCD_USB11 | HCD_DMA | HCD_MEMORY;
 	hcd = usb_create_hcd(&musbfsh_hc_driver, dev, dev_name(dev));
 	if (!hcd)
 		return NULL;

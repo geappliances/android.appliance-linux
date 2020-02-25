@@ -2838,7 +2838,7 @@ struct hc_driver musbfsh_hc_driver = {
 	.description = "musbfsh-hcd",
 	.product_desc = "MUSBFSH HDRC host driver",
 	.hcd_priv_size = sizeof(struct musbfsh),
-	.flags = HCD_USB2 | HCD_MEMORY,
+	.flags = HCD_USB2 | HCD_MEMORY | HCD_DMA,
 
 	/*
 	 * not using irq handler or reset hooks from usbcore, since

@@ -111,7 +111,7 @@ extern struct device_node *usb11_dts_np;
 
 #define	is_host_capable()	(1)
 
-#define host_hc_driver_flag() (HCD_USB2 | HCD_MEMORY)
+#define host_hc_driver_flag() (HCD_USB2 | HCD_DMA | HCD_MEMORY)
 
 extern irqreturn_t musbfsh_h_ep0_irq(struct musbfsh *);
 extern void musbfsh_host_tx(struct musbfsh *, u8);
