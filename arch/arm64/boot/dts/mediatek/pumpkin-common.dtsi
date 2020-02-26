@@ -65,8 +65,6 @@
 	sound: sound {
 		compatible = "mediatek,mt8516-soc-pumpkin";
 		mediatek,platform = <&afe>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&aud_pins_default>;
 		mediatek,audio-codec = <&mt8167_audio_codec>;
 		status = "okay";
 	};
@@ -220,21 +218,6 @@
 	pinctrl-0 = <&state_default>;
 
 	state_default:pinconf_default {
-	};
-
-	aud_pins_default: audiodefault {
-		pins_cmd_dat {
-			pinmux = <MT8516_PIN_25_EINT25__FUNC_I2S_8CH_MCK>,
-				 <MT8516_PIN_71_MSDC2_DAT1__FUNC_I2S_8CH_DO1>,
-				 <MT8516_PIN_72_MSDC2_DAT2__FUNC_I2S_8CH_LRCK>,
-				 <MT8516_PIN_73_MSDC2_DAT3__FUNC_I2S_8CH_BCK>,
-				 <MT8516_PIN_100_CMDAT0__FUNC_TDM_RX_MCK>,
-				 <MT8516_PIN_101_CMDAT1__FUNC_TDM_RX_BCK>,
-				 <MT8516_PIN_102_CMMCLK__FUNC_TDM_RX_LRCK>,
-				 <MT8516_PIN_103_CMPCLK__FUNC_TDM_RX_DI>,
-				 <MT8516_PIN_20_EINT20__FUNC_I2S3_DO>;
-			drive-strength = <MTK_DRIVE_4mA>;
-		};
 	};
 
 	gpio_keys_default: gpiodefault {
