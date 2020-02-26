@@ -431,7 +431,7 @@
 	vmmc-supply = <&mt6392_vmch_reg>;
 	vqmmc-supply = <&mt6392_vio18_reg>;
 //	vqmmc-supply = <&mt6392_vmc_reg>;
-	status = "disabled";
+	status = "okay";
 };
 
 &ethernet {
