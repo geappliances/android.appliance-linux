@@ -277,6 +277,7 @@ snd-soc-wm9713-objs := wm9713.o
 snd-soc-wm-hubs-objs := wm_hubs.o
 snd-soc-zx-aud96p22-objs := zx_aud96p22.o
 snd-soc-mt8167-codec-objs := mt8167-codec.o mt8167-codec-utils.o
+snd-soc-mt6392-codec-objs := mt6392-codec.o
 
 # Amp
 snd-soc-max9877-objs := max9877.o
@@ -570,3 +571,4 @@ obj-$(CONFIG_SND_SOC_MAX9877)	+= snd-soc-max9877.o
 obj-$(CONFIG_SND_SOC_MAX98504)	+= snd-soc-max98504.o
 obj-$(CONFIG_SND_SOC_SIMPLE_AMPLIFIER)	+= snd-soc-simple-amplifier.o
 obj-$(CONFIG_SND_SOC_TPA6130A2)	+= snd-soc-tpa6130a2.o
+obj-$(CONFIG_MTK_SPEAKER)	+= snd-soc-mt6392-codec.o
