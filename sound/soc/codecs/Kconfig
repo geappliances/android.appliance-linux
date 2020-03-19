@@ -1774,6 +1774,19 @@ config SND_SOC_MT6660
 	  Select N if you don't have MT6660 on board.
 	  Select M to build this as module.
 
+config SND_SOC_MT6392_MT8167
+	tristate "MediaTek MT6392 Codec in addition to MT8167 Codec"
+	select MT8167_CODEC
+	select MTK_SPEAKER
+
+config MTK_SPEAKER
+	bool "MTK SPEAKER AMP"
+	default n
+	help
+	  If you say Y, enable MTK_SPEAKER_AMP
+	  This is a config for mediatek internal speaker amp.
+	  Generally you select "N", if unsupport it.
+
 config SND_SOC_NAU8540
        tristate "Nuvoton Technology Corporation NAU85L40 CODEC"
        depends on I2C
