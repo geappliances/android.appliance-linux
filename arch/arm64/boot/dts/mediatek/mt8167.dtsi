@@ -68,6 +68,12 @@
 			#clock-cells = <1>;
 		};
 
+		imgsys: imgsys@15000000 {
+			compatible = "mediatek,mt8167-imgsys", "syscon";
+			reg = <0 0x15000000 0 0x1000>;
+			#clock-cells = <1>;
+		};
+
 		mutex: mutex@14015000 {
 			compatible = "mediatek,mt8167-disp-mutex";
 			reg = <0 0x14015000 0 0x1000>;
