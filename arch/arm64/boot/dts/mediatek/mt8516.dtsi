@@ -528,18 +528,6 @@
 			status = "disabled";
 		};
 
-		ethernet: ethernet@11180000 {
-			compatible = "mediatek,mt8516-ethernet";
-			reg = <0 0x11180000 0 0x1000>,
-			      <0 0x10003400 0 0x1000>;
-			interrupts = <GIC_SPI 111 IRQ_TYPE_LEVEL_LOW>;
-			clocks = <&topckgen CLK_TOP_RG_ETH>,
-				     <&topckgen CLK_TOP_66M_ETH>,
-				     <&topckgen CLK_TOP_133M_ETH>;
-			clock-names = "core", "reg", "trans";
-			status = "disabled";
-		};
-
 		usb0: usb@11100000 {
 			compatible = "mediatek,mt8516-musb",
 				     "mediatek,mtk-musb";
