@@ -28,6 +28,10 @@
 		};
 	};
 
+	firmware: firmware {
+		compatible = "android,firmware";
+		/* reserved for android overlay */
+	};
 };
 
 &dpi1 {

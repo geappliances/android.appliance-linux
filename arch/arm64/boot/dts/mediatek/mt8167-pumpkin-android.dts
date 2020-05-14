@@ -1,0 +1,24 @@
+/dts-v1/;
+/plugin/;
+
+&firmware {
+	android {
+		compatible = "android,firmware";
+		hardware = "pumpkin";
+		vbmeta {
+			compatible = "android,vbmeta";
+			parts = "vbmeta,boot,system,vendor,dtbo";
+			by_name_prefix = "/dev/block/platform/soc/11120000.mmc/by-name/";
+		};
+		fstab {
+			compatible = "android,fstab";
+			vendor {
+				compatible = "android,vendor";
+				dev = "/dev/block/platform/soc/11120000.mmc/by-name/vendor";
+				type = "ext4";
+				mnt_flags = "ro,barrier=1,inode_readahead_blks=8";
+				fsmgr_flags = "wait,avb";
+			};
+		};
+	};
+};

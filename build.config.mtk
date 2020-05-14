@@ -27,6 +27,7 @@ KERNEL_DIR=src
 FILES="
 arch/arm64/boot/Image
 arch/arm64/boot/dts/mediatek/mt8167-pumpkin.dtb
+arch/arm64/boot/dts/mediatek/mt8167-pumpkin-android.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin.dtb
 "
 
