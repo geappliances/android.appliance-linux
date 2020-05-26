@@ -24,9 +24,9 @@
 MALI_RELEASE_NAME ?= "r20p0-01rel0"
 
 # Paths required for build
-KBASE_PATH = $(src)
+KBASE_PATH = $(srctree)/$(src)
 KBASE_PLATFORM_PATH = $(KBASE_PATH)/platform_dummy
-UMP_PATH = $(src)/../../../base
+UMP_PATH = $(srctree)/$(src)/../../../base
 
 # Set up defaults if not defined by build system
 MALI_CUSTOMER_RELEASE ?= 1
@@ -47,10 +47,10 @@ DEFINES = \
 
 ifeq ($(KBUILD_EXTMOD),)
 # in-tree
-DEFINES +=-DMALI_KBASE_PLATFORM_PATH=../../$(src)/platform/$(CONFIG_MALI_PLATFORM_NAME)
+DEFINES +=-DMALI_KBASE_PLATFORM_PATH=../../$(srctree)/$(src)/platform/$(CONFIG_MALI_PLATFORM_NAME)
 else
 # out-of-tree
-DEFINES +=-DMALI_KBASE_PLATFORM_PATH=$(src)/platform/$(CONFIG_MALI_PLATFORM_NAME)
+DEFINES +=-DMALI_KBASE_PLATFORM_PATH=$(srctree)/$(src)/platform/$(CONFIG_MALI_PLATFORM_NAME)
 endif
 
 DEFINES += -I$(srctree)/drivers/staging/android
@@ -137,7 +137,7 @@ mali_kbase-y := $(SRC:.c=.o)
 # Kconfig passes in the name with quotes for in-tree builds - remove them.
 platform_name := $(shell echo $(CONFIG_MALI_PLATFORM_NAME))
 MALI_PLATFORM_DIR := platform/$(platform_name)
-ccflags-y += -I$(src)/$(MALI_PLATFORM_DIR)
+ccflags-y += -I $(srctree)/$(src)/$(MALI_PLATFORM_DIR)
 include $(src)/$(MALI_PLATFORM_DIR)/Kbuild
 
 ifeq ($(CONFIG_MALI_DEVFREQ),y)
@@ -165,8 +165,8 @@ include  $(src)/backend/gpu/Kbuild
 mali_kbase-y += $(BACKEND:.c=.o)
 
 
-ccflags-y += -I$(src)/backend/gpu
-subdir-ccflags-y += -I$(src)/backend/gpu
+ccflags-y += -I $(srctree)/$(src)/backend/gpu
+subdir-ccflags-y += -I $(srctree)/$(src)/backend/gpu
 
 # For kutf and mali_kutf_irq_latency_test
 obj-$(CONFIG_MALI_KUTF) += tests/
