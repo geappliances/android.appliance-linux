@@ -160,9 +160,17 @@ static int mtk_mdp_cmdq_exec(struct mtk_mdp_ctx *ctx,
 	request_size = cmdq->cmd_size;
 	if (unlikely(request_size > handle->buf_size)) {
 		request_size = roundup(request_size, PAGE_SIZE);
-		err = -1;//cmdq_pkt_realloc_cmd_buffer(handle, request_size);
-		if (err < 0)
+
+		handle = cmdq_pkt_create(ctx->mdp_dev->cmdq_client, request_size);
+		if (IS_ERR(handle)) {
+			err = PTR_ERR(handle);
+			dev_err(&ctx->mdp_dev->pdev->dev,
+				"Create cmdq ptk failed %d\n", err);
 			return err;
+		}
+
+		cmdq_pkt_destroy(ctx->cmdq_handle);
+		ctx->cmdq_handle = handle;
 	}
 
 	memcpy(handle->va_base,
