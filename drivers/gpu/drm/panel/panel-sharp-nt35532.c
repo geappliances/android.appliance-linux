@@ -179,7 +179,7 @@ static int sharp_nt_panel_enable(struct drm_panel *panel)
 }
 
 static const struct drm_display_mode default_mode = {
-	.clock = 148500,
+	.clock = 137380,
 	.hdisplay = 1080,
 	.hsync_start = 1080 + 72,
 	.hsync_end = 1080 + 72 + 8,
