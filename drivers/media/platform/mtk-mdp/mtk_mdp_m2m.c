@@ -397,7 +397,8 @@ static const struct mtk_mdp_fmt *mtk_mdp_try_fmt_mplane(struct mtk_mdp_ctx *ctx,
 		int sizeimage = (pix_mp->width * pix_mp->height *
 			fmt->depth[i]) / 8;
 
-		pix_mp->plane_fmt[i].bytesperline = bpl;
+		if (pix_mp->plane_fmt[i].bytesperline < bpl)
+			pix_mp->plane_fmt[i].bytesperline = bpl;
 		if (pix_mp->plane_fmt[i].sizeimage < sizeimage)
 			pix_mp->plane_fmt[i].sizeimage = sizeimage;
 		memset(pix_mp->plane_fmt[i].reserved, 0,
