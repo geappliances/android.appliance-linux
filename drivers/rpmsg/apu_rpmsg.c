@@ -34,11 +34,16 @@ struct rpmsg_apu {
 	struct iommu_domain *domain;
 	struct iova_domain *iovad;
 	int iova_limit_pfn;
+	wait_queue_head_t waitqueue;
+	u8 available_response;
+	spinlock_t ctx_lock;
+	struct list_head requests;
 };
 
 struct rpmsg_request {
-	struct completion completion;
+	u8 ready;
 	struct list_head node;
+	struct apu_buffer *buffer;
 	void *req;
 };
 
@@ -68,25 +73,35 @@ static dev_t rpmsg_major;
 static DEFINE_IDA(rpmsg_ctrl_ida);
 static DEFINE_IDA(rpmsg_minor_ida);
 static DEFINE_IDA(req_ida);
-static LIST_HEAD(requests);
 static struct apu_iova_domain *apu_iovad;
 
-static int apu_rpmsg_callback(struct rpmsg_device *dev, void *data, int count,
+
+static int apu_rpmsg_callback(struct rpmsg_device *rpdev, void *data, int count,
 			      void *priv, u32 addr)
 {
+	struct rpmsg_apu *apu = dev_get_drvdata(&rpdev->dev);
 	struct rpmsg_request *rpmsg_req;
 	struct apu_dev_request *hdr = data;
+	unsigned long flags;
 
-	list_for_each_entry(rpmsg_req, &requests, node) {
-		struct apu_dev_request *tmp_hdr = rpmsg_req->req;
+	spin_lock_irqsave(&apu->ctx_lock, flags);
+	list_for_each_entry(rpmsg_req, &apu->requests, node) {
+		struct apu_request *tmp_hdr = rpmsg_req->req;
 
 		if (hdr->id == tmp_hdr->id) {
-			memcpy(rpmsg_req->req, data, count);
-			complete(&rpmsg_req->completion);
+			rpmsg_req->ready = 1;
+			apu->available_response++;
+			tmp_hdr->result = hdr->result;
+			tmp_hdr->size_in = hdr->size_in;
+			tmp_hdr->size_out = hdr->size_out;
+			memcpy(tmp_hdr->data, hdr->data,
+			       hdr->size_in+hdr->size_out);
 
-			return 0;
+			wake_up_interruptible(&apu->waitqueue);
+			break;
 		}
 	}
+	spin_unlock_irqrestore(&apu->ctx_lock, flags);
 
 	return 0;
 }
@@ -177,48 +192,6 @@ static void apu_device_memory_unmap(struct rpmsg_apu *apu,
 	dma_buf_put(buffer->dma_buf);
 }
 
-static int _apu_send_request(struct rpmsg_apu *apu,
-			     struct rpmsg_device *rpdev,
-			     struct apu_dev_request *req, int len)
-{
-
-	struct rpmsg_request *rpmsg_req;
-	int ret = 0;
-
-	req->id = ida_simple_get(&req_ida, 0, 0xffff, GFP_KERNEL);
-	if (req->id < 0)
-		return ret;
-
-	rpmsg_req = kzalloc(sizeof(*rpmsg_req), GFP_KERNEL);
-	if (!rpmsg_req)
-		return -ENOMEM;
-
-	rpmsg_req->req = req;
-	init_completion(&rpmsg_req->completion);
-	list_add(&rpmsg_req->node, &requests);
-
-	ret = rpmsg_send(rpdev->ept, req, len);
-	if (ret)
-		goto free_req;
-
-	/* be careful with race here between timeout and callback*/
-	ret = wait_for_completion_timeout(&rpmsg_req->completion,
-					  msecs_to_jiffies(1000));
-	if (!ret)
-		ret = -ETIMEDOUT;
-	else
-		ret = 0;
-
-	ida_simple_remove(&req_ida, req->id);
-
-free_req:
-
-	list_del(&rpmsg_req->node);
-	kfree(rpmsg_req);
-
-	return ret;
-}
-
 static int apu_send_request(struct rpmsg_apu *apu,
 			    struct apu_request *req)
 {
@@ -226,6 +199,8 @@ static int apu_send_request(struct rpmsg_apu *apu,
 	struct rpmsg_device *rpdev = apu->rpdev;
 	struct apu_dev_request *dev_req;
 	struct apu_buffer *buffer;
+	struct rpmsg_request *rpmsg_req;
+	unsigned long flags;
 
 	int size = req->size_in + req->size_out +
 		sizeof(u32) * req->count * 2 + sizeof(*dev_req);
@@ -257,17 +232,42 @@ static int apu_send_request(struct rpmsg_apu *apu,
 		dev_req_buffer_size[i] = buffer_size[i];
 	}
 
-	ret = _apu_send_request(apu, rpdev, dev_req, size);
+	ret = ida_simple_get(&req_ida, 0, 0xffff, GFP_KERNEL);
+	if (ret < 0)
+		goto err_free_memory;
 
+	dev_req->id = ret;
+
+	rpmsg_req = kzalloc(sizeof(*rpmsg_req), GFP_KERNEL);
+	if (!rpmsg_req) {
+		ret =  -ENOMEM;
+		goto err_ida_remove;
+	}
+
+	req->id = dev_req->id;
+	rpmsg_req->req = req;
+	rpmsg_req->buffer = buffer;
+	spin_lock_irqsave(&apu->ctx_lock, flags);
+	list_add(&rpmsg_req->node, &apu->requests);
+	spin_unlock_irqrestore(&apu->ctx_lock, flags);
+
+	ret = rpmsg_send(rpdev->ept, dev_req, size);
+	if (ret < 0)
+		goto err;
+
+	kfree(dev_req);
+
+	return req->id;
+
+err:
+	list_del(&rpmsg_req->node);
+	kfree(rpmsg_req);
+	kfree(req);
+err_ida_remove:
+	ida_simple_remove(&req_ida, dev_req->id);
 err_free_memory:
 	for (i--; i >= 0; i--)
 		apu_device_memory_unmap(apu, &buffer[i]);
-
-	req->result = dev_req->result;
-	req->size_in = dev_req->size_in;
-	req->size_out = dev_req->size_out;
-	memcpy(req->data, dev_req->data, dev_req->size_in + dev_req->size_out +
-	       sizeof(u32) * req->count);
 
 	kfree(buffer);
 	kfree(dev_req);
@@ -275,6 +275,20 @@ err_free_memory:
 	return ret;
 }
 
+unsigned int rpmsg_eptdev_poll(struct file *fp, struct poll_table_struct *wait)
+{
+	struct rpmsg_apu *apu = fp->private_data;
+	unsigned long flags;
+
+	poll_wait(fp, &apu->waitqueue, wait);
+	spin_lock_irqsave(&apu->ctx_lock, flags);
+	if (apu->available_response) {
+		spin_unlock_irqrestore(&apu->ctx_lock, flags);
+		return POLLIN;
+	}
+	spin_unlock_irqrestore(&apu->ctx_lock, flags);
+	return 0;
+}
 
 static long rpmsg_eptdev_ioctl(struct file *fp, unsigned int cmd,
 			       unsigned long arg)
@@ -285,6 +299,11 @@ static long rpmsg_eptdev_ioctl(struct file *fp, unsigned int cmd,
 	void __user *argp = (void __user *)arg;
 	int len;
 	int ret;
+	unsigned long flags;
+	struct rpmsg_request *rpmsg_req;
+	int i;
+
+	ret = 0;
 
 	switch (cmd) {
 	case APU_SEND_REQ_IOCTL:
@@ -306,24 +325,66 @@ static long rpmsg_eptdev_ioctl(struct file *fp, unsigned int cmd,
 		}
 
 		ret = apu_send_request(apu, apu_req_full);
-		if (ret) {
-			kfree(apu_req_full);
-			return ret;
+
+		break;
+	case APU_GET_NEXT_AVAILABLE_IOCTL:
+		spin_lock_irqsave(&apu->ctx_lock, flags);
+		list_for_each_entry(rpmsg_req, &apu->requests, node) {
+			if (rpmsg_req->ready == 1) {
+				struct apu_request *req =
+					rpmsg_req->req;
+				if (copy_to_user(argp, &req->id, sizeof(__u16)))
+					ret = -EFAULT;
+				break;
+			}
 		}
+		spin_unlock_irqrestore(&apu->ctx_lock, flags);
+		break;
+	case APU_GET_RESP:
+		/* Get the header */
+		if (!argp)
+			return -EINVAL;
 
-		if (copy_to_user(argp, apu_req_full, sizeof(apu_req) +
-				 sizeof(u32) * apu_req_full->count +
-				 apu_req_full->size_in + apu_req_full->size_out))
-			ret = -EFAULT;
+		if (copy_from_user(&apu_req, argp,
+				   sizeof(apu_req)))
+			return -EFAULT;
 
-		kfree(apu_req_full);
-		return ret;
+		spin_lock_irqsave(&apu->ctx_lock, flags);
+		list_for_each_entry(rpmsg_req, &apu->requests, node) {
+			struct apu_request *req = rpmsg_req->req;
 
+			if ((apu_req.id == req->id) &&
+			    (rpmsg_req->ready == 1)) {
+				int req_len = sizeof(struct apu_request) +
+					req->size_in + req->size_out +
+					req->count * sizeof(u32)*2;
+				int apu_req_len = sizeof(struct apu_request) +
+					req->size_in + req->size_out +
+					req->count * sizeof(u32)*2;
+
+				len = min(req_len, apu_req_len);
+				if (copy_to_user(argp, req, len))
+					ret = -EFAULT;
+				apu->available_response--;
+				ida_simple_remove(&req_ida, req->id);
+				for (i = 0; i < req->count ; i++)
+					apu_device_memory_unmap(apu,
+							&rpmsg_req->buffer[i]);
+				list_del(&rpmsg_req->node);
+				kfree(rpmsg_req->buffer);
+				kfree(rpmsg_req->req);
+				kfree(rpmsg_req);
+				break;
+			}
+		}
+		spin_unlock_irqrestore(&apu->ctx_lock, flags);
+
+		break;
 	default:
-		return -EINVAL;
+		ret = -EINVAL;
 	}
 
-	return 0;
+	return ret;
 }
 
 static int rpmsg_eptdev_open(struct inode *inode, struct file *filp)
@@ -351,6 +412,7 @@ static const struct file_operations rpmsg_eptdev_fops = {
 	.release = rpmsg_eptdev_release,
 	.unlocked_ioctl = rpmsg_eptdev_ioctl,
 	.compat_ioctl = rpmsg_eptdev_ioctl,
+	.poll = rpmsg_eptdev_poll,
 };
 
 static void iova_domain_release(struct kref *ref)
@@ -525,6 +587,11 @@ static int apu_rpmsg_probe(struct rpmsg_device *rpdev)
 		goto free_minor_ida;
 	dev->id = ret;
 	dev_set_name(&apu->dev, "apu%d", ret);
+
+	init_waitqueue_head(&apu->waitqueue);
+	spin_lock_init(&apu->ctx_lock);
+	apu->available_response = 0;
+	INIT_LIST_HEAD(&apu->requests);
 
 	ret = cdev_add(&apu->cdev, dev->devt, 1);
 	if (ret)

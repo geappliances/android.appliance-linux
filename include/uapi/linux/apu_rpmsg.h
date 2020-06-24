@@ -21,6 +21,7 @@
  *        by the APU.
  */
 struct apu_request {
+	__u16 id;
 	__u16 cmd;
 	__u16 result;
 	__u16 size_in;
@@ -31,6 +32,9 @@ struct apu_request {
 };
 
 /* Send synchronous request to an APU */
-#define APU_SEND_REQ_IOCTL	_IOWR(0xb7, 0x2, struct apu_request)
+
+#define APU_SEND_REQ_IOCTL		_IOW(0xb7, 0x2, struct apu_request)
+#define APU_GET_NEXT_AVAILABLE_IOCTL	_IOR(0xb7, 0x3, __u16)
+#define APU_GET_RESP			_IOWR(0xb7, 0x4, struct apu_request)
 
 #endif
