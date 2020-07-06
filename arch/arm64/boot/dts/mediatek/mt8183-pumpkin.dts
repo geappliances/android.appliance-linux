@@ -703,6 +703,11 @@
 	status = "okay";
 };
 
+&vpu1 {
+	memory-region = <&vpu_ram>;
+	status = "okay";
+};
+
 &seninf {
 	status = "okay";
 };
