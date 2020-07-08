@@ -1,11 +1,15 @@
 config RGX_M1_9ED4917962
-	tristate "Imagination Rogue GX M1.9ED4917662 driver"
+	tristate "Imagination Rogue GX M1.9ED4917662 Linux driver"
 
 config RGX_M1_11_5516664
-	tristate "Imagination Rogue GX M1.11@5516664 driver"
+	tristate "Imagination Rogue GX M1.11@5516664 Linux driver"
+
+config RGX_ANDROID_M1_11_5516664
+	tristate "Imagination Rogue GX M1.11@5516664 Android driver"
 
 config RGX_M1_13ED5720833
 	tristate "Imagination Rogue GX M1.13ED5720833 driver"
 
 config RGX_M1_13_5776728
 	tristate "Imagination Rogue GX M1.13_5776728 driver"
+
