@@ -564,6 +564,7 @@ free_minor_ida:
 	ida_simple_remove(&rpmsg_minor_ida, MINOR(dev->devt));
 free_apu:
 	put_device(dev);
+	rproc_put(apu->rproc);
 	kfree(apu);
 
 	return ret;
@@ -578,6 +579,7 @@ static void apu_rpmsg_remove(struct rpmsg_device *rpdev)
 
 	device_del(&apu->dev);
 	put_device(&apu->dev);
+	rproc_put(apu->rproc);
 	kfree(apu);
 }
 
