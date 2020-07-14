@@ -7,7 +7,6 @@ output bus.
 
 Required properties:
 - compatible: "mediatek,<chip>-dpi"
-  the supported chips are mt2701 , mt8173 and mt8183.
 - reg: Physical base address and length of the controller's registers
 - interrupts: The interrupt signal from the function block.
 - clocks: device clocks
@@ -16,11 +15,6 @@ Required properties:
 - port: Output port node with endpoint definitions as described in
   Documentation/devicetree/bindings/graph.txt. This port should be connected
   to the input port of an attached HDMI or LVDS encoder chip.
-
-Optional properties:
-- dpi_pin_mode_swap: Swap the pin mode between dpi mode and gpio mode.
-- pinctrl-names: Contain "gpiomode" and "dpimode".
-- dpi_dual_edge: Control the RGB 24bit data on 12 pins or 24 pins.
 
 Example:
 
@@ -32,11 +26,6 @@ dpi0: dpi@1401d000 {
 		 <&mmsys CLK_MM_DPI_ENGINE>,
 		 <&apmixedsys CLK_APMIXED_TVDPLL>;
 	clock-names = "pixel", "engine", "pll";
-	dpi_dual_edge;
-	dpi_pin_mode_swap;
-	pinctrl-names = "gpiomode", "dpimode";
-	pinctrl-0 = <&dpi_pin_gpio>;
-	pinctrl-1 = <&dpi_pin_func>;
 
 	port {
 		dpi0_out: endpoint {
