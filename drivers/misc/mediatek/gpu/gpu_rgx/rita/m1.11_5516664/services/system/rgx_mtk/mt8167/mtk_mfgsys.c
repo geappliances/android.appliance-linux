@@ -27,17 +27,16 @@
 #include <linux/pm_wakeup.h>
 
 #include "mtk_mfgsys.h"
-#include <mtk_boot.h>
-#include <mtk_gpufreq.h>
-#include "pvr_gputrace.h"
+/* pedro  #include <mtk_boot.h>     */
+/* pedro  #include <mtk_gpufreq.h>  */
+/* pedro  #include "pvr_gputrace.h" */
 #include "rgxdevice.h"
 #include "osfunc.h"
 #include "pvrsrv.h"
 #include "rgxhwperf.h"
 #include "device.h"
 #include "rgxinit.h"
-#include "pvr_dvfs.h"
-#include "mtk_chip.h"
+/* pedro  #include "mtk_chip.h"    */
 
 #ifdef CONFIG_MTK_HIBERNATION
 #include "sysconfig.h"
@@ -46,8 +45,8 @@
 #include <mach/irqs.h>
 #endif
 
-#include <trace/events/mtk_events.h>
-#include <mtk_gpu_utility.h>
+/* pedro #include <trace/events/mtk_events.h> 
+   pedro #include <mtk_gpu_utility.h>   */
 
 
 #ifdef MTK_CAL_POWER_INDEX
@@ -57,7 +56,6 @@ static IMG_PVOID g_pvRegsBaseKM;
 #define MTK_RGX_DEVICE_INDEX_INVALID    -1
 #endif
 
-static IMG_HANDLE g_RGXutilUser;
 static IMG_UINT32 gpu_debug_enable;
 static IMG_BOOL g_bDeviceInit;
 
@@ -102,7 +100,6 @@ static const char * const top_mfg_clk_name[] = {
 #define REG_MFG_CG_STA 0x00
 #define REG_MFG_CG_SET 0x04
 #define REG_MFG_CG_CLR 0x08
-#define REG_MFG_ASYNC_CON 0x1C
 
 #ifdef CONFIG_MTK_HIBERNATION
 int gpu_pm_restore_noirq(struct device *device)
@@ -131,15 +128,6 @@ static PVRSRV_DEVICE_NODE *MTKGetRGXDevNode(void)
 	}
 	return NULL;
 }
-
-static void MTKWriteBackFreqToRGX(PVRSRV_DEVICE_NODE *psDevNode, IMG_UINT32 ui32NewFreq)
-{
-	RGX_DATA *psRGXData = (RGX_DATA *)psDevNode->psDevConfig->hDevData;
-
-	psRGXData->psRGXTimingInfo->ui32CoreClockSpeed = ui32NewFreq * 1000;
-	/* kHz to Hz write to RGX as the same unit */
-}
-
 
 #define MTKCLK_prepare_enable(clk)								\
 	do {											\
@@ -202,8 +190,6 @@ static void mtk_mfg_enable_clock(void)
 	*/
 	pm_stay_awake(&mfg_base->mfg_async_pdev->dev);
 
-	ged_dvfs_gpu_clock_switch_notify(1);
-
 	/* Resume mfg power domain */
 	pm_runtime_get_sync(&mfg_base->mfg_async_pdev->dev);
 	pm_runtime_get_sync(&mfg_base->mfg_2d_pdev->dev);
@@ -237,8 +223,6 @@ static void mtk_mfg_disable_clock(void)
 #endif
 	pm_runtime_put_sync(&mfg_base->mfg_2d_pdev->dev);
 	pm_runtime_put_sync(&mfg_base->mfg_async_pdev->dev);
-
-	ged_dvfs_gpu_clock_switch_notify(0);
 
 	/* Release wakelock when mfg power-off */
 	pm_relax(&mfg_base->mfg_async_pdev->dev);
@@ -294,64 +278,6 @@ static void MTKDisableMfgClock(void)
 	}
 
 	mutex_unlock(&mfg_base->set_power_state);
-}
-
-/* For ged_dvfs idx commit */
-static void MTKCommitFreqIdx(unsigned long ui32NewFreqID, GED_DVFS_COMMIT_TYPE eCommitType, int *pbCommited)
-{
-	PVRSRV_ERROR eResult;
-	PVRSRV_DEVICE_NODE *psDevNode = MTKGetRGXDevNode();
-	struct mtk_mfg_base *mfg_base = GET_MTK_MFG_BASE(sPVRLDMDev);
-
-	/* Disable dvfs when device at reboot or power off stage. */
-	if (psDevNode && !mfg_base->shutdown) {
-		eResult = PVRSRVDevicePreClockSpeedChange(psDevNode, IMG_FALSE, (void *)NULL);
-		if ((eResult == PVRSRV_OK) || (eResult == PVRSRV_ERROR_RETRY)) {
-			unsigned int ui32GPUFreq;
-			unsigned int ui32CurFreqID;
-			PVRSRV_DEV_POWER_STATE ePowerState;
-
-			/* debug patch for ALPS03164004 */
-			if (eResult == PVRSRV_ERROR_RETRY)
-				dump_stack();
-
-			PVRSRVGetDevicePowerState(psDevNode, &ePowerState);
-			if (ePowerState == PVRSRV_DEV_POWER_STATE_ON) {
-				mt_gpufreq_target(ui32NewFreqID);
-				g_bUnsync = IMG_FALSE;
-			} else {
-				g_ui32_unsync_freq_id = ui32NewFreqID;
-				g_bUnsync = IMG_TRUE;
-			}
-
-			ui32CurFreqID = mt_gpufreq_get_cur_freq_index();
-			ui32GPUFreq = mt_gpufreq_get_freq_by_idx(ui32CurFreqID);
-	#if defined(CONFIG_TRACING) && defined(CONFIG_MTK_SCHED_TRACERS)
-			if (PVRGpuTraceEnabled())
-				trace_gpu_freq(ui32GPUFreq);
-	#endif
-			MTKWriteBackFreqToRGX(psDevNode, ui32GPUFreq);
-
-	#ifdef MTK_DEBUG
-			if (gpu_debug_enable)
-				pr_info("PVR_K: 3DFreq=%d, Volt=%d\n", ui32GPUFreq, mt_gpufreq_get_cur_volt());
-	#endif
-
-			if (eResult == PVRSRV_OK)
-				PVRSRVDevicePostClockSpeedChange(psDevNode, IMG_FALSE, (void *)NULL);
-
-			/*
-			 * Always return true because the APM would almost letting GPU power down
-			 * with high possibility while DVFS committing
-			 */
-			if (pbCommited)
-				*pbCommited = IMG_TRUE;
-			return;
-		}
-	}
-
-	if (pbCommited)
-		*pbCommited = IMG_FALSE;
 }
 
 #ifdef MTK_CAL_POWER_INDEX
@@ -478,45 +404,6 @@ static IMG_UINT32 MTKCalPowerIndex(void)
 }
 #endif
 
-static void MTKCalGpuLoading(unsigned int *pui32Loading, unsigned int *pui32Block, unsigned int *pui32Idle)
-{
-	PVRSRV_DEVICE_NODE *psDevNode;
-	PVRSRV_RGXDEV_INFO *psDevInfo;
-
-	psDevNode = MTKGetRGXDevNode();
-	if (!psDevNode) {
-		PVR_DPF((PVR_DBG_ERROR, "psDevNode not found"));
-		return;
-	}
-
-	psDevInfo = (PVRSRV_RGXDEV_INFO *)psDevNode->pvDevice;
-	if (psDevInfo && psDevInfo->pfnGetGpuUtilStats) {
-		RGXFWIF_GPU_UTIL_STATS sGpuUtilStats = {0};
-
-		if (g_RGXutilUser == NULL)
-			return;
-
-		psDevInfo->pfnGetGpuUtilStats(psDevInfo->psDeviceNode, g_RGXutilUser, &sGpuUtilStats);
-		if (sGpuUtilStats.bValid) {
-#if defined(__arm64__) || defined(__aarch64__)
-			*pui32Loading = (100*(sGpuUtilStats.ui64GpuStatActiveHigh +
-					sGpuUtilStats.ui64GpuStatActiveLow)) /
-					sGpuUtilStats.ui64GpuStatCumulative;
-			*pui32Block = (100*(sGpuUtilStats.ui64GpuStatBlocked)) / sGpuUtilStats.ui64GpuStatCumulative;
-			*pui32Idle = (100*(sGpuUtilStats.ui64GpuStatIdle)) / sGpuUtilStats.ui64GpuStatCumulative;
-#else
-			*pui32Loading = (unsigned long)(100*(sGpuUtilStats.ui64GpuStatActiveHigh +
-					sGpuUtilStats.ui64GpuStatActiveLow)) /
-					(unsigned long)sGpuUtilStats.ui64GpuStatCumulative;
-			*pui32Block =  (unsigned long)(100*(sGpuUtilStats.ui64GpuStatBlocked)) /
-				       (unsigned long)sGpuUtilStats.ui64GpuStatCumulative;
-			*pui32Idle = (unsigned long)(100*(sGpuUtilStats.ui64GpuStatIdle)) /
-				     (unsigned long)sGpuUtilStats.ui64GpuStatCumulative;
-#endif
-		}
-	}
-}
-
 static bool MTKCheckDeviceInit(void)
 {
 	PVRSRV_DEVICE_NODE *psDevNode = MTKGetRGXDevNode();
@@ -576,7 +463,7 @@ PVRSRV_ERROR MTKDevPostPowerState(IMG_HANDLE hSysData, PVRSRV_DEV_POWER_STATE eN
 			g_bDeviceInit = MTKCheckDeviceInit();
 
 		if (g_bUnsync == IMG_TRUE) {
-			mt_gpufreq_target(g_ui32_unsync_freq_id);
+			// pedro  mt_gpufreq_target(g_ui32_unsync_freq_id);
 			g_bUnsync = IMG_FALSE;
 		}
 	}
@@ -595,18 +482,59 @@ PVRSRV_ERROR MTKSystemPostPowerState(PVRSRV_SYS_POWER_STATE eNewPowerState)
 	return PVRSRV_OK;
 }
 
-PVRSRV_ERROR MTKMFGSystemInit(void)
-{
 #ifdef SUPPORT_PDVFS
-	ged_dvfs_vsync_trigger_fp = MTKMFGOppUpdate;
-	ged_dvfs_cal_gpu_utilization_fp = MTKFakeGpuLoading; /* turn-off GED loading based DVFS */
-#else
-	ged_dvfs_cal_gpu_utilization_fp = MTKCalGpuLoading;
-	ged_dvfs_gpu_freq_commit_fp = MTKCommitFreqIdx;
+#include "rgxpdvfs.h"
+static IMG_OPP *gpasOPPTable;
+
+static int MTKMFGOppUpdate(int ui32ThrottlePoint)
+{
+	PVRSRV_DEVICE_NODE *psDevNode = MTKGetRGXDevNode();
+	int i, ui32OPPTableSize;
+
+	static RGXFWIF_PDVFS_OPP sPDFVSOppInfo;
+	static int bNotReady = 1;
+
+	if (bNotReady) {
+		ui32OPPTableSize = mt_gpufreq_get_dvfs_table_num();
+		gpasOPPTable = (IMG_OPP  *)OSAllocZMem(sizeof(IMG_OPP) * ui32OPPTableSize);
+
+		for (i = 0; i < ui32OPPTableSize; i++) {
+			gpasOPPTable[i].ui32Volt = mt_gpufreq_get_volt_by_idx(i);
+			gpasOPPTable[i].ui32Freq = mt_gpufreq_get_freq_by_idx(i) * 1000;
+		}
+
+		if (psDevNode) {
+			PVRSRV_RGXDEV_INFO *psDevInfo = psDevNode->pvDevice;
+			PVRSRV_DEVICE_CONFIG *psDevConfig = psDevNode->psDevConfig;
+
+			psDevConfig->sDVFS.sDVFSDeviceCfg.pasOPPTable = gpasOPPTable;
+			psDevConfig->sDVFS.sDVFSDeviceCfg.ui32OPPTableSize = ui32OPPTableSize;
+
+			/* sPDFVSOppInfo.ui32ThrottlePoint = ui32ThrottlePoint; */
+			/* PDVFSSendOPPPoints(psDevInfo, sPDFVSOppInfo); */
+			bNotReady = 0;
+
+			PVR_DPF((PVR_DBG_ERROR, "PDVFS opptab=%p size=%d init completed",
+				 psDevConfig->sDVFS.sDVFSDeviceCfg.pasOPPTable, ui32OPPTableSize));
+		} else {
+			if (gpasOPPTable)
+				OSFreeMem(gpasOPPTable);
+		}
+	}
+}
+
+static void MTKFakeGpuLoading(unsigned int *pui32Loading, unsigned int *pui32Block, unsigned int *pui32Idle)
+{
+	*pui32Loading = 0;
+	*pui32Block = 0;
+	*pui32Idle = 0;
+}
 #endif
 
+PVRSRV_ERROR MTKMFGSystemInit(void)
+{
 	/* Set the CB for ptpod use */
-	mt_gpufreq_mfgclock_notify_registerCB(MTKEnableMfgClock, MTKDisableMfgClock);
+	// pedro mt_gpufreq_mfgclock_notify_registerCB(MTKEnableMfgClock, MTKDisableMfgClock);
 
 #ifdef CONFIG_MTK_HIBERNATION
 	register_swsusp_restore_noirq_func(ID_M_GPU, gpu_pm_restore_noirq, NULL);
@@ -742,10 +670,6 @@ int MTKRGXDeviceInit(PVRSRV_DEVICE_CONFIG *psDevConfig)
 	mutex_init(&mfg_base->set_power_state);
 	pdev->dev.platform_data = mfg_base;
 
-	/* 1.5+DDK support multiple user to query GPU utilization, Need Init here */
-	if (g_RGXutilUser == NULL)
-		SORgxGpuUtilStatsRegister(&g_RGXutilUser);
-
 	bCoreinitSucceeded = IMG_TRUE;
 	return 0;
 }
@@ -770,22 +694,14 @@ bool mt_gpucore_ready(void)
 }
 EXPORT_SYMBOL(mt_gpucore_ready);
 
-void MTKFWDump(void)
-{
-	PVRSRV_DEVICE_NODE *psDevNode = MTKGetRGXDevNode();
-
-	MTK_PVRSRVDebugRequestSetSilence(IMG_TRUE);
-	PVRSRVDebugRequest(psDevNode, DEBUG_REQUEST_VERBOSITY_MAX, NULL, NULL);
-	MTK_PVRSRVDebugRequestSetSilence(IMG_FALSE);
-}
-EXPORT_SYMBOL(MTKFWDump);
-
 module_param(gpu_debug_enable, uint, 0644);
 
 
 static int mtk_mfg_async_probe(struct platform_device *pdev)
 {
+#ifdef MTK_DEBUG
 	pr_info("mtk_mfg_async_probe\n");
+#endif
 
 	if (!pdev->dev.pm_domain) {
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to get dev->pm_domain", __func__));
@@ -845,7 +761,9 @@ static int __init mtk_mfg_async_init(void)
 
 static int mtk_mfg_2d_probe(struct platform_device *pdev)
 {
+#ifdef MTK_DEBUG
 	pr_info("mtk_mfg_2d_probe\n");
+#endif
 
 	if (!pdev->dev.pm_domain) {
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to get dev->pm_domain", __func__));

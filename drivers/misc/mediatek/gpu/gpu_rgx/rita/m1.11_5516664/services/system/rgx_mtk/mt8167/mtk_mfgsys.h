@@ -16,7 +16,6 @@
 
 #include "servicesext.h"
 #include "rgxdevice.h"
-#include "ged_dvfs.h"
 #include <linux/regulator/consumer.h>
 
 /* Control SW APM is enabled or not  */
@@ -62,14 +61,6 @@ PVRSRV_ERROR MTKSystemPostPowerState(PVRSRV_SYS_POWER_STATE eNewPowerState);
 
 int MTKRGXDeviceInit(PVRSRV_DEVICE_CONFIG *psDevConfig);
 int MTKRGXDeviceDeInit(PVRSRV_DEVICE_CONFIG *psDevConfig);
-
-/* from gpu/ged/src/ged_dvfs.c */
-extern void (*ged_dvfs_cal_gpu_utilization_fp)(unsigned int *pui32Loading,
-											   unsigned int *pui32Block,
-											   unsigned int *pui32Idle);
-extern void (*ged_dvfs_gpu_freq_commit_fp)(unsigned long ui32NewFreqID,
-										   GED_DVFS_COMMIT_TYPE eCommitType,
-										   int *pbCommited);
 
 #ifdef CONFIG_MTK_HIBERNATION
 extern void mt_irq_set_sens(unsigned int irq, unsigned int sens);

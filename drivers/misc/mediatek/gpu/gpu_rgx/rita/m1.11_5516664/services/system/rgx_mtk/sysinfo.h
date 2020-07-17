@@ -45,6 +45,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if !defined(__SYSINFO_H__)
 #define __SYSINFO_H__
 
+#define CONFIG_MACH_MT8167	1
+#define MTK_CONFIG_OF
 /*!< System specific poll/timeout details */
 #if defined(PVR_LINUX_USING_WORKQUEUES)
 #define MAX_HW_TIME_US					(1000000)
