@@ -44,7 +44,7 @@ static void handle_enc_encode_msg(struct venc_vpu_inst *vpu, const void *data)
 	vpu->is_key_frm = msg->is_key_frm;
 }
 
-static void vpu_enc_ipi_handler(void *data, unsigned int len, void *priv)
+static int vpu_enc_ipi_handler(void *data, unsigned int len, void *priv)
 {
 	const struct venc_vpu_ipi_msg_common *msg = data;
 	struct venc_vpu_inst *vpu =
@@ -76,6 +76,8 @@ static void vpu_enc_ipi_handler(void *data, unsigned int len, void *priv)
 
 failure:
 	mtk_vcodec_debug_leave(vpu);
+
+	return 0;
 }
 
 static int vpu_enc_send_msg(struct venc_vpu_inst *vpu, void *msg,

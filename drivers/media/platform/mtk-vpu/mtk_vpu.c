@@ -604,7 +604,7 @@ OUT_LOAD_FW:
 	return ret;
 }
 
-static void vpu_init_ipi_handler(const void *data, unsigned int len, void *priv)
+static int vpu_init_ipi_handler(void *data, unsigned int len, void *priv)
 {
 	struct mtk_vpu *vpu = priv;
 	const struct vpu_run *run = data;
@@ -614,6 +614,8 @@ static void vpu_init_ipi_handler(const void *data, unsigned int len, void *priv)
 	vpu->run.dec_capability = run->dec_capability;
 	vpu->run.enc_capability = run->enc_capability;
 	wake_up_interruptible(&vpu->run.wq);
+
+	return 0;
 }
 
 #ifdef CONFIG_DEBUG_FS

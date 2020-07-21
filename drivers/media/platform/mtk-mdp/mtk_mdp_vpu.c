@@ -26,8 +26,7 @@ static void mtk_mdp_vpu_handle_init_ack(const struct mdp_ipi_comm_ack *msg)
 	vpu->inst_addr = msg->vpu_inst_addr;
 }
 
-static void mtk_mdp_vpu_ipi_handler(const void *data, unsigned int len,
-				    void *priv)
+static int mtk_mdp_vpu_ipi_handler(void *data, unsigned int len, void *priv)
 {
 	const struct mdp_ipi_comm_ack *msg = data;
 	unsigned int msg_id = msg->msg_id;
@@ -56,6 +55,8 @@ static void mtk_mdp_vpu_ipi_handler(const void *data, unsigned int len,
 		mtk_mdp_dbg(0, "[%d]:msg 0x%x, failure:%d", ctx->id,
 			    msg_id, vpu->failure);
 	}
+
+	return 0;
 }
 
 int mtk_mdp_vpu_register(struct platform_device *pdev)
