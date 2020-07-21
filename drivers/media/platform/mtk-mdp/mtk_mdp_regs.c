@@ -22,6 +22,8 @@ static int32_t mtk_mdp_map_color_format(int v4l2_format)
 		return DP_COLOR_NV21;
 	case V4L2_PIX_FMT_MT21C:
 		return DP_COLOR_420_BLKP_UFO;
+	case V4L2_PIX_FMT_MT21:
+		return DP_COLOR_420_BLKP;
 	case V4L2_PIX_FMT_YUV420M:
 	case V4L2_PIX_FMT_YUV420:
 		return DP_COLOR_I420;
