@@ -354,8 +354,8 @@ static const struct mtk_mdp_fmt *mtk_mdp_try_fmt_mplane(struct mtk_mdp_ctx *ctx,
 
 	pix_mp->field = V4L2_FIELD_NONE;
 	pix_mp->pixelformat = fmt->pixelformat;
+	pix_mp->colorspace = ctx->colorspace;
 	if (!V4L2_TYPE_IS_OUTPUT(f->type)) {
-		pix_mp->colorspace = ctx->colorspace;
 		pix_mp->xfer_func = ctx->xfer_func;
 		pix_mp->ycbcr_enc = ctx->ycbcr_enc;
 		pix_mp->quantization = ctx->quant;
