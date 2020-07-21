@@ -514,7 +514,7 @@ static int vcu_ipi_init(struct mtk_vcu *vcu)
 	return 0;
 }
 
-static void vcu_init_ipi_handler(void *data, unsigned int len, void *priv)
+static int vcu_init_ipi_handler(void *data, unsigned int len, void *priv)
 {
 	struct mtk_vcu *vcu = (struct mtk_vcu *)priv;
 	struct vcu_run *run = (struct vcu_run *)data;
@@ -541,6 +541,7 @@ static void vcu_init_ipi_handler(void *data, unsigned int len, void *priv)
 	dev_dbg(vcu->dev, "[VCU] fw ver: %s\n", vcu->run.fw_ver);
 	dev_dbg(vcu->dev, "[VCU] dec cap: %x\n", vcu->run.dec_capability);
 	dev_dbg(vcu->dev, "[VCU] enc cap: %x\n", vcu->run.enc_capability);
+	return 0;
 }
 
 static int mtk_vcu_open(struct inode *inode, struct file *file)
