@@ -9,6 +9,9 @@
 
 #include <linux/platform_device.h>
 
+
+void vcu_get_task(struct task_struct **task, struct files_struct **f);
+
 /**
  * VPU (video processor unit) is a tiny processor controlling video hardware
  * related to video codec, scaling and color format converting.
