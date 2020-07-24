@@ -61,6 +61,7 @@ enum ipi_id {
 	IPI_VENC_H264,
 	IPI_VENC_VP8,
 	IPI_MDP,
+	IPI_VENC_HYBRID_H264,
 	IPI_MAX,
 };
 
