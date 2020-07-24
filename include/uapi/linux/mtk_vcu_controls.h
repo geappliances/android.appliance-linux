@@ -41,8 +41,8 @@
  * @va: kernel virtual address
  */
 struct mem_obj {
-	unsigned long iova;
-	unsigned long len;
+	u64 iova;
+	u64 len;
 	u64 va;
 };
 
