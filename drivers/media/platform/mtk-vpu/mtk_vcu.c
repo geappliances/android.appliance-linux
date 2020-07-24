@@ -285,6 +285,7 @@ struct mtk_vcu {
 	const char *vcuname;
 	const char *path;
 	int vcuid;
+	struct log_test_nofuse *vdec_log_info;
 	wait_queue_head_t vdec_log_get_wq;
 	atomic_t vdec_log_got;
 	struct map_cache_mva map_buffer[MAP_VENC_CACHE_MAX_NUM];
@@ -425,6 +426,33 @@ static int vcu_ipi_get(struct mtk_vcu *vcu, unsigned long arg)
 		ret = -EINVAL;
 	}
 	atomic_set(&vcu->ipi_got[i], 0);
+
+	return ret;
+}
+
+static int vcu_log_get(struct mtk_vcu *vcu, unsigned long arg)
+{
+	int ret;
+	unsigned char *user_data_addr = NULL;
+
+	user_data_addr = (unsigned char *)arg;
+
+	ret = wait_event_freezable(vcu->vdec_log_get_wq,
+				    atomic_read(&vcu->vdec_log_got));
+	if (ret != 0) {
+		pr_err("[VCU][%d] wait event return %d @%s\n",
+			vcu->vcuid, ret, __func__);
+		return ret;
+	}
+
+	ret = copy_to_user(user_data_addr, vcu->vdec_log_info,
+		(unsigned long)sizeof(struct log_test_nofuse));
+	if (ret != 0) {
+		pr_err("[VCU] %s(%d) Copy data to user failed!\n",
+			__func__, __LINE__);
+		ret = -EINVAL;
+	}
+	atomic_set(&vcu->vdec_log_got, 0);
 
 	return ret;
 }
@@ -773,6 +801,9 @@ static long mtk_vcu_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 	case VCUD_GET_OBJECT:
 		ret = vcu_ipi_get(vcu_dev, arg);
 		break;
+	case VCUD_GET_LOG_OBJECT:
+		ret = vcu_log_get(vcu_dev, arg);
+		break;
 	case VCUD_MVA_ALLOCATION:
 		user_data_addr = (unsigned char *)arg;
 		ret = (long)copy_from_user(&mem_buff_data, user_data_addr,
@@ -881,6 +912,7 @@ static long mtk_vcu_unlocked_compat_ioctl(struct file *file, unsigned int cmd, u
 	switch (cmd) {
 	case COMPAT_VCUD_SET_OBJECT:
 	case VCUD_GET_OBJECT:
+	case VCUD_GET_LOG_OBJECT:
 	case VCUD_SET_MMAP_TYPE:
 		share_data32 = compat_ptr((uint32_t)arg);
 		ret = file->f_op->unlocked_ioctl(file,
@@ -972,6 +1004,10 @@ static int mtk_vcu_probe(struct platform_device *pdev)
 		return ret;
 	}
 	vcu_mtkdev[vcuid] = vcu;
+	vcu_mtkdev[vcuid]->vdec_log_info = devm_kzalloc(dev,
+		sizeof(struct log_test_nofuse), GFP_KERNEL);
+	if (!vcu_mtkdev[vcuid]->vdec_log_info)
+		return -ENOMEM;
 
 #ifdef CONFIG_MTK_IOMMU
 	vcu_mtkdev[vcuid]->io_domain = iommu_get_domain_for_dev(dev);
