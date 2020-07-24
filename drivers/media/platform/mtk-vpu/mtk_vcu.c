@@ -61,6 +61,18 @@ enum mtk_vcu_daemon_id {
 	MTK_VCU_NR_MAX
 };
 
+enum vcu_ipi_id {
+	VCU_IPI_VPU_INIT = 0,
+	VCU_IPI_VDEC_H264,
+	VCU_IPI_VDEC_VP8 = 3,
+	VCU_IPI_VDEC_VP9,
+	VCU_IPI_VENC_H264 = 11,
+	VCU_IPI_VENC_VP8,
+	VCU_IPI_MDP,
+	VCU_IPI_VENC_HYBRID_H264 = 25,
+	VCU_IPI_MAX,
+};
+
 /* vcu extended mapping length */
 #define VCU_PMEM0_LEN(vcu_data)	(vcu_data->extmem.p_len)
 #define VCU_DMEM0_LEN(vcu_data)	(vcu_data->extmem.d_len)
@@ -91,6 +103,61 @@ enum mtk_vcu_daemon_id {
 #define MAP_SHMEM_MM_CACHEABLE_END	(MAP_SHMEM_MM_CACHEABLE_BASE + MAP_SHMEM_MM_RANGE)
 #define MAP_VENC_CACHE_MAX_NUM 30
 #define VCU_IPIMSG_VENC_BASE 0xD000
+
+static inline enum vcu_ipi_id ipi_vpu_to_vcu(enum ipi_id id)
+{
+	switch (id) {
+	case IPI_VPU_INIT:
+		return VCU_IPI_VPU_INIT;
+	case IPI_VDEC_H264:
+		return VCU_IPI_VDEC_H264;
+	case IPI_VDEC_VP8:
+		return VCU_IPI_VDEC_VP8;
+	case IPI_VDEC_VP9:
+		return VCU_IPI_VDEC_VP9;
+	case IPI_VENC_H264:
+		return VCU_IPI_VENC_H264;
+	case IPI_VENC_VP8:
+		return VCU_IPI_VENC_VP8;
+	case IPI_MDP:
+		return VCU_IPI_MDP;
+	case IPI_VENC_HYBRID_H264:
+		return VCU_IPI_VENC_HYBRID_H264;
+	case IPI_MAX:
+	default:
+		return VCU_IPI_MAX;
+	}
+
+	return VCU_IPI_MAX;
+}
+
+static inline enum ipi_id ipi_vcu_to_vpu(enum vcu_ipi_id id)
+{
+	switch (id) {
+	case VCU_IPI_VPU_INIT:
+		return IPI_VPU_INIT;
+	case VCU_IPI_VDEC_H264:
+		return IPI_VDEC_H264;
+	case VCU_IPI_VDEC_VP8:
+		return IPI_VDEC_VP8;
+	case VCU_IPI_VDEC_VP9:
+		return IPI_VDEC_VP9;
+	case VCU_IPI_VENC_H264:
+		return IPI_VENC_H264;
+	case VCU_IPI_VENC_VP8:
+		return IPI_VENC_VP8;
+	case VCU_IPI_MDP:
+		return IPI_MDP;
+	case VCU_IPI_VENC_HYBRID_H264:
+		return IPI_VENC_HYBRID_H264;
+	case VCU_IPI_MAX:
+	default:
+		return IPI_MAX;
+	}
+
+	return IPI_MAX;
+}
+
 
 inline int ipi_id_to_inst_id(int vcuid, int id)
 {
@@ -351,9 +418,8 @@ int vcu_ipi_send(struct mtk_vpu_plat *vpu,
 	/* send the command to VCU */
 	memcpy((void *)vcu->user_obj[i].share_buf, buf, len);
 	vcu->user_obj[i].len = len;
-	vcu->user_obj[i].id = (int)id;
-	if (id == IPI_MDP)
-		vcu->user_obj[i].id = 13;
+	vcu->user_obj[i].id = (int)ipi_vpu_to_vcu(id);
+
 	atomic_set(&vcu->ipi_got[i], 1);
 	atomic_set(&vcu->ipi_done[i], 0);
 	wake_up(&vcu->get_wq[i]);
@@ -403,7 +469,8 @@ static int vcu_ipi_get(struct mtk_vcu *vcu, unsigned long arg)
 	user_data_addr = (unsigned char *)arg;
 	ret = (long)copy_from_user(&share_buff_data, user_data_addr,
 		(unsigned long)sizeof(struct share_obj));
-	i = ipi_id_to_inst_id(vcu->vcuid, share_buff_data.id);
+	i = ipi_id_to_inst_id(vcu->vcuid,
+			      ipi_vcu_to_vpu(share_buff_data.id));
 
 	/* mutex protection here is unnecessary, since different app service
 	 * threads of daemon are corresponding to different vcu_ipi_get thread.
