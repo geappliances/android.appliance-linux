@@ -488,7 +488,7 @@ static int vcu_ipi_handler(struct mtk_vcu *vcu, struct share_obj *rcv_obj)
 
 	if (rcv_obj->id < (int)IPI_MAX &&
 		ipi_desc[rcv_obj->id].handler != NULL) {
-		ipi_desc[rcv_obj->id].handler(rcv_obj->share_buf,
+		non_ack = ipi_desc[rcv_obj->id].handler(rcv_obj->share_buf,
 							rcv_obj->len,
 							ipi_desc[rcv_obj->id].priv);
 		if (rcv_obj->id > (int)IPI_VPU_INIT && non_ack == 0) {
