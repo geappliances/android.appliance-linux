@@ -24,6 +24,7 @@
 #define VCUD_MVA_FREE		_IOWR('v', 2, struct mem_obj)
 #define VCUD_CACHE_FLUSH_ALL	_IOWR('v', 3, struct mem_obj)
 #define VCUD_GET_OBJECT	_IOWR('v', 4, struct share_obj)
+#define VCUD_GET_LOG_OBJECT	_IOW('v', 5, struct log_test_nofuse)
 #define VCUD_MVA_MAP_CACHE	_IOWR('v', 6, struct mem_obj)
 #define VCUD_SET_MMAP_TYPE	_IOW('v', 8, struct map_obj)
 
@@ -79,6 +80,10 @@ struct share_obj {
 	s32 id;
 	u32 len;
 	unsigned char share_buf[SHARE_BUF_SIZE];
+};
+
+struct log_test_nofuse {
+	char log_info[1024];
 };
 
 #endif
