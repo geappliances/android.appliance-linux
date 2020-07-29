@@ -114,7 +114,7 @@ static int apu_rpmsg_callback(struct rpmsg_device *rpdev, void *data, int count,
 }
 
 static struct apu_buffer *apu_device_memory_map(struct rpmsg_apu *apu,
-		uint32_t fd, struct rpmsg_request *rpmsg_req)
+						uint32_t fd)
 {
 	struct rpmsg_device *rpdev = apu->rpdev;
 	struct apu_buffer *buffer;
@@ -124,15 +124,11 @@ static struct apu_buffer *apu_device_memory_map(struct rpmsg_apu *apu,
 	int ret;
 
 	if (!fd)
-		return NULL;
+		return ERR_PTR(-EINVAL);
 
 	list_for_each_entry(buffer, &apu->buffers, node) {
 		if (buffer->fd == fd) {
 			kref_get(&buffer->refcount);
-			if (rpmsg_req)
-				list_add(&buffer->req_node,
-					 &rpmsg_req->buffers);
-
 			return buffer;
 		}
 	}
@@ -230,6 +226,44 @@ static void apu_device_memory_unmap(struct kref *ref)
 	kfree(buffer);
 }
 
+static int apu_iommu_mmap_ioctl(struct rpmsg_apu *apu, void __user *argp)
+{
+	struct apu_iommu_mmap apu_iommu_mmap;
+	struct apu_buffer *buffer;
+	int ret;
+
+	if (copy_from_user(&apu_iommu_mmap, argp, sizeof(apu_iommu_mmap)))
+		return -EFAULT;
+
+	buffer = apu_device_memory_map(apu, apu_iommu_mmap.fd);
+	if (IS_ERR(buffer))
+		return PTR_ERR(buffer);
+
+	apu_iommu_mmap.da = buffer->iova;
+	if (copy_to_user(argp, &apu_iommu_mmap, sizeof(apu_iommu_mmap)))
+		ret = -EFAULT;
+
+	return 0;
+}
+
+static int apu_iommu_munmap_ioctl(struct rpmsg_apu *apu, void __user *argp)
+{
+	u32 fd;
+	struct apu_buffer *buffer, *tmp;
+
+	if (copy_from_user(&fd, argp, sizeof(fd)))
+		return -EFAULT;
+
+	list_for_each_entry_safe(buffer, tmp, &apu->buffers, node) {
+		if (buffer->fd == fd) {
+			kref_put(&buffer->refcount, apu_device_memory_unmap);
+			return 0;
+		}
+	}
+
+	return -EINVAL;
+}
+
 static int apu_send_request(struct rpmsg_apu *apu,
 			    struct apu_request *req)
 {
@@ -266,7 +300,7 @@ static int apu_send_request(struct rpmsg_apu *apu,
 
 	INIT_LIST_HEAD(&rpmsg_req->buffers);
 	for (i = 0; i < req->count; i++) {
-		buffer = apu_device_memory_map(apu, fd[i], rpmsg_req);
+		buffer = apu_device_memory_map(apu, fd[i]);
 		if (IS_ERR(buffer)) {
 			ret = PTR_ERR(buffer);
 			goto err_free_memory;
@@ -417,6 +451,12 @@ static long rpmsg_eptdev_ioctl(struct file *fp, unsigned int cmd,
 		}
 		spin_unlock_irqrestore(&apu->ctx_lock, flags);
 
+		break;
+	case APU_IOMMU_MMAP:
+		ret = apu_iommu_mmap_ioctl(apu, argp);
+		break;
+	case APU_IOMMU_MUNMAP:
+		ret = apu_iommu_munmap_ioctl(apu, argp);
 		break;
 	default:
 		ret = -EINVAL;
