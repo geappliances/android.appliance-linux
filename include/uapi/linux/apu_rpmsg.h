@@ -31,10 +31,17 @@ struct apu_request {
 	__u8 data[0];
 };
 
+struct apu_iommu_mmap {
+	__u32 fd;
+	__u32 da;
+};
+
 /* Send synchronous request to an APU */
 
 #define APU_SEND_REQ_IOCTL		_IOW(0xb7, 0x2, struct apu_request)
 #define APU_GET_NEXT_AVAILABLE_IOCTL	_IOR(0xb7, 0x3, __u16)
 #define APU_GET_RESP			_IOWR(0xb7, 0x4, struct apu_request)
+#define APU_IOMMU_MMAP			_IOWR(0xb7, 0x5, struct apu_iommu_mmap)
+#define APU_IOMMU_MUNMAP		_IOWR(0xb7, 0x6, __u32)
 
 #endif
