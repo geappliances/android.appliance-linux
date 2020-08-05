@@ -54,6 +54,14 @@
 		};
 	};
 
+	/* XXX: ANDROID overlay */
+	backlight_lcd0: backlight_lcd0 {
+	};
+
+	/* XXX: ANDROID overlay */
+	bl_pp5000: regulator@1 {
+	};
+
 	leds {
 		compatible = "gpio-leds";
 

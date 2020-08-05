@@ -1,0 +1,148 @@
+/dts-v1/;
+/plugin/;
+
+#include "mt8183-pinfunc.h"
+#include "dt-bindings/interrupt-controller/irq.h"
+#include <dt-bindings/gpio/gpio.h>
+
+&firmware {
+	android {
+		compatible = "android,firmware";
+		hardware = "mt8183";
+		fstab {
+			compatible = "android,fstab";
+			vendor {
+				compatible = "android,vendor";
+				dev = "/dev/block/platform/soc/11230000.mmc/by-name/vendor";
+				type = "ext4";
+				mnt_flags = "ro";
+				fsmgr_flags = "wait";
+			};
+			system {
+				compatible = "android,system";
+				dev = "/dev/block/platform/soc/11230000.mmc/by-name/system";
+				type = "ext4";
+				mnt_flags = "ro";
+				fsmgr_flags = "wait";
+			};
+		};
+	};
+};
+
+&reserved_memory {
+	ramoops@0x4FF00000 {
+		compatible = "ramoops";
+		reg = <0x0 0x4FF00000 0x0 0x00100000>;
+		record-size = <0x8000>;
+		console-size = <0x8000>;
+		ftrace-size = <0x0>;
+		pmsg-size = <0x8000>;
+	};
+};
+
+&dsi0 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	panel: panel@0 {
+		compatible = "urt,umo-9465md-t";
+		reg = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&panel_pins_default>;
+		backlight = <&backlight_lcd0>;
+		reset-gpios = <&pio 45 0>;
+		pwr-gpios = <&pio 158 0>;
+		pwr2-gpios = <&pio 159 0>;
+		status = "okay";
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+	};
+
+	ports {
+		port {
+			dsi_out: endpoint {
+				remote-endpoint = <&panel_in>;
+			};
+		};
+	};
+};
+
+&mipi_tx0 {
+	status = "okay";
+};
+
+&backlight_lcd0 {
+	compatible = "pwm-backlight";
+	pwms = <&pwm0 0 500000>;
+	power-supply = <&bl_pp5000>;
+	brightness-levels = <0 1023>;
+	num-interpolated-steps = <1023>;
+	default-brightness-level = <576>;
+	status = "okay";
+};
+
+&bl_pp5000 {
+	compatible = "regulator-fixed";
+	regulator-name = "bl_pp5000";
+	regulator-min-microvolt = <5000000>;
+	regulator-max-microvolt = <5000000>;
+	regulator-always-on;
+	regulator-boot-on;
+};
+
+&i2c3 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <400000>;
+
+	touchscreen@26 {
+		compatible = "ilitek,ili2117";
+		reg = <0x26>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&ctp_pins_default>;
+		interrupt-parent = <&pio>;
+		interrupts = <189 IRQ_TYPE_EDGE_FALLING>;
+		reset-gpios = <&pio 177 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&pwm0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm0_pin_default>;
+};
+
+&pio {
+	panel_pins_default: panel_pins_default {
+		panel_reset {
+			pinmux = <PINMUX_GPIO45__FUNC_GPIO45>;
+			output-low;
+			bias-pull-up;
+		};
+	};
+
+	ctp_pins_default: ctp_pins_default {
+		pins_eint_ctp {
+			pinmux = <PINMUX_GPIO176__FUNC_GPIO176>;
+			input-enable;
+			bias-disable;
+		};
+
+		pins_rst_ctp {
+			pinmux = <PINMUX_GPIO177__FUNC_GPIO177>;
+			output-low;
+		};
+	};
+
+	pwm0_pin_default: pwm0_pin_default {
+		disp_pwm {
+			pinmux = <PINMUX_GPIO43__FUNC_DISP_PWM>;
+		};
+	};
+};
+
