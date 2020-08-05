@@ -328,11 +328,14 @@ static long rpmsg_eptdev_ioctl(struct file *fp, unsigned int cmd,
 
 		break;
 	case APU_GET_NEXT_AVAILABLE_IOCTL:
+		ret = -ENOMSG;
 		spin_lock_irqsave(&apu->ctx_lock, flags);
 		list_for_each_entry(rpmsg_req, &apu->requests, node) {
 			if (rpmsg_req->ready == 1) {
 				struct apu_request *req =
 					rpmsg_req->req;
+
+				ret = 0;
 				if (copy_to_user(argp, &req->id, sizeof(__u16)))
 					ret = -EFAULT;
 				break;
