@@ -288,7 +288,7 @@ int vkms_verify_crc_source(struct drm_crtc *crtc, const char *src_name,
 	return 0;
 }
 
-void vkms_set_composer(struct vkms_output *out, bool enabled)
+static void vkms_set_composer(struct vkms_output *out, bool enabled)
 {
 	bool old_enabled;
 
