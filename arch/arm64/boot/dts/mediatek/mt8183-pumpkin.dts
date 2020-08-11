@@ -17,6 +17,7 @@
 
 	aliases {
 		serial0 = &uart0;
+		serial1 = &uart1;
 	};
 
 	memory@40000000 {
@@ -444,6 +445,18 @@
 			bias-disable;
 		};
 	};
+	uart1_pins: uart_1 {
+		uart_1_tx {
+			pinmux = <PINMUX_GPIO115__FUNC_UTXD1>;
+			output-low;
+		};
+
+		uart_1_rx {
+			pinmux = <PINMUX_GPIO121__FUNC_URXD1>;
+			input-enable;
+			bias-disable;
+		};
+	};
 };
 
 &cci {
@@ -510,6 +523,11 @@
 	status = "okay";
 };
 
+&uart1 {
+	status = "okay";
+	pinctrl-0 = <&uart1_pins>;
+	pinctrl-names = "default";
+};
 &gpu {
 	supply-names = "mali","shadercores";
 	mali-supply = <&mt6358_vgpu_reg>;
