@@ -632,6 +632,13 @@
 	pinctrl-0 = <&i2c_pins_1>;
 	status = "okay";
 	clock-frequency = <100000>;
+
+	opt3001@44 {
+		compatible = "ti,opt3001";
+		reg = <0x44>;
+		interrupt-parent = <&pio>;
+		interrupts = <151 IRQ_TYPE_EDGE_FALLING>;
+	};
 };
 
 &i2c2 {
