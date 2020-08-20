@@ -28,3 +28,4 @@ obj-$(CONFIG_DRM_NWL_MIPI_DSI) += nwl-dsi.o
 obj-y += analogix/
 obj-y += cadence/
 obj-y += synopsys/
+obj-$(CONFIG_DRM_I2C_SN65DSI83) += sn65dsi83/
