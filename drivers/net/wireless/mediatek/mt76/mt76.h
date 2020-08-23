@@ -1021,6 +1021,8 @@ void mt76_rx_aggr_reorder(struct sk_buff *skb, struct sk_buff_head *frames);
 u32 mt76_calc_rx_airtime(struct mt76_dev *dev, struct mt76_rx_status *status,
 			 int len);
 void mt76_testmode_tx_pending(struct mt76_dev *dev);
+void mt76_queue_tx_complete(struct mt76_dev *dev, struct mt76_queue *q,
+			    struct mt76_queue_entry *e);
 
 /* usb */
 static inline bool mt76u_urb_error(struct urb *urb)
