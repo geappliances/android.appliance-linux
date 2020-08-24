@@ -157,8 +157,8 @@ static void sn65dsi83_bridge_disable(struct drm_bridge *bridge)
 }
 
 static void sn65dsi83_bridge_mode_set(struct drm_bridge *bridge,
-				      struct drm_display_mode *mode,
-				      struct drm_display_mode *adj_mode)
+				      const struct drm_display_mode *mode,
+				      const struct drm_display_mode *adj_mode)
 {
 	struct sn65dsi83 *sn65dsi83 = bridge_to_sn65dsi83(bridge);
 	dev_info(DRM_DEVICE(bridge), "%s: mode: %d*%d@%d\n", __func__,
