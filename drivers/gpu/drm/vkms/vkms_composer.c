@@ -82,13 +82,11 @@ static void alpha_blending(const u8 *argb_src, u8 *argb_dst)
  * @dst_composer: destination framebuffer's metadata
  * @src_composer: source framebuffer's metadata
  *
- * Blend value at vaddr_src with value at vaddr_dst.
- * Currently, this function write value of vaddr_src on value
- * at vaddr_dst using buffer's metadata to locate the new values
- * from vaddr_src and their destination at vaddr_dst.
- *
- * TODO: Use the alpha value to blend vaddr_src with vaddr_dst
- *	 instead of overwriting it.
+ * Blend the vaddr_src value with the vaddr_dst value using the pre-multiplied
+ * alpha blending equation, since DRM currently assumes that the pixel color
+ * values have already been pre-multiplied with the alpha channel values. See
+ * more drm_plane_create_blend_mode_property(). This function uses buffer's
+ * metadata to locate the new composite values at vaddr_dst.
  */
 static void blend(void *vaddr_dst, void *vaddr_src,
 		  struct vkms_composer *dst_composer,
