@@ -287,7 +287,7 @@ static void mtk_dsi_reset_all(struct mtk_dsi *dsi)
 		return;
 
 	regmap_update_bits(dsi->mmsys_sw_rst_b, dsi->sw_rst_b,
-			   MMSYS_SW_RST_DSI_B, ~MMSYS_SW_RST_DSI_B);
+			   MMSYS_SW_RST_DSI_B, (u32)~MMSYS_SW_RST_DSI_B);
 	usleep_range(1000, 1100);
 
 	regmap_update_bits(dsi->mmsys_sw_rst_b, dsi->sw_rst_b,
