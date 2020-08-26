@@ -1072,10 +1072,12 @@ static int mtk_mdp_m2m_s_selection(struct file *file, void *fh,
 	int ret;
 	bool valid = false;
 
-	if (s->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+	if (s->type == V4L2_BUF_TYPE_VIDEO_CAPTURE ||
+	    s->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
 		if (s->target == V4L2_SEL_TGT_COMPOSE)
 			valid = true;
-	} else if (s->type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
+	} else if (s->type == V4L2_BUF_TYPE_VIDEO_OUTPUT ||
+		   s->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
 		if (s->target == V4L2_SEL_TGT_CROP)
 			valid = true;
 	}
