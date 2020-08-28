@@ -513,8 +513,8 @@ static void mtk_mipicsi_reg_init(struct mtk_mipicsi_dev *mipicsi)
 		dev_err(dev, "seninf_top_init error\n");
 
 	for (i = 0; i < mipicsi->camsv_num; i++) {
-		u32 b = 1280*2;
-		u32 h = 720;
+		u32 b = mipicsi->fmt.fmt.pix.width * 2;
+		u32 h = mipicsi->fmt.fmt.pix.height;
 
 		mtk_mipicsi_seninf_mux_init(ch[i].seninf_mux, i);
 		mtk_mipicsi_camsv_init(ch[i].camsv, b, h);
