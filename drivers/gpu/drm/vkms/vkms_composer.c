@@ -244,8 +244,6 @@ void vkms_composer_worker(struct work_struct *work)
 	 */
 	while (frame_start <= frame_end)
 		drm_crtc_add_crc_entry(crtc, true, frame_start++, &crc32);
-
-	kfree(vaddr_out);
 }
 
 static const char * const pipe_crc_sources[] = {"auto"};
@@ -288,7 +286,7 @@ int vkms_verify_crc_source(struct drm_crtc *crtc, const char *src_name,
 	return 0;
 }
 
-static void vkms_set_composer(struct vkms_output *out, bool enabled)
+void vkms_set_composer(struct vkms_output *out, bool enabled)
 {
 	bool old_enabled;
 
