@@ -1235,6 +1235,7 @@ static struct platform_driver mxcmci_driver = {
 	.id_table	= mxcmci_devtype,
 	.driver		= {
 		.name		= DRIVER_NAME,
+		.probe_type	= PROBE_PREFER_ASYNCHRONOUS,
 		.pm	= &mxcmci_pm_ops,
 		.of_match_table	= mxcmci_of_match,
 	}
