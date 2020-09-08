@@ -591,36 +591,22 @@ static int apu_init_iovad(struct rpmsg_apu *apu)
 
 static struct rproc *apu_get_rproc(struct rpmsg_device *rpdev)
 {
-	struct rproc *rproc;
-	struct device_node *np;
-	char *name = NULL;
-
 	/*
 	 * To work, the APU RPMsg driver need to get the rproc device.
-	 * One way to get it is to use the device tree.
-	 * To achieve it, we convert the service name, sent by the APU in node
-	 * name, and use it to get the rproc device.
+	 * Currently, we only use virtio so we could use that to find the
+	 * remoteproc parent.
 	 */
-	if (!strncmp(rpdev->id.name, APU_RPMSG_SERVICE_MT8183, RPMSG_NAME_SIZE))
-		name = "vpu";
-	else {
-		dev_err(&rpdev->dev, "unknown apu service name\n");
+	if (!rpdev->dev.parent && rpdev->dev.parent->bus) {
+		dev_err(&rpdev->dev, "invalid rpmsg device\n");
 		return ERR_PTR(-EINVAL);
 	}
 
-	np = of_find_node_by_name(NULL, name);
-	if (!np) {
-		dev_err(&rpdev->dev, "could not get apu device_node\n");
-		return ERR_PTR(-ENODEV);
+	if (strcmp(rpdev->dev.parent->bus->name, "virtio")) {
+		dev_err(&rpdev->dev, "unsupported bus\n");
+		return ERR_PTR(-EINVAL);
 	}
 
-	rproc = rproc_get_by_phandle(np->phandle);
-	if (!rproc) {
-		dev_err(&rpdev->dev, "could not get rproc\n");
-		return ERR_PTR(-EPROBE_DEFER);
-	}
-
-	return rproc;
+	return vdev_to_rproc(dev_to_virtio(rpdev->dev.parent));
 }
 
 static void rpmsg_apu_release_device(struct device *dev)
@@ -646,7 +632,7 @@ static int apu_rpmsg_probe(struct rpmsg_device *rpdev)
 	INIT_LIST_HEAD(&apu->buffers);
 
 	apu->rproc = apu_get_rproc(rpdev);
-	if (IS_ERR(apu->rproc))
+	if (IS_ERR_OR_NULL(apu->rproc))
 		return PTR_ERR(apu->rproc);
 
 	dev = &apu->dev;
