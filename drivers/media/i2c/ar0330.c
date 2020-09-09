@@ -252,12 +252,12 @@ static int ar0330_pll_configure(struct ar0330 *ar0330)
 	int ret;
 
 	ret = ar0330_write16(ar0330, AR0330_VT_PIX_CLK_DIV,
-			     ar0330->pll.vt_pix_clk_div);
+			     ar0330->pll.vt.pix_clk_div);
 	if (ret < 0)
 		return ret;
 
 	ret = ar0330_write16(ar0330, AR0330_VT_SYS_CLK_DIV,
-			     ar0330->pll.vt_sys_clk_div);
+			     ar0330->pll.vt.sys_clk_div);
 	if (ret < 0)
 		return ret;
 
@@ -272,12 +272,12 @@ static int ar0330_pll_configure(struct ar0330 *ar0330)
 		return ret;
 
 	ret = ar0330_write16(ar0330, AR0330_OP_PIX_CLK_DIV,
-			     ar0330->pll.op_pix_clk_div);
+			     ar0330->pll.op.pix_clk_div);
 	if (ret < 0)
 		return ret;
 
 	ret = ar0330_write16(ar0330, AR0330_OP_SYS_CLK_DIV,
-			     ar0330->pll.op_sys_clk_div);
+			     ar0330->pll.op.sys_clk_div);
 	if (ret < 0)
 		return ret;
 
@@ -315,25 +315,25 @@ static int ar0330_pll_init(struct ar0330 *ar0330)
 	limits.min_pll_op_freq_hz = 384000000;
 	limits.max_pll_op_freq_hz = 768000000;
 
-	limits.min_vt_sys_clk_div = 1;
-	limits.max_vt_sys_clk_div = 16;
-	limits.min_vt_sys_clk_freq_hz = 24000000;
-	limits.max_vt_sys_clk_freq_hz = 768000000;
-	limits.min_vt_pix_clk_div = 4;
-	limits.max_vt_pix_clk_div = 16;
-	limits.min_vt_pix_clk_freq_hz = 1;
-	limits.max_vt_pix_clk_freq_hz = 98000000;
+	limits.vt.min_sys_clk_div = 1;
+	limits.vt.max_sys_clk_div = 16;
+	limits.vt.min_sys_clk_freq_hz = 24000000;
+	limits.vt.max_sys_clk_freq_hz = 768000000;
+	limits.vt.min_pix_clk_div = 4;
+	limits.vt.max_pix_clk_div = 16;
+	limits.vt.min_pix_clk_freq_hz = 1;
+	limits.vt.max_pix_clk_freq_hz = 98000000;
 
-	limits.min_op_sys_clk_div = 1;
-	limits.max_op_sys_clk_div = 1;
-	limits.min_op_sys_clk_freq_hz = 384000000;
-	limits.max_op_sys_clk_freq_hz = 768000000;
-	limits.min_op_pix_clk_div = 8;
-	limits.max_op_pix_clk_div = 12;
-	limits.min_op_pix_clk_freq_hz = 1;
-	limits.max_op_pix_clk_freq_hz = 98000000;
+	limits.op.min_sys_clk_div = 1;
+	limits.op.max_sys_clk_div = 1;
+	limits.op.min_sys_clk_freq_hz = 384000000;
+	limits.op.max_sys_clk_freq_hz = 768000000;
+	limits.op.min_pix_clk_div = 8;
+	limits.op.max_pix_clk_div = 12;
+	limits.op.min_pix_clk_freq_hz = 1;
+	limits.op.max_pix_clk_freq_hz = 98000000;
 
-	ar0330->pll.lanes = 2;
+	ar0330->pll.csi2.lanes = 2;
 	ar0330->pll.binning_horizontal = 1;
 	ar0330->pll.binning_vertical = 1;
 	ar0330->pll.scale_m = 16;
@@ -351,18 +351,18 @@ static int ar0330_pll_init(struct ar0330 *ar0330)
 	dev_dbg(ar0330->dev, "ext_clk_freq_hz %u\n", ar0330->pll.ext_clk_freq_hz);
 	dev_dbg(ar0330->dev, "pre_pll_clk_div %u\n", ar0330->pll.pre_pll_clk_div);
 	dev_dbg(ar0330->dev, "pll_multiplier %u\n", ar0330->pll.pll_multiplier);
-	dev_dbg(ar0330->dev, "vt_pix_clk_div %u\n", ar0330->pll.vt_pix_clk_div);
-	dev_dbg(ar0330->dev, "vt_sys_clk_div %u\n", ar0330->pll.vt_sys_clk_div);
-	dev_dbg(ar0330->dev, "vt_pix_clk_freq_hz %u\n", ar0330->pll.vt_pix_clk_freq_hz);
-	dev_dbg(ar0330->dev, "op_pix_clk_div %u\n", ar0330->pll.op_pix_clk_div);
-	dev_dbg(ar0330->dev, "op_sys_clk_div %u\n", ar0330->pll.op_sys_clk_div);
+	dev_dbg(ar0330->dev, "vt_pix_clk_div %u\n", ar0330->pll.vt.pix_clk_div);
+	dev_dbg(ar0330->dev, "vt_sys_clk_div %u\n", ar0330->pll.vt.sys_clk_div);
+	dev_dbg(ar0330->dev, "vt_pix_clk_freq_hz %u\n", ar0330->pll.vt.pix_clk_freq_hz);
+	dev_dbg(ar0330->dev, "op_pix_clk_div %u\n", ar0330->pll.op.pix_clk_div);
+	dev_dbg(ar0330->dev, "op_sys_clk_div %u\n", ar0330->pll.op.sys_clk_div);
 
 	/*
 	 * The sensor has dual pixel readout paths, the pixel rate is equal to
 	 * twice the VT pixel clock frequency.
 	 */
 	__v4l2_ctrl_s_ctrl_int64(ar0330->pixel_rate,
-				 ar0330->pll.vt_pix_clk_freq_hz * 2);
+				 ar0330->pll.vt.pix_clk_freq_hz * 2);
 
 	return 0;
 }
@@ -1192,6 +1192,8 @@ static int ar0330_probe(struct i2c_client *client,
 	ar0330_init_cfg(&ar0330->subdev, NULL);
 
 	ret = ar0330_pll_init(ar0330);
+	if (ret < 0)
+		dev_err(ar0330->dev, "PLL initialization failed\n");
 
 done:
 	if (ret < 0) {
