@@ -1238,18 +1238,7 @@ static struct i2c_driver ar0330_i2c_driver = {
 	.id_table       = ar0330_id,
 };
 
-static int __init ar0330_mod_init(void)
-{
-	return i2c_add_driver(&ar0330_i2c_driver);
-}
-
-static void __exit ar0330_mod_exit(void)
-{
-	i2c_del_driver(&ar0330_i2c_driver);
-}
-
-module_init(ar0330_mod_init);
-module_exit(ar0330_mod_exit);
+module_i2c_driver(ar0330_i2c_driver);
 
 MODULE_DESCRIPTION("Aptina AR0330 Camera driver");
 MODULE_AUTHOR("Laurent Pinchart <laurent.pinchart@ideasonboard.com>");
