@@ -547,8 +547,12 @@ static int ar0330_otpm_patch(struct ar0330 *ar0330)
 
 static int ar0330_power_on(struct ar0330 *ar0330)
 {
+	int ret;
+
 	/* Enable clock */
-	clk_enable(ar0330->clock);
+	ret = clk_enable(ar0330->clock);
+	if (ret < 0)
+		return ret;
 
 	/* Assert reset for 1ms */
 	if (ar0330->reset) {
