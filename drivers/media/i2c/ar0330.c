@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <linux/videodev2.h>
 
+#include <media/v4l2-async.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-subdev.h>
@@ -1193,8 +1194,16 @@ static int ar0330_probe(struct i2c_client *client,
 	ar0330_init_cfg(&ar0330->subdev, NULL);
 
 	ret = ar0330_pll_init(ar0330, rate);
-	if (ret < 0)
+	if (ret < 0) {
 		dev_err(ar0330->dev, "PLL initialization failed\n");
+		goto done;
+	}
+
+	ret = v4l2_async_register_subdev(&ar0330->subdev);
+	if (ret < 0) {
+		dev_err(ar0330->dev, "Subdev registration failed\n");
+		goto done;
+	}
 
 done:
 	if (ret < 0) {
@@ -1212,7 +1221,7 @@ static int ar0330_remove(struct i2c_client *client)
 	struct ar0330 *ar0330 = to_ar0330(subdev);
 
 	v4l2_ctrl_handler_free(&ar0330->ctrls);
-	v4l2_device_unregister_subdev(subdev);
+	v4l2_async_unregister_subdev(subdev);
 	media_entity_cleanup(&subdev->entity);
 	kfree(ar0330);
 
