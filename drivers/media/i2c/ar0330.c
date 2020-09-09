@@ -702,35 +702,9 @@ static int ar0330_s_stream(struct v4l2_subdev *subdev, int enable)
 			     AR0330_MODE_SELECT_STREAM);
 }
 
-static int ar0330_enum_mbus_code(struct v4l2_subdev *subdev,
-				 struct v4l2_subdev_pad_config *cfg,
-				 struct v4l2_subdev_mbus_code_enum *code)
-{
-	struct ar0330 *ar0330 = to_ar0330(subdev);
-
-	if (code->pad || code->index)
-		return -EINVAL;
-
-	code->code = ar0330->format.code;
-	return 0;
-}
-
-static int ar0330_enum_frame_size(struct v4l2_subdev *subdev,
-				  struct v4l2_subdev_pad_config *cfg,
-				  struct v4l2_subdev_frame_size_enum *fse)
-{
-	struct ar0330 *ar0330 = to_ar0330(subdev);
-
-	if (fse->index >= 3 || fse->code != ar0330->format.code)
-		return -EINVAL;
-
-	fse->min_width = AR0330_WINDOW_WIDTH_DEF / (fse->index + 1);
-	fse->max_width = fse->min_width;
-	fse->min_height = AR0330_WINDOW_HEIGHT_DEF / (fse->index + 1);
-	fse->max_height = fse->min_height;
-
-	return 0;
-}
+/* -----------------------------------------------------------------------------
+ * V4L2 subdev pad operations
+ */
 
 static struct v4l2_mbus_framefmt *
 __ar0330_get_pad_format(struct ar0330 *ar0330,
@@ -759,6 +733,60 @@ __ar0330_get_pad_crop(struct ar0330 *ar0330, struct v4l2_subdev_pad_config *cfg,
 	default:
 		return NULL;
 	}
+}
+
+static int ar0330_init_cfg(struct v4l2_subdev *subdev,
+			   struct v4l2_subdev_pad_config *cfg)
+{
+	u32 which = cfg ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
+	struct ar0330 *ar0330 = to_ar0330(subdev);
+	struct v4l2_mbus_framefmt *format;
+	struct v4l2_rect *crop;
+
+	crop = __ar0330_get_pad_crop(ar0330, cfg, 0, which);
+	crop->left = (AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_DEF) / 2;
+	crop->top = (AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_DEF) / 2;
+	crop->width = AR0330_WINDOW_WIDTH_DEF;
+	crop->height = AR0330_WINDOW_HEIGHT_DEF;
+
+	format = __ar0330_get_pad_format(ar0330, cfg, 0, which);
+	format->code = MEDIA_BUS_FMT_SGRBG12_1X12;
+	format->width = AR0330_WINDOW_WIDTH_DEF;
+	format->height = AR0330_WINDOW_HEIGHT_DEF;
+	format->field = V4L2_FIELD_NONE;
+	format->colorspace = V4L2_COLORSPACE_SRGB;
+
+	return 0;
+}
+
+static int ar0330_enum_mbus_code(struct v4l2_subdev *subdev,
+				 struct v4l2_subdev_pad_config *cfg,
+				 struct v4l2_subdev_mbus_code_enum *code)
+{
+	struct ar0330 *ar0330 = to_ar0330(subdev);
+
+	if (code->pad || code->index)
+		return -EINVAL;
+
+	code->code = ar0330->format.code;
+	return 0;
+}
+
+static int ar0330_enum_frame_size(struct v4l2_subdev *subdev,
+				  struct v4l2_subdev_pad_config *cfg,
+				  struct v4l2_subdev_frame_size_enum *fse)
+{
+	struct ar0330 *ar0330 = to_ar0330(subdev);
+
+	if (fse->index >= 3 || fse->code != ar0330->format.code)
+		return -EINVAL;
+
+	fse->min_width = AR0330_WINDOW_WIDTH_DEF / (fse->index + 1);
+	fse->max_width = fse->min_width;
+	fse->min_height = AR0330_WINDOW_HEIGHT_DEF / (fse->index + 1);
+	fse->max_height = fse->min_height;
+
+	return 0;
 }
 
 static int ar0330_get_format(struct v4l2_subdev *subdev,
@@ -1039,23 +1067,6 @@ static int ar0330_registered(struct v4l2_subdev *subdev)
 
 static int ar0330_open(struct v4l2_subdev *subdev, struct v4l2_subdev_fh *fh)
 {
-	struct v4l2_mbus_framefmt *format;
-	struct v4l2_rect *crop;
-
-	crop = v4l2_subdev_get_try_crop(fh, 0);
-	crop->left = (AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_DEF) / 2;
-	crop->top = (AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_DEF) / 2;
-	crop->width = AR0330_WINDOW_WIDTH_DEF;
-	crop->height = AR0330_WINDOW_HEIGHT_DEF;
-
-	format = v4l2_subdev_get_try_format(fh, 0);
-
-	format->code = MEDIA_BUS_FMT_SGRBG12_1X12;
-	format->width = AR0330_WINDOW_WIDTH_DEF;
-	format->height = AR0330_WINDOW_HEIGHT_DEF;
-	format->field = V4L2_FIELD_NONE;
-	format->colorspace = V4L2_COLORSPACE_SRGB;
-
 	return ar0330_set_power(subdev, 1);
 }
 
@@ -1073,6 +1084,7 @@ static struct v4l2_subdev_video_ops ar0330_subdev_video_ops = {
 };
 
 static struct v4l2_subdev_pad_ops ar0330_subdev_pad_ops = {
+	.init_cfg = ar0330_init_cfg,
 	.enum_mbus_code = ar0330_enum_mbus_code,
 	.enum_frame_size = ar0330_enum_frame_size,
 	.get_fmt = ar0330_get_format,
@@ -1171,18 +1183,7 @@ static int ar0330_probe(struct i2c_client *client,
 
 	ar0330->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 
-	ar0330->crop.width = AR0330_WINDOW_WIDTH_DEF;
-	ar0330->crop.height = AR0330_WINDOW_HEIGHT_DEF;
-	ar0330->crop.left = (AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_DEF)
-			  / 2;
-	ar0330->crop.top = (AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_DEF)
-			 / 2;
-
-	ar0330->format.code = MEDIA_BUS_FMT_SGRBG12_1X12;
-	ar0330->format.width = AR0330_WINDOW_WIDTH_DEF;
-	ar0330->format.height = AR0330_WINDOW_HEIGHT_DEF;
-	ar0330->format.field = V4L2_FIELD_NONE;
-	ar0330->format.colorspace = V4L2_COLORSPACE_SRGB;
+	ar0330_init_cfg(&ar0330->subdev, NULL);
 
 	ret = ar0330_pll_init(ar0330);
 
