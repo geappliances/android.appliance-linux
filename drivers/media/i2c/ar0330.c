@@ -127,6 +127,9 @@
 #define		AR0330_POLY_SC_ENABLE			(1 << 15)
 
 struct ar0330 {
+	struct i2c_client *client;
+	struct device *dev;
+
 	struct ar0330_platform_data *pdata;
 	struct smiapp_pll pll;
 	unsigned int version;
@@ -157,8 +160,9 @@ static struct ar0330 *to_ar0330(struct v4l2_subdev *sd)
  * Register access
  */
 
-static int __ar0330_read(struct i2c_client *client, u16 reg, size_t size)
+static int __ar0330_read(struct ar0330 *ar0330, u16 reg, size_t size)
 {
+	struct i2c_client *client = ar0330->client;
 	u8 data[2];
 	struct i2c_msg msg[2] = {
 		{ client->addr, 0, 2, data },
@@ -171,7 +175,7 @@ static int __ar0330_read(struct i2c_client *client, u16 reg, size_t size)
 
 	ret = i2c_transfer(client->adapter, msg, 2);
 	if (ret < 0) {
-		dev_err(&client->dev, "%s(0x%04x) failed (%d)\n", __func__,
+		dev_err(ar0330->dev, "%s(0x%04x) failed (%d)\n", __func__,
 			reg, ret);
 		return ret;
 	}
@@ -182,14 +186,15 @@ static int __ar0330_read(struct i2c_client *client, u16 reg, size_t size)
 		return data[0];
 }
 
-static int __ar0330_write(struct i2c_client *client, u16 reg, u16 value,
+static int __ar0330_write(struct ar0330 *ar0330, u16 reg, u16 value,
 			  size_t size)
 {
+	struct i2c_client *client = ar0330->client;
 	u8 data[4];
 	struct i2c_msg msg = { client->addr, 0, 2 + size, data };
 	int ret;
 
-	dev_dbg(&client->dev, "writing 0x%04x to 0x%04x\n", value, reg);
+	dev_dbg(ar0330->dev, "writing 0x%04x to 0x%04x\n", value, reg);
 
 	data[0] = reg >> 8;
 	data[1] = reg & 0xff;
@@ -202,7 +207,7 @@ static int __ar0330_write(struct i2c_client *client, u16 reg, u16 value,
 
 	ret = i2c_transfer(client->adapter, &msg, 1);
 	if (ret < 0) {
-		dev_err(&client->dev, "%s(0x%04x) failed (%d)\n", __func__,
+		dev_err(ar0330->dev, "%s(0x%04x) failed (%d)\n", __func__,
 			reg, ret);
 		return ret;
 	}
@@ -210,33 +215,32 @@ static int __ar0330_write(struct i2c_client *client, u16 reg, u16 value,
 	return 0;
 }
 
-static inline int ar0330_read8(struct i2c_client *client, u16 reg)
+static inline int ar0330_read8(struct ar0330 *ar0330, u16 reg)
 {
-	return __ar0330_read(client, reg, 1);
+	return __ar0330_read(ar0330, reg, 1);
 }
 
-static inline int ar0330_write8(struct i2c_client *client, u16 reg, u8 value)
+static inline int ar0330_write8(struct ar0330 *ar0330, u16 reg, u8 value)
 {
-	return __ar0330_write(client, reg, value, 1);
+	return __ar0330_write(ar0330, reg, value, 1);
 }
 
-static inline int ar0330_read16(struct i2c_client *client, u16 reg)
+static inline int ar0330_read16(struct ar0330 *ar0330, u16 reg)
 {
-	return __ar0330_read(client, reg, 2);
+	return __ar0330_read(ar0330, reg, 2);
 }
 
-static inline int ar0330_write16(struct i2c_client *client, u16 reg, u16 value)
+static inline int ar0330_write16(struct ar0330 *ar0330, u16 reg, u16 value)
 {
-	return __ar0330_write(client, reg, value, 2);
+	return __ar0330_write(ar0330, reg, value, 2);
 }
 
 static int ar0330_set_read_mode(struct ar0330 *ar0330, u16 clear, u16 set)
 {
-	struct i2c_client *client = v4l2_get_subdevdata(&ar0330->subdev);
 	u16 value = (ar0330->read_mode & ~clear) | set;
 	int ret;
 
-	ret = ar0330_write16(client, AR0330_READ_MODE, value);
+	ret = ar0330_write16(ar0330, AR0330_READ_MODE, value);
 	if (ret < 0)
 		return ret;
 
@@ -246,35 +250,34 @@ static int ar0330_set_read_mode(struct ar0330 *ar0330, u16 clear, u16 set)
 
 static int ar0330_pll_configure(struct ar0330 *ar0330)
 {
-	struct i2c_client *client = v4l2_get_subdevdata(&ar0330->subdev);
 	int ret;
 
-	ret = ar0330_write16(client, AR0330_VT_PIX_CLK_DIV,
+	ret = ar0330_write16(ar0330, AR0330_VT_PIX_CLK_DIV,
 			     ar0330->pll.vt_pix_clk_div);
 	if (ret < 0)
 		return ret;
 
-	ret = ar0330_write16(client, AR0330_VT_SYS_CLK_DIV,
+	ret = ar0330_write16(ar0330, AR0330_VT_SYS_CLK_DIV,
 			     ar0330->pll.vt_sys_clk_div);
 	if (ret < 0)
 		return ret;
 
-	ret = ar0330_write16(client, AR0330_PRE_PLL_CLK_DIV,
+	ret = ar0330_write16(ar0330, AR0330_PRE_PLL_CLK_DIV,
 			     ar0330->pll.pre_pll_clk_div);
 	if (ret < 0)
 		return ret;
 
-	ret = ar0330_write16(client, AR0330_PLL_MULTIPLIER,
+	ret = ar0330_write16(ar0330, AR0330_PLL_MULTIPLIER,
 			     ar0330->pll.pll_multiplier);
 	if (ret < 0)
 		return ret;
 
-	ret = ar0330_write16(client, AR0330_OP_PIX_CLK_DIV,
+	ret = ar0330_write16(ar0330, AR0330_OP_PIX_CLK_DIV,
 			     ar0330->pll.op_pix_clk_div);
 	if (ret < 0)
 		return ret;
 
-	ret = ar0330_write16(client, AR0330_OP_SYS_CLK_DIV,
+	ret = ar0330_write16(ar0330, AR0330_OP_SYS_CLK_DIV,
 			     ar0330->pll.op_sys_clk_div);
 	if (ret < 0)
 		return ret;
@@ -286,7 +289,6 @@ static int ar0330_pll_configure(struct ar0330 *ar0330)
 
 static int ar0330_pll_init(struct ar0330 *ar0330)
 {
-	struct i2c_client *client = v4l2_get_subdevdata(&ar0330->subdev);
 	struct smiapp_pll_limits limits;
 	unsigned long rate = 24000000;
 	int ret;
@@ -295,7 +297,7 @@ static int ar0330_pll_init(struct ar0330 *ar0330)
 		rate = clk_round_rate(ar0330->pdata->clock, rate);
 		if (clk_set_rate(ar0330->pdata->clock, rate))
 			return -EINVAL;
-		dev_dbg(&client->dev, "clock rate set to %lu\n", rate);
+		dev_dbg(ar0330->dev, "clock rate set to %lu\n", rate);
 	}
 
 	limits.min_ext_clk_freq_hz = 6000000;
@@ -343,18 +345,18 @@ static int ar0330_pll_init(struct ar0330 *ar0330)
 	ar0330->pll.ext_clk_freq_hz = rate;
 	ar0330->pll.link_freq = 294000000;
 
-	ret = smiapp_pll_calculate(&client->dev, &limits, &ar0330->pll);
+	ret = smiapp_pll_calculate(ar0330->dev, &limits, &ar0330->pll);
 	if (ret < 0)
 		return ret;
 
-	dev_dbg(&client->dev, "ext_clk_freq_hz %u\n", ar0330->pll.ext_clk_freq_hz);
-	dev_dbg(&client->dev, "pre_pll_clk_div %u\n", ar0330->pll.pre_pll_clk_div);
-	dev_dbg(&client->dev, "pll_multiplier %u\n", ar0330->pll.pll_multiplier);
-	dev_dbg(&client->dev, "vt_pix_clk_div %u\n", ar0330->pll.vt_pix_clk_div);
-	dev_dbg(&client->dev, "vt_sys_clk_div %u\n", ar0330->pll.vt_sys_clk_div);
-	dev_dbg(&client->dev, "vt_pix_clk_freq_hz %u\n", ar0330->pll.vt_pix_clk_freq_hz);
-	dev_dbg(&client->dev, "op_pix_clk_div %u\n", ar0330->pll.op_pix_clk_div);
-	dev_dbg(&client->dev, "op_sys_clk_div %u\n", ar0330->pll.op_sys_clk_div);
+	dev_dbg(ar0330->dev, "ext_clk_freq_hz %u\n", ar0330->pll.ext_clk_freq_hz);
+	dev_dbg(ar0330->dev, "pre_pll_clk_div %u\n", ar0330->pll.pre_pll_clk_div);
+	dev_dbg(ar0330->dev, "pll_multiplier %u\n", ar0330->pll.pll_multiplier);
+	dev_dbg(ar0330->dev, "vt_pix_clk_div %u\n", ar0330->pll.vt_pix_clk_div);
+	dev_dbg(ar0330->dev, "vt_sys_clk_div %u\n", ar0330->pll.vt_sys_clk_div);
+	dev_dbg(ar0330->dev, "vt_pix_clk_freq_hz %u\n", ar0330->pll.vt_pix_clk_freq_hz);
+	dev_dbg(ar0330->dev, "op_pix_clk_div %u\n", ar0330->pll.op_pix_clk_div);
+	dev_dbg(ar0330->dev, "op_sys_clk_div %u\n", ar0330->pll.op_sys_clk_div);
 
 	/* The sensor has dual pixel readout paths, the pixel rate is equal to
 	 * twice the VT pixel clock frequency.
@@ -507,7 +509,6 @@ struct ar0330_patch ar0330_patches[] = {
 
 static int ar0330_otpm_patch(struct ar0330 *ar0330)
 {
-	struct i2c_client *client = v4l2_get_subdevdata(&ar0330->subdev);
 	const struct ar0330_patch *patch;
 	unsigned int i;
 	int ret;
@@ -519,22 +520,22 @@ static int ar0330_otpm_patch(struct ar0330 *ar0330)
 
 	for (i = 0; i < patch->reg_size; ++i) {
 		if (!patch->reg_data[i].wide)
-			ret = ar0330_write8(client, patch->reg_data[i].addr,
+			ret = ar0330_write8(ar0330, patch->reg_data[i].addr,
 					    patch->reg_data[i].value);
 		else
-			ret = ar0330_write16(client, patch->reg_data[i].addr,
+			ret = ar0330_write16(ar0330, patch->reg_data[i].addr,
 					     patch->reg_data[i].value);
 
 		if (ret < 0)
 			return ret;
 	}
 
-	ret = ar0330_write16(client, AR0330_SEQ_CTRL_PORT, patch->seq_addr);
+	ret = ar0330_write16(ar0330, AR0330_SEQ_CTRL_PORT, patch->seq_addr);
 	if (ret < 0)
 		return ret;
 
 	for (i = 0; i < patch->seq_size; ++i) {
-		ret = ar0330_write16(client, AR0330_SEQ_DATA_PORT,
+		ret = ar0330_write16(ar0330, AR0330_SEQ_DATA_PORT,
 				     patch->seq_data[i]);
 		if (ret < 0)
 			return ret;
@@ -593,7 +594,6 @@ static int __ar0330_set_power(struct ar0330 *ar0330, bool on)
 
 static int ar0330_set_params(struct ar0330 *ar0330)
 {
-	struct i2c_client *client = v4l2_get_subdevdata(&ar0330->subdev);
 	struct v4l2_mbus_framefmt *format = &ar0330->format;
 	const struct v4l2_rect *crop = &ar0330->crop;
 	unsigned int xskip;
@@ -601,37 +601,37 @@ static int ar0330_set_params(struct ar0330 *ar0330)
 	int ret;
 
 	/* Serial interface. */
-	ret = ar0330_write16(client, AR0330_RESET, 0);
+	ret = ar0330_write16(ar0330, AR0330_RESET, 0);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_DATA_FORMAT_BITS, 0x0c0c);
+	ret = ar0330_write16(ar0330, AR0330_DATA_FORMAT_BITS, 0x0c0c);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_SERIAL_FORMAT, 0x0202);
+	ret = ar0330_write16(ar0330, AR0330_SERIAL_FORMAT, 0x0202);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_FRAME_PREAMBLE, 36);
+	ret = ar0330_write16(ar0330, AR0330_FRAME_PREAMBLE, 36);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_LINE_PREAMBLE, 12);
+	ret = ar0330_write16(ar0330, AR0330_LINE_PREAMBLE, 12);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_MIPI_TIMING_0, 0x2643);
+	ret = ar0330_write16(ar0330, AR0330_MIPI_TIMING_0, 0x2643);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_MIPI_TIMING_1, 0x114e);
+	ret = ar0330_write16(ar0330, AR0330_MIPI_TIMING_1, 0x114e);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_MIPI_TIMING_2, 0x2048);
+	ret = ar0330_write16(ar0330, AR0330_MIPI_TIMING_2, 0x2048);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_MIPI_TIMING_3, 0x0186);
+	ret = ar0330_write16(ar0330, AR0330_MIPI_TIMING_3, 0x0186);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_MIPI_TIMING_4, 0x8005);
+	ret = ar0330_write16(ar0330, AR0330_MIPI_TIMING_4, 0x8005);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_MIPI_CONFIG_STATUS, 0x2003);
+	ret = ar0330_write16(ar0330, AR0330_MIPI_CONFIG_STATUS, 0x2003);
 	if (ret < 0)
 		return ret;
 
@@ -640,17 +640,17 @@ static int ar0330_set_params(struct ar0330 *ar0330)
 	 * TODO: Make sure the start coordinates and window size match the
 	 * skipping and mirroring requirements.
 	 */
-	ret = ar0330_write16(client, AR0330_X_ADDR_START, crop->left);
+	ret = ar0330_write16(ar0330, AR0330_X_ADDR_START, crop->left);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_Y_ADDR_START, crop->top);
+	ret = ar0330_write16(ar0330, AR0330_Y_ADDR_START, crop->top);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_X_ADDR_END,
+	ret = ar0330_write16(ar0330, AR0330_X_ADDR_END,
 			     crop->left + crop->width);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_Y_ADDR_END,
+	ret = ar0330_write16(ar0330, AR0330_Y_ADDR_END,
 			     crop->top + crop->height);
 	if (ret < 0)
 		return ret;
@@ -659,19 +659,19 @@ static int ar0330_set_params(struct ar0330 *ar0330)
 	xskip = DIV_ROUND_CLOSEST(crop->width, format->width) * 2 - 1;
 	yskip = DIV_ROUND_CLOSEST(crop->height, format->height) * 2 - 1;
 
-	ret = ar0330_write16(client, AR0330_X_ODD_INC, xskip);
+	ret = ar0330_write16(ar0330, AR0330_X_ODD_INC, xskip);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_Y_ODD_INC, yskip);
+	ret = ar0330_write16(ar0330, AR0330_Y_ODD_INC, yskip);
 	if (ret < 0)
 		return ret;
 
 	/* Blanking - use default values. */
-	ret = ar0330_write16(client, AR0330_LINE_LENGTH_PCK,
+	ret = ar0330_write16(ar0330, AR0330_LINE_LENGTH_PCK,
 			     (crop->width + 192) / 2);
 	if (ret < 0)
 		return ret;
-	ret = ar0330_write16(client, AR0330_FRAME_LENGTH_LINES,
+	ret = ar0330_write16(ar0330, AR0330_FRAME_LENGTH_LINES,
 			     crop->height + 60);
 	if (ret < 0)
 		return ret;
@@ -681,15 +681,14 @@ static int ar0330_set_params(struct ar0330 *ar0330)
 
 static int ar0330_s_stream(struct v4l2_subdev *subdev, int enable)
 {
-	struct i2c_client *client = v4l2_get_subdevdata(subdev);
 	struct ar0330 *ar0330 = to_ar0330(subdev);
 	int ret;
 
-	dev_dbg(&client->dev, "%s: frame count is %d\n", __func__,
-		ar0330_read16(client, AR0330_FRAME_COUNT));
+	dev_dbg(ar0330->dev, "%s: frame count is %d\n", __func__,
+		ar0330_read16(ar0330, AR0330_FRAME_COUNT));
 
 	if (!enable)
-		return ar0330_write8(client, AR0330_MODE_SELECT, 0);
+		return ar0330_write8(ar0330, AR0330_MODE_SELECT, 0);
 
 	ret = ar0330_pll_configure(ar0330);
 	if (ret < 0)
@@ -699,7 +698,7 @@ static int ar0330_s_stream(struct v4l2_subdev *subdev, int enable)
 	if (ret < 0)
 		return ret;
 
-	return ar0330_write8(client, AR0330_MODE_SELECT,
+	return ar0330_write8(ar0330, AR0330_MODE_SELECT,
 			     AR0330_MODE_SELECT_STREAM);
 }
 
@@ -874,23 +873,22 @@ static int ar0330_s_ctrl(struct v4l2_ctrl *ctrl)
 	static const u16 test_pattern[] = { 0, 1, 2, 3, 256, };
 	struct ar0330 *ar0330 =
 			container_of(ctrl->handler, struct ar0330, ctrls);
-	struct i2c_client *client = v4l2_get_subdevdata(&ar0330->subdev);
 	int ret;
 
 	switch (ctrl->id) {
 	case V4L2_CID_EXPOSURE:
-		return ar0330_write16(client, AR0330_COARSE_INTEGRATION_TIME,
+		return ar0330_write16(ar0330, AR0330_COARSE_INTEGRATION_TIME,
 				      ctrl->val);
 
 	case V4L2_CID_GAIN:
-		return ar0330_write16(client, AR0330_GLOBAL_GAIN, ctrl->val);
+		return ar0330_write16(ar0330, AR0330_GLOBAL_GAIN, ctrl->val);
 
 	case V4L2_CID_HFLIP:
 	case V4L2_CID_VFLIP: {
 		u16 clr = 0;
 		u16 set = 0;
 
-		ret = ar0330_write16(client, AR0330_LOCK_CONTROL,
+		ret = ar0330_write16(ar0330, AR0330_LOCK_CONTROL,
 				     AR0330_LOCK_CONTROL_UNLOCK);
 		if (ret < 0)
 			return ret;
@@ -907,31 +905,31 @@ static int ar0330_s_ctrl(struct v4l2_ctrl *ctrl)
 
 		ret = ar0330_set_read_mode(ar0330, clr, set);
 
-		ar0330_write16(client, AR0330_LOCK_CONTROL, 0);
+		ar0330_write16(ar0330, AR0330_LOCK_CONTROL, 0);
 		return ret;
 	}
 
 	case V4L2_CID_TEST_PATTERN:
 		if (ctrl->val == 1) {
-			ret = ar0330_write16(client, AR0330_TEST_DATA_RED,
+			ret = ar0330_write16(ar0330, AR0330_TEST_DATA_RED,
 					     0x0eb0);
 			if (ret < 0)
 				return ret;
-			ret = ar0330_write16(client, AR0330_TEST_DATA_GREENR,
+			ret = ar0330_write16(ar0330, AR0330_TEST_DATA_GREENR,
 					     0x0690);
 			if (ret < 0)
 				return ret;
-			ret = ar0330_write16(client, AR0330_TEST_DATA_BLUE,
+			ret = ar0330_write16(ar0330, AR0330_TEST_DATA_BLUE,
 					     0x00b0);
 			if (ret < 0)
 				return ret;
-			ret = ar0330_write16(client, AR0330_TEST_DATA_GREENB,
+			ret = ar0330_write16(ar0330, AR0330_TEST_DATA_GREENB,
 					     0x0690);
 			if (ret < 0)
 				return ret;
 		}
 
-		return ar0330_write16(client, AR0330_TEST_PATTERN_MODE,
+		return ar0330_write16(ar0330, AR0330_TEST_PATTERN_MODE,
 				      test_pattern[ctrl->val]);
 	}
 
@@ -1001,7 +999,6 @@ out:
 
 static int ar0330_registered(struct v4l2_subdev *subdev)
 {
-	struct i2c_client *client = v4l2_get_subdevdata(subdev);
 	struct ar0330 *ar0330 = to_ar0330(subdev);
 	s32 revision;
 	s32 data;
@@ -1009,28 +1006,28 @@ static int ar0330_registered(struct v4l2_subdev *subdev)
 
 	ret = ar0330_power_on(ar0330);
 	if (ret < 0) {
-		dev_err(&client->dev, "AR0330 power up failed\n");
+		dev_err(ar0330->dev, "AR0330 power up failed\n");
 		return ret;
 	}
 
 	/* Read out the chip version register */
-	data = ar0330_read16(client, AR0330_CHIP_VERSION);
+	data = ar0330_read16(ar0330, AR0330_CHIP_VERSION);
 	if (data != AR0330_CHIP_VERSION_VALUE) {
-		dev_err(&client->dev, "AR0330 not detected, wrong version "
+		dev_err(ar0330->dev, "AR0330 not detected, wrong version "
 			"0x%04x\n", data);
 		return -ENODEV;
 	}
 
-	revision = ar0330_read8(client, AR0330_CHIP_REVISION);
+	revision = ar0330_read8(ar0330, AR0330_CHIP_REVISION);
 	if (revision < 0) {
-		dev_err(&client->dev, "%s: unable to read chip revision (%d)\n",
+		dev_err(ar0330->dev, "%s: unable to read chip revision (%d)\n",
 			__func__, revision);
 		return -ENODEV;
 	}
 
-	data = ar0330_read16(client, AR0330_TEST_DATA_RED);
+	data = ar0330_read16(ar0330, AR0330_TEST_DATA_RED);
 	if (data < 0) {
-		dev_err(&client->dev, "%s: unable to read chip version (%d)\n",
+		dev_err(ar0330->dev, "%s: unable to read chip version (%d)\n",
 			__func__, data);
 		return -ENODEV;
 	}
@@ -1048,8 +1045,8 @@ static int ar0330_registered(struct v4l2_subdev *subdev)
 
 	ar0330_power_off(ar0330);
 
-	dev_info(&client->dev, "AR0330 rev. %02x ver. %u detected at address "
-		 "0x%02x\n", revision, ar0330->version, client->addr);
+	dev_info(ar0330->dev, "AR0330 rev. %02x ver. %u detected at address "
+		 "0x%02x\n", revision, ar0330->version, ar0330->client->addr);
 
 	return ret;
 }
@@ -1131,6 +1128,8 @@ static int ar0330_probe(struct i2c_client *client,
 	if (ar0330 == NULL)
 		return -ENOMEM;
 
+	ar0330->client = client;
+	ar0330->dev = &client->dev;
 	ar0330->pdata = pdata;
 	ar0330->read_mode = 0;
 
@@ -1157,7 +1156,7 @@ static int ar0330_probe(struct i2c_client *client,
 	v4l2_ctrl_cluster(ARRAY_SIZE(ar0330->flip), ar0330->flip);
 
 	if (ar0330->ctrls.error)
-		dev_err(&client->dev, "%s: control initialization error %d\n",
+		dev_err(ar0330->dev, "%s: control initialization error %d\n",
 			__func__, ar0330->ctrls.error);
 
 	ar0330->subdev.ctrl_handler = &ar0330->ctrls;
