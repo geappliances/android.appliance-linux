@@ -16,7 +16,7 @@
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/module.h>
-#include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/i2c.h>
 #include <linux/log2.h>
 #include <linux/pm.h>
@@ -133,6 +133,8 @@ struct ar0330 {
 	struct ar0330_platform_data *pdata;
 	struct smiapp_pll pll;
 	unsigned int version;
+
+	struct gpio_desc *reset;
 
 	struct v4l2_subdev subdev;
 	struct media_pad pad;
@@ -551,10 +553,10 @@ static int ar0330_power_on(struct ar0330 *ar0330)
 		clk_enable(ar0330->pdata->clock);
 
 	/* Assert reset for 1ms */
-	if (ar0330->pdata->reset) {
-		gpio_set_value(ar0330->pdata->reset, 0);
+	if (ar0330->reset) {
+		gpiod_set_value(ar0330->reset, 1);
 		usleep_range(1000, 2000);
-		gpio_set_value(ar0330->pdata->reset, 1);
+		gpiod_set_value(ar0330->reset, 0);
 		usleep_range(10000, 11000);
 	}
 
@@ -1132,6 +1134,16 @@ static int ar0330_probe(struct i2c_client *client,
 	ar0330->dev = &client->dev;
 	ar0330->pdata = pdata;
 	ar0330->read_mode = 0;
+
+	ar0330->reset = devm_gpiod_get_optional(ar0330->dev, "reset",
+						GPIOD_OUT_HIGH);
+	if (IS_ERR(ar0330->reset)) {
+		ret = PTR_ERR(ar0330->reset);
+		if (ret != -EPROBE_DEFER)
+			dev_err(ar0330->dev, "Failed to get reset GPIO: %d\n",
+				ret);
+		goto done;
+	}
 
 	v4l2_ctrl_handler_init(&ar0330->ctrls, ARRAY_SIZE(ar0330_ctrls) + 5);
 
