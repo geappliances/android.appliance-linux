@@ -186,12 +186,15 @@ static int __ar0330_read(struct ar0330 *ar0330, u16 reg, size_t size)
 }
 
 static int __ar0330_write(struct ar0330 *ar0330, u16 reg, u16 value,
-			  size_t size)
+			  size_t size, int *err)
 {
 	struct i2c_client *client = ar0330->client;
 	u8 data[4];
 	struct i2c_msg msg = { client->addr, 0, 2 + size, data };
 	int ret;
+
+	if (err && *err)
+		return *err;
 
 	dev_dbg(ar0330->dev, "writing 0x%04x to 0x%04x\n", value, reg);
 
@@ -208,6 +211,8 @@ static int __ar0330_write(struct ar0330 *ar0330, u16 reg, u16 value,
 	if (ret < 0) {
 		dev_err(ar0330->dev, "%s(0x%04x) failed (%d)\n", __func__,
 			reg, ret);
+		if (*err)
+			*err = ret;
 		return ret;
 	}
 
@@ -221,7 +226,7 @@ static inline int ar0330_read8(struct ar0330 *ar0330, u16 reg)
 
 static inline int ar0330_write8(struct ar0330 *ar0330, u16 reg, u8 value)
 {
-	return __ar0330_write(ar0330, reg, value, 1);
+	return __ar0330_write(ar0330, reg, value, 1, NULL);
 }
 
 static inline int ar0330_read16(struct ar0330 *ar0330, u16 reg)
@@ -229,9 +234,10 @@ static inline int ar0330_read16(struct ar0330 *ar0330, u16 reg)
 	return __ar0330_read(ar0330, reg, 2);
 }
 
-static inline int ar0330_write16(struct ar0330 *ar0330, u16 reg, u16 value)
+static inline int ar0330_write16(struct ar0330 *ar0330, u16 reg, u16 value,
+				 int *err)
 {
-	return __ar0330_write(ar0330, reg, value, 2);
+	return __ar0330_write(ar0330, reg, value, 2, err);
 }
 
 static int ar0330_set_read_mode(struct ar0330 *ar0330, u16 clear, u16 set)
@@ -239,7 +245,7 @@ static int ar0330_set_read_mode(struct ar0330 *ar0330, u16 clear, u16 set)
 	u16 value = (ar0330->read_mode & ~clear) | set;
 	int ret;
 
-	ret = ar0330_write16(ar0330, AR0330_READ_MODE, value);
+	ret = ar0330_write16(ar0330, AR0330_READ_MODE, value, NULL);
 	if (ret < 0)
 		return ret;
 
@@ -249,35 +255,20 @@ static int ar0330_set_read_mode(struct ar0330 *ar0330, u16 clear, u16 set)
 
 static int ar0330_pll_configure(struct ar0330 *ar0330)
 {
-	int ret;
+	int ret = 0;
 
-	ret = ar0330_write16(ar0330, AR0330_VT_PIX_CLK_DIV,
-			     ar0330->pll.vt.pix_clk_div);
-	if (ret < 0)
-		return ret;
-
-	ret = ar0330_write16(ar0330, AR0330_VT_SYS_CLK_DIV,
-			     ar0330->pll.vt.sys_clk_div);
-	if (ret < 0)
-		return ret;
-
-	ret = ar0330_write16(ar0330, AR0330_PRE_PLL_CLK_DIV,
-			     ar0330->pll.pre_pll_clk_div);
-	if (ret < 0)
-		return ret;
-
-	ret = ar0330_write16(ar0330, AR0330_PLL_MULTIPLIER,
-			     ar0330->pll.pll_multiplier);
-	if (ret < 0)
-		return ret;
-
-	ret = ar0330_write16(ar0330, AR0330_OP_PIX_CLK_DIV,
-			     ar0330->pll.op.pix_clk_div);
-	if (ret < 0)
-		return ret;
-
-	ret = ar0330_write16(ar0330, AR0330_OP_SYS_CLK_DIV,
-			     ar0330->pll.op.sys_clk_div);
+	ar0330_write16(ar0330, AR0330_VT_PIX_CLK_DIV,
+		       ar0330->pll.vt.pix_clk_div, &ret);
+	ar0330_write16(ar0330, AR0330_VT_SYS_CLK_DIV,
+		       ar0330->pll.vt.sys_clk_div, &ret);
+	ar0330_write16(ar0330, AR0330_PRE_PLL_CLK_DIV,
+		       ar0330->pll.pre_pll_clk_div, &ret);
+	ar0330_write16(ar0330, AR0330_PLL_MULTIPLIER,
+		       ar0330->pll.pll_multiplier, &ret);
+	ar0330_write16(ar0330, AR0330_OP_PIX_CLK_DIV,
+		       ar0330->pll.op.pix_clk_div, &ret);
+	ar0330_write16(ar0330, AR0330_OP_SYS_CLK_DIV,
+			ar0330->pll.op.sys_clk_div, &ret);
 	if (ret < 0)
 		return ret;
 
@@ -525,19 +516,20 @@ static int ar0330_otpm_patch(struct ar0330 *ar0330)
 					    patch->reg_data[i].value);
 		else
 			ret = ar0330_write16(ar0330, patch->reg_data[i].addr,
-					     patch->reg_data[i].value);
+					     patch->reg_data[i].value, NULL);
 
 		if (ret < 0)
 			return ret;
 	}
 
-	ret = ar0330_write16(ar0330, AR0330_SEQ_CTRL_PORT, patch->seq_addr);
+	ret = ar0330_write16(ar0330, AR0330_SEQ_CTRL_PORT, patch->seq_addr,
+			     NULL);
 	if (ret < 0)
 		return ret;
 
 	for (i = 0; i < patch->seq_size; ++i) {
 		ret = ar0330_write16(ar0330, AR0330_SEQ_DATA_PORT,
-				     patch->seq_data[i]);
+				     patch->seq_data[i], NULL);
 		if (ret < 0)
 			return ret;
 	}
@@ -599,42 +591,20 @@ static int ar0330_set_params(struct ar0330 *ar0330)
 	const struct v4l2_rect *crop = &ar0330->crop;
 	unsigned int xskip;
 	unsigned int yskip;
-	int ret;
+	int ret = 0;
 
 	/* Serial interface. */
-	ret = ar0330_write16(ar0330, AR0330_RESET, 0);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_DATA_FORMAT_BITS, 0x0c0c);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_SERIAL_FORMAT, 0x0202);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_FRAME_PREAMBLE, 36);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_LINE_PREAMBLE, 12);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_MIPI_TIMING_0, 0x2643);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_MIPI_TIMING_1, 0x114e);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_MIPI_TIMING_2, 0x2048);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_MIPI_TIMING_3, 0x0186);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_MIPI_TIMING_4, 0x8005);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_MIPI_CONFIG_STATUS, 0x2003);
-	if (ret < 0)
-		return ret;
+	ar0330_write16(ar0330, AR0330_RESET, 0, &ret);
+	ar0330_write16(ar0330, AR0330_DATA_FORMAT_BITS, 0x0c0c, &ret);
+	ar0330_write16(ar0330, AR0330_SERIAL_FORMAT, 0x0202, &ret);
+	ar0330_write16(ar0330, AR0330_FRAME_PREAMBLE, 36, &ret);
+	ar0330_write16(ar0330, AR0330_LINE_PREAMBLE, 12, &ret);
+	ar0330_write16(ar0330, AR0330_MIPI_TIMING_0, 0x2643, &ret);
+	ar0330_write16(ar0330, AR0330_MIPI_TIMING_1, 0x114e, &ret);
+	ar0330_write16(ar0330, AR0330_MIPI_TIMING_2, 0x2048, &ret);
+	ar0330_write16(ar0330, AR0330_MIPI_TIMING_3, 0x0186, &ret);
+	ar0330_write16(ar0330, AR0330_MIPI_TIMING_4, 0x8005, &ret);
+	ar0330_write16(ar0330, AR0330_MIPI_CONFIG_STATUS, 0x2003, &ret);
 
 	/*
 	 * Windows position and size.
@@ -642,41 +612,25 @@ static int ar0330_set_params(struct ar0330 *ar0330)
 	 * TODO: Make sure the start coordinates and window size match the
 	 * skipping and mirroring requirements.
 	 */
-	ret = ar0330_write16(ar0330, AR0330_X_ADDR_START, crop->left);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_Y_ADDR_START, crop->top);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_X_ADDR_END,
-			     crop->left + crop->width);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_Y_ADDR_END,
-			     crop->top + crop->height);
-	if (ret < 0)
-		return ret;
+	ar0330_write16(ar0330, AR0330_X_ADDR_START, crop->left, &ret);
+	ar0330_write16(ar0330, AR0330_Y_ADDR_START, crop->top, &ret);
+	ar0330_write16(ar0330, AR0330_X_ADDR_END, crop->left + crop->width,
+		       &ret);
+	ar0330_write16(ar0330, AR0330_Y_ADDR_END, crop->top + crop->height,
+		       &ret);
 
 	/* Row and column binning. */
 	xskip = DIV_ROUND_CLOSEST(crop->width, format->width) * 2 - 1;
 	yskip = DIV_ROUND_CLOSEST(crop->height, format->height) * 2 - 1;
 
-	ret = ar0330_write16(ar0330, AR0330_X_ODD_INC, xskip);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_Y_ODD_INC, yskip);
-	if (ret < 0)
-		return ret;
+	ar0330_write16(ar0330, AR0330_X_ODD_INC, xskip, &ret);
+	ar0330_write16(ar0330, AR0330_Y_ODD_INC, yskip, &ret);
 
 	/* Blanking - use default values. */
-	ret = ar0330_write16(ar0330, AR0330_LINE_LENGTH_PCK,
-			     (crop->width + 192) / 2);
-	if (ret < 0)
-		return ret;
-	ret = ar0330_write16(ar0330, AR0330_FRAME_LENGTH_LINES,
-			     crop->height + 60);
-	if (ret < 0)
-		return ret;
+	ar0330_write16(ar0330, AR0330_LINE_LENGTH_PCK, (crop->width + 192) / 2,
+		       &ret);
+	ar0330_write16(ar0330, AR0330_FRAME_LENGTH_LINES, crop->height + 60,
+		       &ret);
 
 	return ret;
 }
@@ -909,15 +863,16 @@ static int ar0330_s_ctrl(struct v4l2_ctrl *ctrl)
 	static const u16 test_pattern[] = { 0, 1, 2, 3, 256, };
 	struct ar0330 *ar0330 =
 			container_of(ctrl->handler, struct ar0330, ctrls);
-	int ret;
+	int ret = 0;
 
 	switch (ctrl->id) {
 	case V4L2_CID_EXPOSURE:
 		return ar0330_write16(ar0330, AR0330_COARSE_INTEGRATION_TIME,
-				      ctrl->val);
+				      ctrl->val, NULL);
 
 	case V4L2_CID_GAIN:
-		return ar0330_write16(ar0330, AR0330_GLOBAL_GAIN, ctrl->val);
+		return ar0330_write16(ar0330, AR0330_GLOBAL_GAIN, ctrl->val,
+				      NULL);
 
 	case V4L2_CID_HFLIP:
 	case V4L2_CID_VFLIP: {
@@ -925,7 +880,7 @@ static int ar0330_s_ctrl(struct v4l2_ctrl *ctrl)
 		u16 set = 0;
 
 		ret = ar0330_write16(ar0330, AR0330_LOCK_CONTROL,
-				     AR0330_LOCK_CONTROL_UNLOCK);
+				     AR0330_LOCK_CONTROL_UNLOCK, NULL);
 		if (ret < 0)
 			return ret;
 
@@ -941,32 +896,26 @@ static int ar0330_s_ctrl(struct v4l2_ctrl *ctrl)
 
 		ret = ar0330_set_read_mode(ar0330, clr, set);
 
-		ar0330_write16(ar0330, AR0330_LOCK_CONTROL, 0);
+		ar0330_write16(ar0330, AR0330_LOCK_CONTROL, 0, &ret);
 		return ret;
 	}
 
 	case V4L2_CID_TEST_PATTERN:
 		if (ctrl->val == 1) {
-			ret = ar0330_write16(ar0330, AR0330_TEST_DATA_RED,
-					     0x0eb0);
-			if (ret < 0)
-				return ret;
-			ret = ar0330_write16(ar0330, AR0330_TEST_DATA_GREENR,
-					     0x0690);
-			if (ret < 0)
-				return ret;
-			ret = ar0330_write16(ar0330, AR0330_TEST_DATA_BLUE,
-					     0x00b0);
-			if (ret < 0)
-				return ret;
-			ret = ar0330_write16(ar0330, AR0330_TEST_DATA_GREENB,
-					     0x0690);
+			ar0330_write16(ar0330, AR0330_TEST_DATA_RED, 0x0eb0,
+				       &ret);
+			ar0330_write16(ar0330, AR0330_TEST_DATA_GREENR, 0x0690,
+				       &ret);
+			ar0330_write16(ar0330, AR0330_TEST_DATA_BLUE, 0x00b0,
+				       &ret);
+			ar0330_write16(ar0330, AR0330_TEST_DATA_GREENB, 0x0690,
+				       &ret);
 			if (ret < 0)
 				return ret;
 		}
 
 		return ar0330_write16(ar0330, AR0330_TEST_PATTERN_MODE,
-				      test_pattern[ctrl->val]);
+				      test_pattern[ctrl->val], NULL);
 	}
 
 	return 0;
