@@ -302,7 +302,8 @@ static int ar0330_pll_init(struct ar0330 *ar0330)
 
 	limits.min_ext_clk_freq_hz = 6000000;
 	limits.max_ext_clk_freq_hz = 64000000;
-	/* HACK: The real minimum pre_pll_clk_div value is 1. The SMIA++ PLL
+	/*
+	 * HACK: The real minimum pre_pll_clk_div value is 1. The SMIA++ PLL
 	 * computation code currently hardcodes pre_pll_clk_div to its minimum
 	 * value, so set it to 8 as that's what the AR0330 requires with the
 	 * panda board.
@@ -358,7 +359,8 @@ static int ar0330_pll_init(struct ar0330 *ar0330)
 	dev_dbg(ar0330->dev, "op_pix_clk_div %u\n", ar0330->pll.op_pix_clk_div);
 	dev_dbg(ar0330->dev, "op_sys_clk_div %u\n", ar0330->pll.op_sys_clk_div);
 
-	/* The sensor has dual pixel readout paths, the pixel rate is equal to
+	/*
+	 * The sensor has dual pixel readout paths, the pixel rate is equal to
 	 * twice the VT pixel clock frequency.
 	 */
 	ar0330->pixel_rate->cur.val64 = ar0330->pll.vt_pix_clk_freq_hz * 2;
@@ -633,7 +635,8 @@ static int ar0330_set_params(struct ar0330 *ar0330)
 	if (ret < 0)
 		return ret;
 
-	/* Windows position and size.
+	/*
+	 * Windows position and size.
 	 *
 	 * TODO: Make sure the start coordinates and window size match the
 	 * skipping and mirroring requirements.
@@ -825,7 +828,8 @@ static int ar0330_set_crop(struct v4l2_subdev *subdev,
 	struct v4l2_rect *__crop;
 	struct v4l2_rect rect;
 
-	/* Clamp the crop rectangle boundaries and align them to a multiple of 2
+	/*
+	 * Clamp the crop rectangle boundaries and align them to a multiple of 2
 	 * pixels to ensure a GRBG Bayer pattern.
 	 */
 	rect.left = clamp(ALIGN(crop->rect.left, 2), 0,
@@ -845,7 +849,8 @@ static int ar0330_set_crop(struct v4l2_subdev *subdev,
 	__crop = __ar0330_get_pad_crop(ar0330, fh, crop->pad, crop->which);
 
 	if (rect.width != __crop->width || rect.height != __crop->height) {
-		/* Reset the output image size if the crop rectangle size has
+		/*
+		 * Reset the output image size if the crop rectangle size has
 		 * been modified.
 		 */
 		__format = __ar0330_get_pad_format(ar0330, fh, crop->pad,
@@ -973,7 +978,8 @@ static int ar0330_set_power(struct v4l2_subdev *subdev, int on)
 
 	mutex_lock(&ar0330->power_lock);
 
-	/* If the power count is modified from 0 to != 0 or from != 0 to 0,
+	/*
+	 * If the power count is modified from 0 to != 0 or from != 0 to 0,
 	 * update the power state.
 	 */
 	if (ar0330->power_count == !on) {
