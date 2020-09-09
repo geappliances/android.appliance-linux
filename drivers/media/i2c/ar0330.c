@@ -361,7 +361,8 @@ static int ar0330_pll_init(struct ar0330 *ar0330)
 	 * The sensor has dual pixel readout paths, the pixel rate is equal to
 	 * twice the VT pixel clock frequency.
 	 */
-	ar0330->pixel_rate->cur.val64 = ar0330->pll.vt_pix_clk_freq_hz * 2;
+	__v4l2_ctrl_s_ctrl_int64(ar0330->pixel_rate,
+				 ar0330->pll.vt_pix_clk_freq_hz * 2);
 
 	return 0;
 }
@@ -867,8 +868,6 @@ static int ar0330_set_crop(struct v4l2_subdev *subdev,
  * V4L2 subdev control operations
  */
 
-#define V4L2_CID_TEST_PATTERN		(V4L2_CID_USER_BASE | 0x1001)
-
 static int ar0330_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	static const u16 test_pattern[] = { 0, 1, 2, 3, 256, };
@@ -947,22 +946,6 @@ static const char * const ar0330_test_pattern_menu[] = {
 	"Full Color Bar",
 	"Fade-to-gray Color Bar",
 	"Walking 1s",
-};
-
-static const struct v4l2_ctrl_config ar0330_ctrls[] = {
-	{
-		.ops		= &ar0330_ctrl_ops,
-		.id		= V4L2_CID_TEST_PATTERN,
-		.type		= V4L2_CTRL_TYPE_MENU,
-		.name		= "Test Pattern",
-		.min		= 0,
-		.max		= ARRAY_SIZE(ar0330_test_pattern_menu) - 1,
-		.step		= 0,
-		.def		= 0,
-		.flags		= 0,
-		.menu_skip_mask	= 0,
-		.qmenu		= ar0330_test_pattern_menu,
-	}
 };
 
 /* -----------------------------------------------------------------------------
@@ -1117,7 +1100,6 @@ static int ar0330_probe(struct i2c_client *client,
 			 const struct i2c_device_id *did)
 {
 	struct ar0330 *ar0330;
-	unsigned int i;
 	int ret;
 
 	ar0330 = kzalloc(sizeof(*ar0330), GFP_KERNEL);
@@ -1147,7 +1129,8 @@ static int ar0330_probe(struct i2c_client *client,
 		goto done;
 	}
 
-	v4l2_ctrl_handler_init(&ar0330->ctrls, ARRAY_SIZE(ar0330_ctrls) + 5);
+	/* Create V4L2 controls. */
+	v4l2_ctrl_handler_init(&ar0330->ctrls, 6);
 
 	v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
 			  V4L2_CID_EXPOSURE, AR0330_COARSE_INTEGRATION_TIME_MIN,
@@ -1161,11 +1144,12 @@ static int ar0330_probe(struct i2c_client *client,
 	ar0330->flip[1] = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
 					    V4L2_CID_VFLIP, 0, 1, 1, 0);
 	ar0330->pixel_rate = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
-					       V4L2_CID_IMAGE_PROC_PIXEL_RATE,
+					       V4L2_CID_PIXEL_RATE,
 					       0, 0, 1, 0);
-
-	for (i = 0; i < ARRAY_SIZE(ar0330_ctrls); ++i)
-		v4l2_ctrl_new_custom(&ar0330->ctrls, &ar0330_ctrls[i], NULL);
+	v4l2_ctrl_new_std_menu_items(&ar0330->ctrls, &ar0330_ctrl_ops,
+				     V4L2_CID_TEST_PATTERN,
+				     ARRAY_SIZE(ar0330_test_pattern_menu) - 1,
+				     0, 0, ar0330_test_pattern_menu);
 
 	v4l2_ctrl_cluster(ARRAY_SIZE(ar0330->flip), ar0330->flip);
 
