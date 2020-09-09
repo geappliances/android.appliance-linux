@@ -561,7 +561,7 @@ static int ar0330_power_on(struct ar0330 *ar0330)
 	/* Assert reset for 1ms */
 	if (ar0330->reset) {
 		gpiod_set_value(ar0330->reset, 1);
-		usleep_range(1000, 2000);
+		usleep_range(2000, 3000);
 		gpiod_set_value(ar0330->reset, 0);
 		usleep_range(10000, 11000);
 	}
