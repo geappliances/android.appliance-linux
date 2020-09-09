@@ -26,14 +26,14 @@
 
 #include "smiapp-pll.h"
 
-#define AR0330_PIXEL_ARRAY_WIDTH		2304
-#define AR0330_PIXEL_ARRAY_HEIGHT		1536
+#define AR0330_PIXEL_ARRAY_WIDTH		2304U
+#define AR0330_PIXEL_ARRAY_HEIGHT		1536U
 
-#define AR0330_WINDOW_WIDTH_MIN			32
-#define AR0330_WINDOW_WIDTH_DEF			2304
+#define AR0330_WINDOW_WIDTH_MIN			32U
+#define AR0330_WINDOW_WIDTH_DEF			2304U
 #define AR0330_WINDOW_WIDTH_MAX			AR0330_PIXEL_ARRAY_WIDTH
-#define AR0330_WINDOW_HEIGHT_MIN		32
-#define AR0330_WINDOW_HEIGHT_DEF		1296
+#define AR0330_WINDOW_HEIGHT_MIN		32U
+#define AR0330_WINDOW_HEIGHT_DEF		1296U
 #define AR0330_WINDOW_HEIGHT_MAX		AR0330_PIXEL_ARRAY_HEIGHT
 
 #define AR0330_CHIP_VERSION				0x3000
@@ -50,9 +50,9 @@
 #define AR0330_LOCK_CONTROL				0x3010
 #define		AR0330_LOCK_CONTROL_UNLOCK		0xbeef
 #define AR0330_COARSE_INTEGRATION_TIME			0x3012
-#define		AR0330_COARSE_INTEGRATION_TIME_MIN	1
-#define		AR0330_COARSE_INTEGRATION_TIME_DEF	16
-#define		AR0330_COARSE_INTEGRATION_TIME_MAX	65535
+#define		AR0330_COARSE_INTEGRATION_TIME_MIN	1U
+#define		AR0330_COARSE_INTEGRATION_TIME_DEF	16U
+#define		AR0330_COARSE_INTEGRATION_TIME_MAX	65535U
 #define AR0330_RESET					0x301a
 #define		AR0330_RESET_SMIA_DIS			(1 << 12)
 #define		AR0330_RESET_FORCE_PLL_ON		(1 << 11)
@@ -87,9 +87,9 @@
 #define AR0330_RED_GAIN					0x305a
 #define AR0330_GREEN2_GAIN				0x305c
 #define AR0330_GLOBAL_GAIN				0x305e
-#define		AR0330_GLOBAL_GAIN_MIN			128
-#define		AR0330_GLOBAL_GAIN_DEF			128
-#define		AR0330_GLOBAL_GAIN_MAX			2047
+#define		AR0330_GLOBAL_GAIN_MIN			128U
+#define		AR0330_GLOBAL_GAIN_DEF			128U
+#define		AR0330_GLOBAL_GAIN_MAX			2047U
 #define AR0330_ANALOG_GAIN				0x3060
 #define AR0330_DATAPATH_SELECT				0x306e
 #define		AR0330_DATAPATH_SLEW_DOUT_MASK		(7 << 13)
@@ -789,8 +789,8 @@ static int ar0330_set_format(struct v4l2_subdev *subdev,
 			max(__crop->width / 3, AR0330_WINDOW_WIDTH_MIN),
 			__crop->width);
 	height = clamp_t(unsigned int, ALIGN(format->format.height, 2),
-			max(__crop->height / 3, AR0330_WINDOW_HEIGHT_MIN),
-			__crop->height);
+			 max(__crop->height / 3, AR0330_WINDOW_HEIGHT_MIN),
+			 __crop->height);
 
 	hratio = DIV_ROUND_CLOSEST(__crop->width, width);
 	vratio = DIV_ROUND_CLOSEST(__crop->height, height);
@@ -829,10 +829,10 @@ static int ar0330_set_crop(struct v4l2_subdev *subdev,
 	 * Clamp the crop rectangle boundaries and align them to a multiple of 2
 	 * pixels to ensure a GRBG Bayer pattern.
 	 */
-	rect.left = clamp(ALIGN(crop->rect.left, 2), 0,
-			  AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_MIN);
-	rect.top = clamp(ALIGN(crop->rect.top, 2), 0,
-			 AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_MIN);
+	rect.left = clamp_t(unsigned int, ALIGN(crop->rect.left, 2), 0,
+			    AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_MIN);
+	rect.top = clamp_t(unsigned int, ALIGN(crop->rect.top, 2), 0,
+			   AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_MIN);
 	rect.width = clamp(ALIGN(crop->rect.width, 2),
 			   AR0330_WINDOW_WIDTH_MIN,
 			   AR0330_WINDOW_WIDTH_MAX);
