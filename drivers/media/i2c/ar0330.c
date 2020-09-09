@@ -1020,60 +1020,6 @@ out:
  * V4L2 subdev internal operations
  */
 
-static int ar0330_registered(struct v4l2_subdev *subdev)
-{
-	struct ar0330 *ar0330 = to_ar0330(subdev);
-	s32 revision;
-	s32 data;
-	int ret;
-
-	ret = ar0330_power_on(ar0330);
-	if (ret < 0) {
-		dev_err(ar0330->dev, "AR0330 power up failed\n");
-		return ret;
-	}
-
-	/* Read out the chip version register */
-	data = ar0330_read16(ar0330, AR0330_CHIP_VERSION);
-	if (data != AR0330_CHIP_VERSION_VALUE) {
-		dev_err(ar0330->dev, "AR0330 not detected, wrong version "
-			"0x%04x\n", data);
-		return -ENODEV;
-	}
-
-	revision = ar0330_read8(ar0330, AR0330_CHIP_REVISION);
-	if (revision < 0) {
-		dev_err(ar0330->dev, "%s: unable to read chip revision (%d)\n",
-			__func__, revision);
-		return -ENODEV;
-	}
-
-	data = ar0330_read16(ar0330, AR0330_TEST_DATA_RED);
-	if (data < 0) {
-		dev_err(ar0330->dev, "%s: unable to read chip version (%d)\n",
-			__func__, data);
-		return -ENODEV;
-	}
-
-	if (revision == 0x10)
-		ar0330->version = 1;
-	else if (revision != 0x20)
-		ar0330->version = 2;
-	else if (data == 0x0006)
-		ar0330->version = 3;
-	else if (data == 0x0007)
-		ar0330->version = 4;
-	else
-		ar0330->version = 0;
-
-	ar0330_power_off(ar0330);
-
-	dev_info(ar0330->dev, "AR0330 rev. %02x ver. %u detected at address "
-		 "0x%02x\n", revision, ar0330->version, ar0330->client->addr);
-
-	return ret;
-}
-
 static int ar0330_open(struct v4l2_subdev *subdev, struct v4l2_subdev_fh *fh)
 {
 	return ar0330_set_power(subdev, 1);
@@ -1109,7 +1055,6 @@ static const struct v4l2_subdev_ops ar0330_subdev_ops = {
 };
 
 static const struct v4l2_subdev_internal_ops ar0330_subdev_internal_ops = {
-	.registered = ar0330_registered,
 	.open = ar0330_open,
 	.close = ar0330_close,
 };
@@ -1117,6 +1062,63 @@ static const struct v4l2_subdev_internal_ops ar0330_subdev_internal_ops = {
 /* -----------------------------------------------------------------------------
  * Driver initialization and probing
  */
+
+static int ar0330_identify(struct ar0330 *ar0330)
+{
+	s32 revision;
+	s32 data;
+	int ret;
+
+	ret = ar0330_power_on(ar0330);
+	if (ret < 0) {
+		dev_err(ar0330->dev, "AR0330 power up failed\n");
+		return ret;
+	}
+
+	/* Read out the chip version register */
+	data = ar0330_read16(ar0330, AR0330_CHIP_VERSION);
+	if (data != AR0330_CHIP_VERSION_VALUE) {
+		dev_err(ar0330->dev, "AR0330 not detected, wrong version "
+			"0x%04x\n", data);
+		goto error;
+	}
+
+	revision = ar0330_read8(ar0330, AR0330_CHIP_REVISION);
+	if (revision < 0) {
+		dev_err(ar0330->dev, "%s: unable to read chip revision (%d)\n",
+			__func__, revision);
+		goto error;
+	}
+
+	data = ar0330_read16(ar0330, AR0330_TEST_DATA_RED);
+	if (data < 0) {
+		dev_err(ar0330->dev, "%s: unable to read chip version (%d)\n",
+			__func__, data);
+		goto error;
+	}
+
+	if (revision == 0x10)
+		ar0330->version = 1;
+	else if (revision != 0x20)
+		ar0330->version = 2;
+	else if (data == 0x0006)
+		ar0330->version = 3;
+	else if (data == 0x0007)
+		ar0330->version = 4;
+	else
+		ar0330->version = 0;
+
+	ar0330_power_off(ar0330);
+
+	dev_info(ar0330->dev, "AR0330 rev. %02x ver. %u detected at address "
+		 "0x%02x\n", revision, ar0330->version, ar0330->client->addr);
+
+	return 0;
+
+error:
+	ar0330_power_off(ar0330);
+	return -ENODEV;
+}
 
 static int ar0330_probe(struct i2c_client *client,
 			 const struct i2c_device_id *did)
@@ -1134,6 +1136,7 @@ static int ar0330_probe(struct i2c_client *client,
 
 	mutex_init(&ar0330->power_lock);
 
+	/* Acquire resources. */
 	ar0330->clock = devm_clk_get(ar0330->dev, NULL);
 	if (IS_ERR(ar0330->clock)) {
 		ret = PTR_ERR(ar0330->clock);
@@ -1152,6 +1155,11 @@ static int ar0330_probe(struct i2c_client *client,
 				ret);
 		goto done;
 	}
+
+	/* Identify the sensor. */
+	ret = ar0330_identify(ar0330);
+	if (ret < 0)
+		goto done;
 
 	/* Create V4L2 controls. */
 	v4l2_ctrl_handler_init(&ar0330->ctrls, 6);
