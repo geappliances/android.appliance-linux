@@ -189,7 +189,7 @@ static int __ar0330_write(struct i2c_client *client, u16 reg, u16 value,
 	struct i2c_msg msg = { client->addr, 0, 2 + size, data };
 	int ret;
 
-	printk(KERN_DEBUG "writing 0x%04x to 0x%04x\n", value, reg);
+	dev_dbg(&client->dev, "writing 0x%04x to 0x%04x\n", value, reg);
 
 	data[0] = reg >> 8;
 	data[1] = reg & 0xff;
@@ -295,7 +295,7 @@ static int ar0330_pll_init(struct ar0330 *ar0330)
 		rate = clk_round_rate(ar0330->pdata->clock, rate);
 		if (clk_set_rate(ar0330->pdata->clock, rate))
 			return -EINVAL;
-		printk(KERN_INFO "clock rate set to %lu\n", rate);
+		dev_dbg(&client->dev, "clock rate set to %lu\n", rate);
 	}
 
 	limits.min_ext_clk_freq_hz = 6000000;
@@ -347,14 +347,14 @@ static int ar0330_pll_init(struct ar0330 *ar0330)
 	if (ret < 0)
 		return ret;
 
-	printk(KERN_INFO "ext_clk_freq_hz %u\n", ar0330->pll.ext_clk_freq_hz);
-	printk(KERN_INFO "pre_pll_clk_div %u\n", ar0330->pll.pre_pll_clk_div);
-	printk(KERN_INFO "pll_multiplier %u\n", ar0330->pll.pll_multiplier);
-	printk(KERN_INFO "vt_pix_clk_div %u\n", ar0330->pll.vt_pix_clk_div);
-	printk(KERN_INFO "vt_sys_clk_div %u\n", ar0330->pll.vt_sys_clk_div);
-	printk(KERN_INFO "vt_pix_clk_freq_hz %u\n", ar0330->pll.vt_pix_clk_freq_hz);
-	printk(KERN_INFO "op_pix_clk_div %u\n", ar0330->pll.op_pix_clk_div);
-	printk(KERN_INFO "op_sys_clk_div %u\n", ar0330->pll.op_sys_clk_div);
+	dev_dbg(&client->dev, "ext_clk_freq_hz %u\n", ar0330->pll.ext_clk_freq_hz);
+	dev_dbg(&client->dev, "pre_pll_clk_div %u\n", ar0330->pll.pre_pll_clk_div);
+	dev_dbg(&client->dev, "pll_multiplier %u\n", ar0330->pll.pll_multiplier);
+	dev_dbg(&client->dev, "vt_pix_clk_div %u\n", ar0330->pll.vt_pix_clk_div);
+	dev_dbg(&client->dev, "vt_sys_clk_div %u\n", ar0330->pll.vt_sys_clk_div);
+	dev_dbg(&client->dev, "vt_pix_clk_freq_hz %u\n", ar0330->pll.vt_pix_clk_freq_hz);
+	dev_dbg(&client->dev, "op_pix_clk_div %u\n", ar0330->pll.op_pix_clk_div);
+	dev_dbg(&client->dev, "op_sys_clk_div %u\n", ar0330->pll.op_sys_clk_div);
 
 	/* The sensor has dual pixel readout paths, the pixel rate is equal to
 	 * twice the VT pixel clock frequency.
@@ -685,8 +685,9 @@ static int ar0330_s_stream(struct v4l2_subdev *subdev, int enable)
 	struct ar0330 *ar0330 = to_ar0330(subdev);
 	int ret;
 
-	printk(KERN_INFO "%s: frame count is %d\n", __func__,
+	dev_dbg(&client->dev, "%s: frame count is %d\n", __func__,
 		ar0330_read16(client, AR0330_FRAME_COUNT));
+
 	if (!enable)
 		return ar0330_write8(client, AR0330_MODE_SELECT, 0);
 
@@ -1156,8 +1157,8 @@ static int ar0330_probe(struct i2c_client *client,
 	v4l2_ctrl_cluster(ARRAY_SIZE(ar0330->flip), ar0330->flip);
 
 	if (ar0330->ctrls.error)
-		printk(KERN_INFO "%s: control initialization error %d\n",
-		       __func__, ar0330->ctrls.error);
+		dev_err(&client->dev, "%s: control initialization error %d\n",
+			__func__, ar0330->ctrls.error);
 
 	ar0330->subdev.ctrl_handler = &ar0330->ctrls;
 
