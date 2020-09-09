@@ -1024,6 +1024,9 @@ static int ar0330_identify(struct ar0330 *ar0330)
 
 	/* Read out the chip version register */
 	data = ar0330_read16(ar0330, AR0330_CHIP_VERSION);
+	if (data < 0)
+		goto error;
+
 	if (data != AR0330_CHIP_VERSION_VALUE) {
 		dev_err(ar0330->dev, "AR0330 not detected, wrong version "
 			"0x%04x\n", data);
@@ -1031,18 +1034,12 @@ static int ar0330_identify(struct ar0330 *ar0330)
 	}
 
 	revision = ar0330_read8(ar0330, AR0330_CHIP_REVISION);
-	if (revision < 0) {
-		dev_err(ar0330->dev, "%s: unable to read chip revision (%d)\n",
-			__func__, revision);
+	if (revision < 0)
 		goto error;
-	}
 
 	data = ar0330_read16(ar0330, AR0330_TEST_DATA_RED);
-	if (data < 0) {
-		dev_err(ar0330->dev, "%s: unable to read chip version (%d)\n",
-			__func__, data);
+	if (data < 0)
 		goto error;
-	}
 
 	if (revision == 0x10)
 		ar0330->version = 1;
