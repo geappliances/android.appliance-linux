@@ -1128,6 +1128,8 @@ static int ar0330_probe(struct i2c_client *client,
 	ar0330->dev = &client->dev;
 	ar0330->read_mode = 0;
 
+	mutex_init(&ar0330->power_lock);
+
 	ar0330->clock = devm_clk_get(ar0330->dev, NULL);
 	if (IS_ERR(ar0330->clock)) {
 		ret = PTR_ERR(ar0330->clock);
@@ -1177,15 +1179,14 @@ static int ar0330_probe(struct i2c_client *client,
 
 	ar0330->subdev.ctrl_handler = &ar0330->ctrls;
 
-	mutex_init(&ar0330->power_lock);
-	v4l2_i2c_subdev_init(&ar0330->subdev, client, &ar0330_subdev_ops);
-	ar0330->subdev.internal_ops = &ar0330_subdev_internal_ops;
-
+	/* Initialize the media entity and V4L2 subdev. */
 	ar0330->pad.flags = MEDIA_PAD_FL_SOURCE;
-	ret = media_entity_init(&ar0330->subdev.entity, 1, &ar0330->pad, 0);
+	ret = media_entity_pads_init(&ar0330->subdev.entity, 1, &ar0330->pad);
 	if (ret < 0)
 		goto done;
 
+	v4l2_i2c_subdev_init(&ar0330->subdev, client, &ar0330_subdev_ops);
+	ar0330->subdev.internal_ops = &ar0330_subdev_internal_ops;
 	ar0330->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 
 	ar0330_init_cfg(&ar0330->subdev, NULL);
