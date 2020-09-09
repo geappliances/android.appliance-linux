@@ -1049,7 +1049,7 @@ static int ar0330_open(struct v4l2_subdev *subdev, struct v4l2_subdev_fh *fh)
 
 	format = v4l2_subdev_get_try_format(fh, 0);
 
-	format->code = V4L2_MBUS_FMT_SGRBG12_1X12;
+	format->code = MEDIA_BUS_FMT_SGRBG12_1X12;
 	format->width = AR0330_WINDOW_WIDTH_DEF;
 	format->height = AR0330_WINDOW_HEIGHT_DEF;
 	format->field = V4L2_FIELD_NONE;
@@ -1177,7 +1177,7 @@ static int ar0330_probe(struct i2c_client *client,
 	ar0330->crop.top = (AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_DEF)
 			 / 2;
 
-	ar0330->format.code = V4L2_MBUS_FMT_SGRBG12_1X12;
+	ar0330->format.code = MEDIA_BUS_FMT_SGRBG12_1X12;
 	ar0330->format.width = AR0330_WINDOW_WIDTH_DEF;
 	ar0330->format.height = AR0330_WINDOW_HEIGHT_DEF;
 	ar0330->format.field = V4L2_FIELD_NONE;
