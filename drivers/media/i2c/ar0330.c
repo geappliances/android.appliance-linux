@@ -18,6 +18,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/pm.h>
+#include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/videodev2.h>
 
@@ -132,6 +133,7 @@ struct ar0330 {
 
 	struct clk *clock;
 	struct gpio_desc *reset;
+	struct regulator_bulk_data supplies[3];
 
 	struct v4l2_subdev subdev;
 	struct media_pad pad;
@@ -362,6 +364,12 @@ static int ar0330_pll_init(struct ar0330 *ar0330)
  * Power handling
  */
 
+static const char * const ar0330_supply_names[3] = {
+	"vddpll",
+	"vaa",
+	"vddio",
+};
+
 struct ar0330_register {
 	u16 addr;
 	u16 value;
@@ -541,9 +549,21 @@ static int ar0330_power_on(struct ar0330 *ar0330)
 {
 	int ret;
 
-	ret = clk_prepare_enable(ar0330->clock);
-	if (ret < 0)
+	ret = regulator_bulk_enable(ARRAY_SIZE(ar0330->supplies),
+				    ar0330->supplies);
+	if (ret < 0) {
+		dev_err(ar0330->dev, "Failed to enable power supplies: %d\n",
+			ret);
 		return ret;
+	}
+
+	ret = clk_prepare_enable(ar0330->clock);
+	if (ret < 0) {
+		dev_err(ar0330->dev, "Failed to enable clock: %d\n", ret);
+		regulator_bulk_disable(ARRAY_SIZE(ar0330->supplies),
+				       ar0330->supplies);
+		return ret;
+	}
 
 	/* Assert reset for 1ms */
 	if (ar0330->reset) {
@@ -559,6 +579,7 @@ static int ar0330_power_on(struct ar0330 *ar0330)
 static void ar0330_power_off(struct ar0330 *ar0330)
 {
 	clk_disable_unprepare(ar0330->clock);
+	regulator_bulk_disable(ARRAY_SIZE(ar0330->supplies), ar0330->supplies);
 }
 
 static int __ar0330_set_power(struct ar0330 *ar0330, bool on)
@@ -1068,6 +1089,7 @@ static int ar0330_probe(struct i2c_client *client,
 			 const struct i2c_device_id *did)
 {
 	struct ar0330 *ar0330;
+	unsigned int i;
 	int ret;
 
 	ar0330 = kzalloc(sizeof(*ar0330), GFP_KERNEL);
@@ -1096,6 +1118,18 @@ static int ar0330_probe(struct i2c_client *client,
 		ret = PTR_ERR(ar0330->reset);
 		if (ret != -EPROBE_DEFER)
 			dev_err(ar0330->dev, "Failed to get reset GPIO: %d\n",
+				ret);
+		goto done;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(ar0330->supplies); ++i)
+		ar0330->supplies[i].supply = ar0330_supply_names[i];
+
+	ret = devm_regulator_bulk_get(ar0330->dev, ARRAY_SIZE(ar0330->supplies),
+				      ar0330->supplies);
+	if (ret < 0) {
+		if (ret != -EPROBE_DEFER)
+			dev_err(ar0330->dev, "Failed to get power supplies: %d\n",
 				ret);
 		goto done;
 	}
