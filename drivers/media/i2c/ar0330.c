@@ -549,8 +549,7 @@ static int ar0330_power_on(struct ar0330 *ar0330)
 {
 	int ret;
 
-	/* Enable clock */
-	ret = clk_enable(ar0330->clock);
+	ret = clk_prepare_enable(ar0330->clock);
 	if (ret < 0)
 		return ret;
 
@@ -567,8 +566,7 @@ static int ar0330_power_on(struct ar0330 *ar0330)
 
 static void ar0330_power_off(struct ar0330 *ar0330)
 {
-	/* Disable clock */
-	clk_disable(ar0330->clock);
+	clk_disable_unprepare(ar0330->clock);
 }
 
 static int __ar0330_set_power(struct ar0330 *ar0330, bool on)
