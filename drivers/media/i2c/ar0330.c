@@ -836,59 +836,64 @@ static int ar0330_set_format(struct v4l2_subdev *subdev,
 	return 0;
 }
 
-static int ar0330_get_crop(struct v4l2_subdev *subdev,
-			   struct v4l2_subdev_pad_config *cfg,
-			   struct v4l2_subdev_crop *crop)
+static int ar0330_get_selection(struct v4l2_subdev *subdev,
+				struct v4l2_subdev_pad_config *cfg,
+				struct v4l2_subdev_selection *sel)
 {
 	struct ar0330 *ar0330 = to_ar0330(subdev);
 
-	crop->rect = *__ar0330_get_pad_crop(ar0330, cfg, crop->pad,
-					     crop->which);
+	if (sel->target != V4L2_SEL_TGT_CROP)
+		return -EINVAL;
+
+	sel->r = *__ar0330_get_pad_crop(ar0330, cfg, sel->pad, sel->which);
 	return 0;
 }
 
-static int ar0330_set_crop(struct v4l2_subdev *subdev,
-			   struct v4l2_subdev_pad_config *cfg,
-			   struct v4l2_subdev_crop *crop)
+static int ar0330_set_selection(struct v4l2_subdev *subdev,
+				struct v4l2_subdev_pad_config *cfg,
+				struct v4l2_subdev_selection *sel)
 {
 	struct ar0330 *ar0330 = to_ar0330(subdev);
 	struct v4l2_mbus_framefmt *__format;
 	struct v4l2_rect *__crop;
 	struct v4l2_rect rect;
 
+	if (sel->target != V4L2_SEL_TGT_CROP)
+		return -EINVAL;
+
 	/*
 	 * Clamp the crop rectangle boundaries and align them to a multiple of 2
 	 * pixels to ensure a GRBG Bayer pattern.
 	 */
-	rect.left = clamp_t(unsigned int, ALIGN(crop->rect.left, 2), 0,
+	rect.left = clamp_t(unsigned int, ALIGN(sel->r.left, 2), 0,
 			    AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_MIN);
-	rect.top = clamp_t(unsigned int, ALIGN(crop->rect.top, 2), 0,
+	rect.top = clamp_t(unsigned int, ALIGN(sel->r.top, 2), 0,
 			   AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_MIN);
-	rect.width = clamp(ALIGN(crop->rect.width, 2),
+	rect.width = clamp(ALIGN(sel->r.width, 2),
 			   AR0330_WINDOW_WIDTH_MIN,
 			   AR0330_WINDOW_WIDTH_MAX);
-	rect.height = clamp(ALIGN(crop->rect.height, 2),
+	rect.height = clamp(ALIGN(sel->r.height, 2),
 			    AR0330_WINDOW_HEIGHT_MIN,
 			    AR0330_WINDOW_HEIGHT_MAX);
 
 	rect.width = min(rect.width, AR0330_WINDOW_WIDTH_MAX - rect.left);
 	rect.height = min(rect.height, AR0330_WINDOW_HEIGHT_MAX - rect.top);
 
-	__crop = __ar0330_get_pad_crop(ar0330, cfg, crop->pad, crop->which);
+	__crop = __ar0330_get_pad_crop(ar0330, cfg, sel->pad, sel->which);
 
 	if (rect.width != __crop->width || rect.height != __crop->height) {
 		/*
 		 * Reset the output image size if the crop rectangle size has
 		 * been modified.
 		 */
-		__format = __ar0330_get_pad_format(ar0330, cfg, crop->pad,
-						    crop->which);
+		__format = __ar0330_get_pad_format(ar0330, cfg, sel->pad,
+						    sel->which);
 		__format->width = rect.width;
 		__format->height = rect.height;
 	}
 
 	*__crop = rect;
-	crop->rect = rect;
+	sel->r = rect;
 
 	return 0;
 }
@@ -1089,8 +1094,8 @@ static struct v4l2_subdev_pad_ops ar0330_subdev_pad_ops = {
 	.enum_frame_size = ar0330_enum_frame_size,
 	.get_fmt = ar0330_get_format,
 	.set_fmt = ar0330_set_format,
-	.get_crop = ar0330_get_crop,
-	.set_crop = ar0330_set_crop,
+	.get_selection = ar0330_get_selection,
+	.set_selection = ar0330_set_selection,
 };
 
 static struct v4l2_subdev_ops ar0330_subdev_ops = {
