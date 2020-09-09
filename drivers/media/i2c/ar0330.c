@@ -279,17 +279,10 @@ static int ar0330_pll_configure(struct ar0330 *ar0330)
 	return 0;
 }
 
-static int ar0330_pll_init(struct ar0330 *ar0330)
+static int ar0330_pll_init(struct ar0330 *ar0330, unsigned long rate)
 {
 	struct smiapp_pll_limits limits;
-	unsigned long rate = 24000000;
 	int ret;
-
-	rate = clk_round_rate(ar0330->clock, rate);
-	if (clk_set_rate(ar0330->clock, rate))
-		return -EINVAL;
-
-	dev_dbg(ar0330->dev, "clock rate set to %lu\n", rate);
 
 	limits.min_ext_clk_freq_hz = 6000000;
 	limits.max_ext_clk_freq_hz = 64000000;
@@ -1088,6 +1081,7 @@ error:
 static int ar0330_probe(struct i2c_client *client,
 			 const struct i2c_device_id *did)
 {
+	unsigned long rate = 24000000;
 	struct ar0330 *ar0330;
 	unsigned int i;
 	int ret;
@@ -1111,6 +1105,15 @@ static int ar0330_probe(struct i2c_client *client,
 				ret);
 		goto done;
 	}
+
+	rate = clk_round_rate(ar0330->clock, rate);
+	ret = clk_set_rate(ar0330->clock, rate);
+	if (ret < 0) {
+		dev_err(ar0330->dev, "Failed to set clock rate: %d\n", ret);
+		return -EINVAL;
+	}
+
+	dev_dbg(ar0330->dev, "clock rate set to %lu\n", rate);
 
 	ar0330->reset = devm_gpiod_get_optional(ar0330->dev, "reset",
 						GPIOD_OUT_HIGH);
@@ -1181,7 +1184,7 @@ static int ar0330_probe(struct i2c_client *client,
 
 	ar0330_init_cfg(&ar0330->subdev, NULL);
 
-	ret = ar0330_pll_init(ar0330);
+	ret = ar0330_pll_init(ar0330, rate);
 	if (ret < 0)
 		dev_err(ar0330->dev, "PLL initialization failed\n");
 
