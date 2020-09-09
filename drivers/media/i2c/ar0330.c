@@ -12,10 +12,10 @@
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/device.h>
-#include <linux/module.h>
 #include <linux/gpio/consumer.h>
 #include <linux/i2c.h>
 #include <linux/log2.h>
+#include <linux/module.h>
 #include <linux/pm.h>
 #include <linux/slab.h>
 #include <linux/videodev2.h>
