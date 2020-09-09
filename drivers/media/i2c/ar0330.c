@@ -23,7 +23,6 @@
 #include <linux/slab.h>
 #include <linux/videodev2.h>
 
-#include <media/ar0330.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-subdev.h>
@@ -130,10 +129,10 @@ struct ar0330 {
 	struct i2c_client *client;
 	struct device *dev;
 
-	struct ar0330_platform_data *pdata;
 	struct smiapp_pll pll;
 	unsigned int version;
 
+	struct clk *clock;
 	struct gpio_desc *reset;
 
 	struct v4l2_subdev subdev;
@@ -295,12 +294,11 @@ static int ar0330_pll_init(struct ar0330 *ar0330)
 	unsigned long rate = 24000000;
 	int ret;
 
-	if (ar0330->pdata->clock) {
-		rate = clk_round_rate(ar0330->pdata->clock, rate);
-		if (clk_set_rate(ar0330->pdata->clock, rate))
-			return -EINVAL;
-		dev_dbg(ar0330->dev, "clock rate set to %lu\n", rate);
-	}
+	rate = clk_round_rate(ar0330->clock, rate);
+	if (clk_set_rate(ar0330->clock, rate))
+		return -EINVAL;
+
+	dev_dbg(ar0330->dev, "clock rate set to %lu\n", rate);
 
 	limits.min_ext_clk_freq_hz = 6000000;
 	limits.max_ext_clk_freq_hz = 64000000;
@@ -549,8 +547,7 @@ static int ar0330_otpm_patch(struct ar0330 *ar0330)
 static int ar0330_power_on(struct ar0330 *ar0330)
 {
 	/* Enable clock */
-	if (ar0330->pdata->clock)
-		clk_enable(ar0330->pdata->clock);
+	clk_enable(ar0330->clock);
 
 	/* Assert reset for 1ms */
 	if (ar0330->reset) {
@@ -566,8 +563,7 @@ static int ar0330_power_on(struct ar0330 *ar0330)
 static void ar0330_power_off(struct ar0330 *ar0330)
 {
 	/* Disable clock */
-	if (ar0330->pdata->clock)
-		clk_disable(ar0330->pdata->clock);
+	clk_disable(ar0330->clock);
 }
 
 static int __ar0330_set_power(struct ar0330 *ar0330, bool on)
@@ -1116,15 +1112,9 @@ static const struct v4l2_subdev_internal_ops ar0330_subdev_internal_ops = {
 static int ar0330_probe(struct i2c_client *client,
 			 const struct i2c_device_id *did)
 {
-	struct ar0330_platform_data *pdata = client->dev.platform_data;
 	struct ar0330 *ar0330;
 	unsigned int i;
 	int ret;
-
-	if (pdata == NULL) {
-		dev_err(&client->dev, "No platform data\n");
-		return -EINVAL;
-	}
 
 	ar0330 = kzalloc(sizeof(*ar0330), GFP_KERNEL);
 	if (ar0330 == NULL)
@@ -1132,8 +1122,16 @@ static int ar0330_probe(struct i2c_client *client,
 
 	ar0330->client = client;
 	ar0330->dev = &client->dev;
-	ar0330->pdata = pdata;
 	ar0330->read_mode = 0;
+
+	ar0330->clock = devm_clk_get(ar0330->dev, NULL);
+	if (IS_ERR(ar0330->clock)) {
+		ret = PTR_ERR(ar0330->clock);
+		if (ret != -EPROBE_DEFER)
+			dev_err(ar0330->dev, "Failed to get clock: %d\n",
+				ret);
+		goto done;
+	}
 
 	ar0330->reset = devm_gpiod_get_optional(ar0330->dev, "reset",
 						GPIOD_OUT_HIGH);
