@@ -970,7 +970,7 @@ static int ar0330_s_ctrl(struct v4l2_ctrl *ctrl)
 	return 0;
 }
 
-static struct v4l2_ctrl_ops ar0330_ctrl_ops = {
+static const struct v4l2_ctrl_ops ar0330_ctrl_ops = {
 	.s_ctrl = ar0330_s_ctrl,
 };
 
@@ -1080,15 +1080,15 @@ static int ar0330_close(struct v4l2_subdev *subdev, struct v4l2_subdev_fh *fh)
 	return ar0330_set_power(subdev, 0);
 }
 
-static struct v4l2_subdev_core_ops ar0330_subdev_core_ops = {
+static const struct v4l2_subdev_core_ops ar0330_subdev_core_ops = {
 	.s_power        = ar0330_set_power,
 };
 
-static struct v4l2_subdev_video_ops ar0330_subdev_video_ops = {
+static const struct v4l2_subdev_video_ops ar0330_subdev_video_ops = {
 	.s_stream       = ar0330_s_stream,
 };
 
-static struct v4l2_subdev_pad_ops ar0330_subdev_pad_ops = {
+static const struct v4l2_subdev_pad_ops ar0330_subdev_pad_ops = {
 	.init_cfg = ar0330_init_cfg,
 	.enum_mbus_code = ar0330_enum_mbus_code,
 	.enum_frame_size = ar0330_enum_frame_size,
@@ -1098,7 +1098,7 @@ static struct v4l2_subdev_pad_ops ar0330_subdev_pad_ops = {
 	.set_selection = ar0330_set_selection,
 };
 
-static struct v4l2_subdev_ops ar0330_subdev_ops = {
+static const struct v4l2_subdev_ops ar0330_subdev_ops = {
 	.core   = &ar0330_subdev_core_ops,
 	.video  = &ar0330_subdev_video_ops,
 	.pad    = &ar0330_subdev_pad_ops,
