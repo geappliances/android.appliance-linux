@@ -602,14 +602,14 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c_pins_4>;
 	status = "okay";
-	clock-frequency = <1000000>;
+	clock-frequency = <100000>;
 };
 
 &i2c5 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c_pins_5>;
 	status = "okay";
-	clock-frequency = <1000000>;
+	clock-frequency = <100000>;
 };
 
 &keypad {
