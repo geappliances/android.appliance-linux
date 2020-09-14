@@ -880,7 +880,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	struct sensor_async_subdev *s_asd =
 		container_of(asd, struct sensor_async_subdev, asd);
 
-	if (vep->bus_type != V4L2_MBUS_CSI2) {
+	if (vep->bus_type != V4L2_MBUS_CSI2_DPHY) {
 		dev_err(dev, "Only CSI2 bus type is currently supported\n");
 		return -EINVAL;
 	}
@@ -929,7 +929,7 @@ static int mtk_seninf_media_register(struct mtk_seninf *priv)
 	if (ret < 0)
 		goto err_free_handler;
 
-	// v4l2_async_notifier_init(&priv->notifier);
+	v4l2_async_notifier_init(&priv->notifier);
 
 	for (i = 0; i < NUM_SENSORS; ++i) {
 		ret = v4l2_async_notifier_parse_fwnode_endpoints_by_port(
