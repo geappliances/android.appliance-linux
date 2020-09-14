@@ -596,6 +596,8 @@ static int __ar0330_set_power(struct ar0330 *ar0330, bool on)
 	if (ret < 0)
 		goto error;
 
+	return 0;
+
 error:
 	ar0330_power_off(ar0330);
 	return ret;
