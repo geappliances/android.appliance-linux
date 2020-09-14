@@ -55,8 +55,6 @@
 #define IMG_MIN_WIDTH 80
 #define IMG_MIN_HEIGHT 60
 
-#define MAX_BUFFER_NUM		4
-
 enum TEST_MODE { TEST_PATTERN_DISABLED = 0x0, TEST_PATTERN_SENINF };
 
 /*
@@ -66,7 +64,7 @@ enum TEST_MODE { TEST_PATTERN_DISABLED = 0x0, TEST_PATTERN_SENINF };
 enum { MTK_CAMSV_P1_MAIN_STREAM_OUT = 0, MTK_CAMSV_P1_TOTAL_NODES };
 
 struct mtk_camsv_dev_buffer {
-	struct vb2_buffer *vb;
+	struct vb2_v4l2_buffer v4l2_buf;
 	struct list_head list;
 	dma_addr_t daddr;
 	dma_addr_t fhaddr;
@@ -79,6 +77,12 @@ struct mtk_camsv_sparams {
 	unsigned int pak;
 	unsigned int imgo_stride;
 };
+
+static inline struct mtk_camsv_dev_buffer *
+to_mtk_camsv_dev_buffer(struct vb2_buffer *buf)
+{
+	return container_of(buf, struct mtk_camsv_dev_buffer, v4l2_buf.vb2_buf);
+}
 
 /*
  * struct mtk_camsv_dev_node_desc - MTK camera device node descriptor
@@ -172,7 +176,6 @@ struct mtk_camsv_dev {
 
 	struct mutex op_lock;
 
-	struct mtk_camsv_dev_buffer bufs[MAX_BUFFER_NUM];
 	struct list_head buf_list;
 };
 

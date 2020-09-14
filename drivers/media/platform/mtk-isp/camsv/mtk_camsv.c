@@ -357,10 +357,8 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 
 static int mtk_camsv_vb2_buf_init(struct vb2_buffer *vb)
 {
-	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vb->vb2_queue);
-	struct mtk_camsv_dev_buffer *buf;
+	struct mtk_camsv_dev_buffer *buf = to_mtk_camsv_dev_buffer(vb);
 
-	buf = &cam->bufs[vb->index];
 	buf->daddr = 0ULL;
 
 	return 0;
@@ -372,8 +370,7 @@ static int mtk_camsv_vb2_buf_prepare(struct vb2_buffer *vb)
 		mtk_camsv_vbq_to_vdev(vb->vb2_queue);
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vb->vb2_queue);
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
-	struct vb2_v4l2_buffer *v4l2_buf = to_vb2_v4l2_buffer(vb);
-	struct mtk_camsv_dev_buffer *buf;
+	struct mtk_camsv_dev_buffer *buf = to_mtk_camsv_dev_buffer(vb);
 	const struct v4l2_format *fmt = &node->vdev_fmt;
 	u32 size;
 	int i;
@@ -387,20 +384,17 @@ static int mtk_camsv_vb2_buf_prepare(struct vb2_buffer *vb)
 		}
 	}
 
-	v4l2_buf->field = V4L2_FIELD_NONE;
+	buf->v4l2_buf.field = V4L2_FIELD_NONE;
 
 	for (i = 0; i < vb->num_planes; i++) {
 		size = fmt->fmt.pix_mp.plane_fmt[i].sizeimage;
 		vb2_set_plane_payload(vb, i, size);
 	}
 
-	buf = &cam->bufs[vb->index];
 	if (buf->daddr == 0ULL) {
 		buf->daddr = vb2_dma_contig_plane_dma_addr(vb, 0);
 		if (p1_dev->conf->enableFH)
 			buf->fhaddr = vb2_dma_contig_plane_dma_addr(vb, 1);
-
-		buf->vb = vb;
 	}
 
 	return 0;
@@ -411,7 +405,7 @@ static void mtk_camsv_vb2_buf_queue(struct vb2_buffer *vb)
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vb->vb2_queue);
 	struct device *dev = cam->dev;
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
-	struct mtk_camsv_dev_buffer *buf = &cam->bufs[vb->index];
+	struct mtk_camsv_dev_buffer *buf = to_mtk_camsv_dev_buffer(vb);
 
 	mutex_lock(&p1_dev->protect_mutex);
 
@@ -446,7 +440,7 @@ static void mtk_camsv_vb2_return_all_buffers(struct mtk_camsv_dev *cam,
 	list_for_each_entry_safe(buf, buf_prev, &cam->buf_list, list) {
 		buf->daddr = 0ULL;
 		list_del(&buf->list);
-		vb2_buffer_done(buf->vb, state);
+		vb2_buffer_done(&buf->v4l2_buf.vb2_buf, state);
 	}
 	mutex_unlock(&p1_dev->protect_mutex);
 }
@@ -905,7 +899,7 @@ static int mtk_camsv_video_register_device(struct mtk_camsv_dev *cam,
 	vbq->dev = dev;
 	vbq->ops = &mtk_camsv_vb2_ops;
 	vbq->mem_ops = &vb2_dma_contig_memops;
-	vbq->buf_struct_size = sizeof(struct vb2_buffer);
+	vbq->buf_struct_size = sizeof(struct mtk_camsv_dev_buffer);
 	vbq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 
 	/* No minimum buffers limitation */

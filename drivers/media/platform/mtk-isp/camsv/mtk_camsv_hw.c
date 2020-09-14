@@ -145,7 +145,7 @@ static irqreturn_t isp_irq_camsv(int irq, void *data)
 {
 	struct mtk_camsv_p1_device *p1_dev = (struct mtk_camsv_p1_device *)data;
 	struct mtk_camsv_dev *cam = &p1_dev->camsv_dev;
-	struct mtk_camsv_dev_buffer *tmp_buf = NULL;
+	struct mtk_camsv_dev_buffer *buf;
 	unsigned int irq_status;
 
 	mutex_lock(&p1_dev->protect_mutex);
@@ -159,11 +159,13 @@ static irqreturn_t isp_irq_camsv(int irq, void *data)
 
 	/* De-queue frame */
 	if (irq_status & CAMSV_IRQ_SW_PASS1_DON) {
-		if (!list_empty(&cam->buf_list)) {
-			tmp_buf = list_entry(cam->buf_list.next,
-					struct mtk_camsv_dev_buffer, list);
-			vb2_buffer_done(tmp_buf->vb, VB2_BUF_STATE_DONE);
-			list_del(&tmp_buf->list);
+		buf = list_first_entry_or_null(&cam->buf_list,
+					       struct mtk_camsv_dev_buffer,
+					       list);
+		if (buf) {
+			vb2_buffer_done(&buf->v4l2_buf.vb2_buf,
+					VB2_BUF_STATE_DONE);
+			list_del(&buf->list);
 		}
 	}
 
