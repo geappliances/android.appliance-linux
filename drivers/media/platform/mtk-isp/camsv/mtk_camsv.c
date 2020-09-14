@@ -1126,12 +1126,11 @@ static int mtk_camsv_v4l2_async_register(struct mtk_camsv_dev *cam)
 	struct device *dev = cam->dev;
 	int ret;
 
-	/* v4l2_async_notifier_init() does not exist in v4.19 and we don't
-	need it but keep it commented out here so that we can use it when
-	we switched to 5.4 after porting all v5.4 v4l2 stuffs */
-	/* v4l2_async_notifier_init(&cam->notifier); */
-	ret = v4l2_async_notifier_parse_fwnode_endpoints(
-		dev, &cam->notifier, sizeof(struct v4l2_async_subdev), NULL);
+	v4l2_async_notifier_init(&cam->notifier);
+
+	ret = v4l2_async_notifier_parse_fwnode_endpoints(dev,
+		&cam->notifier, sizeof(struct v4l2_async_subdev), NULL);
+
 	if (ret) {
 		dev_err(dev, "failed to parse fwnode endpoints:%d\n", ret);
 		return ret;
@@ -1156,7 +1155,7 @@ static void mtk_camsv_v4l2_async_unregister(struct mtk_camsv_dev *cam)
 static const struct v4l2_ioctl_ops mtk_camsv_v4l2_vcap_ioctl_ops = {
 	.vidioc_querycap = mtk_camsv_vidioc_querycap,
 	.vidioc_enum_framesizes = mtk_camsv_vidioc_enum_framesizes,
-	.vidioc_enum_fmt_vid_cap_mplane = mtk_camsv_vidioc_enum_fmt,
+	.vidioc_enum_fmt_vid_cap = mtk_camsv_vidioc_enum_fmt,
 	.vidioc_g_fmt_vid_cap_mplane = mtk_camsv_vidioc_g_fmt,
 	.vidioc_s_fmt_vid_cap_mplane = mtk_camsv_vidioc_s_fmt,
 	.vidioc_try_fmt_vid_cap_mplane = mtk_camsv_vidioc_try_fmt,
