@@ -590,9 +590,15 @@ static int __ar0330_set_power(struct ar0330 *ar0330, bool on)
 
 	ret = ar0330_otpm_patch(ar0330);
 	if (ret < 0)
-		return ret;
+		goto error;
 
-	return v4l2_ctrl_handler_setup(&ar0330->ctrls);
+	ret = v4l2_ctrl_handler_setup(&ar0330->ctrls);
+	if (ret < 0)
+		goto error;
+
+error:
+	ar0330_power_off(ar0330);
+	return ret;
 }
 
 /* -----------------------------------------------------------------------------
