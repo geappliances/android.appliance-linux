@@ -1190,6 +1190,7 @@ static int ar0330_probe(struct i2c_client *client,
 	v4l2_i2c_subdev_init(&ar0330->subdev, client, &ar0330_subdev_ops);
 	ar0330->subdev.internal_ops = &ar0330_subdev_internal_ops;
 	ar0330->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+	ar0330->subdev.entity.function = MEDIA_ENT_F_CAM_SENSOR;
 
 	ar0330_init_cfg(&ar0330->subdev, NULL);
 
