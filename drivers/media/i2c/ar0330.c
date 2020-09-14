@@ -18,6 +18,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/pm.h>
+#include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/videodev2.h>
@@ -146,8 +147,7 @@ struct ar0330 {
 	struct v4l2_ctrl *flip[2];
 	struct v4l2_ctrl *pixel_rate;
 
-	struct mutex power_lock; /* lock to protect power_count */
-	int power_count;
+	bool streaming;
 
 	/* Registers cache */
 	u16 read_mode;
@@ -157,6 +157,12 @@ static struct ar0330 *to_ar0330(struct v4l2_subdev *sd)
 {
 	return container_of(sd, struct ar0330, subdev);
 }
+
+static const char * const ar0330_supply_names[3] = {
+	"vddpll",
+	"vaa",
+	"vddio",
+};
 
 /* -----------------------------------------------------------------------------
  * Register access
@@ -255,6 +261,10 @@ static int ar0330_set_read_mode(struct ar0330 *ar0330, u16 clear, u16 set)
 	ar0330->read_mode = value;
 	return 0;
 }
+
+/* -----------------------------------------------------------------------------
+ * PLL configuration
+ */
 
 static int ar0330_pll_configure(struct ar0330 *ar0330)
 {
@@ -355,14 +365,8 @@ static int ar0330_pll_init(struct ar0330 *ar0330, unsigned long rate)
 }
 
 /* -----------------------------------------------------------------------------
- * Power handling
+ * Hardware configuration
  */
-
-static const char * const ar0330_supply_names[3] = {
-	"vddpll",
-	"vaa",
-	"vddio",
-};
 
 struct ar0330_register {
 	u16 addr;
@@ -539,75 +543,6 @@ static int ar0330_otpm_patch(struct ar0330 *ar0330)
 	return 0;
 }
 
-static int ar0330_power_on(struct ar0330 *ar0330)
-{
-	int ret;
-
-	ret = regulator_bulk_enable(ARRAY_SIZE(ar0330->supplies),
-				    ar0330->supplies);
-	if (ret < 0) {
-		dev_err(ar0330->dev, "Failed to enable power supplies: %d\n",
-			ret);
-		return ret;
-	}
-
-	ret = clk_prepare_enable(ar0330->clock);
-	if (ret < 0) {
-		dev_err(ar0330->dev, "Failed to enable clock: %d\n", ret);
-		regulator_bulk_disable(ARRAY_SIZE(ar0330->supplies),
-				       ar0330->supplies);
-		return ret;
-	}
-
-	/* Assert reset for 1ms */
-	if (ar0330->reset) {
-		gpiod_set_value(ar0330->reset, 1);
-		usleep_range(2000, 3000);
-		gpiod_set_value(ar0330->reset, 0);
-		usleep_range(10000, 11000);
-	}
-
-	return 0;
-}
-
-static void ar0330_power_off(struct ar0330 *ar0330)
-{
-	clk_disable_unprepare(ar0330->clock);
-	regulator_bulk_disable(ARRAY_SIZE(ar0330->supplies), ar0330->supplies);
-}
-
-static int __ar0330_set_power(struct ar0330 *ar0330, bool on)
-{
-	int ret;
-
-	if (!on) {
-		ar0330_power_off(ar0330);
-		return 0;
-	}
-
-	ret = ar0330_power_on(ar0330);
-	if (ret < 0)
-		return ret;
-
-	ret = ar0330_otpm_patch(ar0330);
-	if (ret < 0)
-		goto error;
-
-	ret = v4l2_ctrl_handler_setup(&ar0330->ctrls);
-	if (ret < 0)
-		goto error;
-
-	return 0;
-
-error:
-	ar0330_power_off(ar0330);
-	return ret;
-}
-
-/* -----------------------------------------------------------------------------
- * V4L2 subdev video operations
- */
-
 static int ar0330_set_params(struct ar0330 *ar0330)
 {
 	struct v4l2_mbus_framefmt *format = &ar0330->format;
@@ -658,6 +593,10 @@ static int ar0330_set_params(struct ar0330 *ar0330)
 	return ret;
 }
 
+/* -----------------------------------------------------------------------------
+ * V4L2 subdev video operations
+ */
+
 static int ar0330_s_stream(struct v4l2_subdev *subdev, int enable)
 {
 	struct ar0330 *ar0330 = to_ar0330(subdev);
@@ -666,19 +605,59 @@ static int ar0330_s_stream(struct v4l2_subdev *subdev, int enable)
 	dev_dbg(ar0330->dev, "%s: frame count is %d\n", __func__,
 		ar0330_read16(ar0330, AR0330_FRAME_COUNT));
 
-	if (!enable)
-		return ar0330_write8(ar0330, AR0330_MODE_SELECT, 0);
+	if (!enable) {
+		ret = ar0330_write8(ar0330, AR0330_MODE_SELECT, 0);
+		pm_runtime_mark_last_busy(ar0330->dev);
+		pm_runtime_put_autosuspend(ar0330->dev);
+
+		mutex_lock(ar0330->ctrls.lock);
+		ar0330->streaming = false;
+		mutex_unlock(ar0330->ctrls.lock);
+
+		return ret;
+	}
+
+	mutex_lock(ar0330->ctrls.lock);
+
+	/*
+	 * Set streaming to true early, protected by the controls lock, to
+	 * ensure __v4l2_ctrl_handler_setup() will set the controls. The flag
+	 * is reset to false further down if an error occurs.
+	 */
+	ar0330->streaming = true;
+
+	ret = pm_runtime_get_sync(ar0330->dev);
+	if (ret < 0)
+		goto done;
 
 	ret = ar0330_pll_configure(ar0330);
 	if (ret < 0)
-		return ret;
+		goto done;
+
+	ret = __v4l2_ctrl_handler_setup(&ar0330->ctrls);
+	if (ret < 0)
+		goto done;
 
 	ret = ar0330_set_params(ar0330);
 	if (ret < 0)
-		return ret;
+		goto done;
 
-	return ar0330_write8(ar0330, AR0330_MODE_SELECT,
-			     AR0330_MODE_SELECT_STREAM);
+	ret = ar0330_write8(ar0330, AR0330_MODE_SELECT,
+			    AR0330_MODE_SELECT_STREAM);
+
+done:
+	if (ret < 0) {
+		/*
+		 * In case of error, turn the power off synchronously as the
+		 * device likely has no other chance to recover.
+		 */
+		pm_runtime_put_sync(ar0330->dev);
+		ar0330->streaming = false;
+	}
+
+	mutex_unlock(ar0330->ctrls.lock);
+
+	return ret;
 }
 
 /* -----------------------------------------------------------------------------
@@ -888,6 +867,9 @@ static int ar0330_s_ctrl(struct v4l2_ctrl *ctrl)
 			container_of(ctrl->handler, struct ar0330, ctrls);
 	int ret = 0;
 
+	if (!ar0330->streaming)
+		return 0;
+
 	switch (ctrl->id) {
 	case V4L2_CID_EXPOSURE:
 		return ar0330_write16(ar0330, AR0330_COARSE_INTEGRATION_TIME,
@@ -957,52 +939,8 @@ static const char * const ar0330_test_pattern_menu[] = {
 };
 
 /* -----------------------------------------------------------------------------
- * V4L2 subdev core operations
+ * V4L2 subdev operations
  */
-
-static int ar0330_set_power(struct v4l2_subdev *subdev, int on)
-{
-	struct ar0330 *ar0330 = to_ar0330(subdev);
-	int ret = 0;
-
-	mutex_lock(&ar0330->power_lock);
-
-	/*
-	 * If the power count is modified from 0 to != 0 or from != 0 to 0,
-	 * update the power state.
-	 */
-	if (ar0330->power_count == !on) {
-		ret = __ar0330_set_power(ar0330, !!on);
-		if (ret < 0)
-			goto out;
-	}
-
-	/* Update the power count. */
-	ar0330->power_count += on ? 1 : -1;
-	WARN_ON(ar0330->power_count < 0);
-
-out:
-	mutex_unlock(&ar0330->power_lock);
-	return ret;
-}
-
-/* -----------------------------------------------------------------------------
- * V4L2 subdev internal operations
- */
-
-static int ar0330_open(struct v4l2_subdev *subdev, struct v4l2_subdev_fh *fh)
-{
-	return ar0330_set_power(subdev, 1);
-}
-
-static int ar0330_close(struct v4l2_subdev *subdev, struct v4l2_subdev_fh *fh)
-{
-	return ar0330_set_power(subdev, 0);
-}
-
-static const struct v4l2_subdev_core_ops ar0330_subdev_core_ops = {
-	.s_power        = ar0330_set_power,
-};
 
 static const struct v4l2_subdev_video_ops ar0330_subdev_video_ops = {
 	.s_stream       = ar0330_s_stream,
@@ -1019,14 +957,89 @@ static const struct v4l2_subdev_pad_ops ar0330_subdev_pad_ops = {
 };
 
 static const struct v4l2_subdev_ops ar0330_subdev_ops = {
-	.core   = &ar0330_subdev_core_ops,
 	.video  = &ar0330_subdev_video_ops,
 	.pad    = &ar0330_subdev_pad_ops,
 };
 
-static const struct v4l2_subdev_internal_ops ar0330_subdev_internal_ops = {
-	.open = ar0330_open,
-	.close = ar0330_close,
+/* -----------------------------------------------------------------------------
+ * Power management
+ */
+
+static int ar0330_power_on(struct ar0330 *ar0330)
+{
+	int ret;
+
+	ret = regulator_bulk_enable(ARRAY_SIZE(ar0330->supplies),
+				    ar0330->supplies);
+	if (ret < 0) {
+		dev_err(ar0330->dev, "Failed to enable power supplies: %d\n",
+			ret);
+		return ret;
+	}
+
+	ret = clk_prepare_enable(ar0330->clock);
+	if (ret < 0) {
+		dev_err(ar0330->dev, "Failed to enable clock: %d\n", ret);
+		regulator_bulk_disable(ARRAY_SIZE(ar0330->supplies),
+				       ar0330->supplies);
+		return ret;
+	}
+
+	/* Assert reset for 1ms */
+	if (ar0330->reset) {
+		gpiod_set_value(ar0330->reset, 1);
+		usleep_range(2000, 3000);
+		gpiod_set_value(ar0330->reset, 0);
+		usleep_range(10000, 11000);
+	}
+
+	return 0;
+}
+
+static int ar0330_power_on_init(struct ar0330 *ar0330)
+{
+	return ar0330_otpm_patch(ar0330);
+}
+
+static void ar0330_power_off(struct ar0330 *ar0330)
+{
+	clk_disable_unprepare(ar0330->clock);
+	regulator_bulk_disable(ARRAY_SIZE(ar0330->supplies), ar0330->supplies);
+}
+
+static int ar0330_runtime_resume(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct v4l2_subdev *subdev = i2c_get_clientdata(client);
+	struct ar0330 *ar0330 = to_ar0330(subdev);
+	int ret;
+
+	ret = ar0330_power_on(ar0330);
+	if (ret < 0)
+		return ret;
+
+	ret = ar0330_power_on_init(ar0330);
+	if (ret < 0) {
+		ar0330_power_off(ar0330);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int ar0330_runtime_suspend(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct v4l2_subdev *subdev = i2c_get_clientdata(client);
+	struct ar0330 *ar0330 = to_ar0330(subdev);
+
+	ar0330_power_off(ar0330);
+
+	return 0;
+}
+
+static const struct dev_pm_ops ar0330_pm_ops = {
+        SET_RUNTIME_PM_OPS(ar0330_runtime_suspend, ar0330_runtime_resume, NULL)
 };
 
 /* -----------------------------------------------------------------------------
@@ -1037,32 +1050,25 @@ static int ar0330_identify(struct ar0330 *ar0330)
 {
 	s32 revision;
 	s32 data;
-	int ret;
-
-	ret = ar0330_power_on(ar0330);
-	if (ret < 0) {
-		dev_err(ar0330->dev, "AR0330 power up failed\n");
-		return ret;
-	}
 
 	/* Read out the chip version register */
 	data = ar0330_read16(ar0330, AR0330_CHIP_VERSION);
 	if (data < 0)
-		goto error;
+		return data;
 
 	if (data != AR0330_CHIP_VERSION_VALUE) {
 		dev_err(ar0330->dev, "AR0330 not detected, wrong version "
 			"0x%04x\n", data);
-		goto error;
+		return -ENODEV;
 	}
 
 	revision = ar0330_read8(ar0330, AR0330_CHIP_REVISION);
 	if (revision < 0)
-		goto error;
+		return revision;
 
 	data = ar0330_read16(ar0330, AR0330_TEST_DATA_RED);
 	if (data < 0)
-		goto error;
+		return data;
 
 	if (revision == 0x10)
 		ar0330->version = 1;
@@ -1075,16 +1081,10 @@ static int ar0330_identify(struct ar0330 *ar0330)
 	else
 		ar0330->version = 0;
 
-	ar0330_power_off(ar0330);
-
 	dev_info(ar0330->dev, "AR0330 rev. %02x ver. %u detected at address "
 		 "0x%02x\n", revision, ar0330->version, ar0330->client->addr);
 
 	return 0;
-
-error:
-	ar0330_power_off(ar0330);
-	return -ENODEV;
 }
 
 static int ar0330_probe(struct i2c_client *client,
@@ -1103,8 +1103,6 @@ static int ar0330_probe(struct i2c_client *client,
 	ar0330->dev = &client->dev;
 	ar0330->read_mode = 0;
 
-	mutex_init(&ar0330->power_lock);
-
 	/* Acquire resources. */
 	ar0330->clock = devm_clk_get(ar0330->dev, NULL);
 	if (IS_ERR(ar0330->clock)) {
@@ -1112,14 +1110,14 @@ static int ar0330_probe(struct i2c_client *client,
 		if (ret != -EPROBE_DEFER)
 			dev_err(ar0330->dev, "Failed to get clock: %d\n",
 				ret);
-		goto done;
+		goto error_free;
 	}
 
 	rate = clk_round_rate(ar0330->clock, rate);
 	ret = clk_set_rate(ar0330->clock, rate);
 	if (ret < 0) {
 		dev_err(ar0330->dev, "Failed to set clock rate: %d\n", ret);
-		return -EINVAL;
+		goto error_free;
 	}
 
 	dev_dbg(ar0330->dev, "clock rate set to %lu\n", rate);
@@ -1131,7 +1129,7 @@ static int ar0330_probe(struct i2c_client *client,
 		if (ret != -EPROBE_DEFER)
 			dev_err(ar0330->dev, "Failed to get reset GPIO: %d\n",
 				ret);
-		goto done;
+		goto error_free;
 	}
 
 	for (i = 0; i < ARRAY_SIZE(ar0330->supplies); ++i)
@@ -1143,13 +1141,25 @@ static int ar0330_probe(struct i2c_client *client,
 		if (ret != -EPROBE_DEFER)
 			dev_err(ar0330->dev, "Failed to get power supplies: %d\n",
 				ret);
-		goto done;
+		goto error_free;
 	}
 
-	/* Identify the sensor. */
+	/*
+	 * Enable power management. The driver supports runtime PM, but needs to
+	 * work when runtime PM is disabled in the kernel. To that end, power
+	 * the sensor on manually here, identify it, and fully initialize it.
+	 */
+	ret = ar0330_power_on(ar0330);
+	if (ret < 0)
+		goto error_free;
+
 	ret = ar0330_identify(ar0330);
 	if (ret < 0)
-		goto done;
+		goto error_power;
+
+	ret = ar0330_power_on_init(ar0330);
+	if (ret < 0)
+		goto error_power;
 
 	/* Create V4L2 controls. */
 	v4l2_ctrl_handler_init(&ar0330->ctrls, 6);
@@ -1185,10 +1195,9 @@ static int ar0330_probe(struct i2c_client *client,
 	ar0330->pad.flags = MEDIA_PAD_FL_SOURCE;
 	ret = media_entity_pads_init(&ar0330->subdev.entity, 1, &ar0330->pad);
 	if (ret < 0)
-		goto done;
+		goto error_ctrl;
 
 	v4l2_i2c_subdev_init(&ar0330->subdev, client, &ar0330_subdev_ops);
-	ar0330->subdev.internal_ops = &ar0330_subdev_internal_ops;
 	ar0330->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	ar0330->subdev.entity.function = MEDIA_ENT_F_CAM_SENSOR;
 
@@ -1197,21 +1206,45 @@ static int ar0330_probe(struct i2c_client *client,
 	ret = ar0330_pll_init(ar0330, rate);
 	if (ret < 0) {
 		dev_err(ar0330->dev, "PLL initialization failed\n");
-		goto done;
+		goto error_media;
 	}
+
+	/*
+	 * Enable runtime PM. As the device has been powered manually, mark it
+	 * as active, and increase the usage count without resuming the device.
+	 */
+	pm_runtime_set_active(ar0330->dev);
+	pm_runtime_get_noresume(ar0330->dev);
+	pm_runtime_enable(ar0330->dev);
 
 	ret = v4l2_async_register_subdev(&ar0330->subdev);
 	if (ret < 0) {
 		dev_err(ar0330->dev, "Subdev registration failed\n");
-		goto done;
+		goto error_pm;
 	}
 
-done:
-	if (ret < 0) {
-		v4l2_ctrl_handler_free(&ar0330->ctrls);
-		media_entity_cleanup(&ar0330->subdev.entity);
-		kfree(ar0330);
-	}
+	/*
+	 * Finally, enable autosuspend and decrease the usage count. The device
+	 * will get suspended after the autosuspend delay, turning the power
+	 * off.
+	 */
+	pm_runtime_set_autosuspend_delay(ar0330->dev, 1000);
+	pm_runtime_use_autosuspend(ar0330->dev);
+	pm_runtime_put_autosuspend(ar0330->dev);
+
+	return 0;
+
+error_pm:
+	pm_runtime_disable(ar0330->dev);
+	pm_runtime_put_noidle(ar0330->dev);
+error_media:
+	media_entity_cleanup(&ar0330->subdev.entity);
+error_ctrl:
+	v4l2_ctrl_handler_free(&ar0330->ctrls);
+error_power:
+	ar0330_power_off(ar0330);
+error_free:
+	kfree(ar0330);
 
 	return ret;
 }
@@ -1224,6 +1257,16 @@ static int ar0330_remove(struct i2c_client *client)
 	v4l2_ctrl_handler_free(&ar0330->ctrls);
 	v4l2_async_unregister_subdev(subdev);
 	media_entity_cleanup(&subdev->entity);
+
+	/*
+	 * Disable runtime PM. In case runtime PM is disabled in the kernel,
+	 * make sure to turn power off manually.
+	 */
+	pm_runtime_disable(ar0330->dev);
+	if (!pm_runtime_status_suspended(ar0330->dev))
+		ar0330_power_off(ar0330);
+	pm_runtime_set_suspended(ar0330->dev);
+
 	kfree(ar0330);
 
 	return 0;
@@ -1245,6 +1288,7 @@ static struct i2c_driver ar0330_i2c_driver = {
 	.driver = {
 		.name = "ar0330",
 		.of_match_table = ar0330_of_id,
+		.pm = &ar0330_pm_ops,
 	},
 	.probe          = ar0330_probe,
 	.remove         = ar0330_remove,
