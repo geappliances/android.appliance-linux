@@ -214,7 +214,7 @@ static int __ar0330_write(struct ar0330 *ar0330, u16 reg, u16 value,
 	if (ret < 0) {
 		dev_err(ar0330->dev, "%s(0x%04x) failed (%d)\n", __func__,
 			reg, ret);
-		if (*err)
+		if (err)
 			*err = ret;
 		return ret;
 	}
