@@ -28,6 +28,7 @@ FILES="
 arch/arm64/boot/Image
 arch/arm64/boot/dts/mediatek/mt8167-pumpkin.dtb
 arch/arm64/boot/dts/mediatek/mt8167-pumpkin-android.dtb
+arch/arm64/boot/dts/mediatek/mt8167-pumpkin-android-dsi.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin-android.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin-urt-umo-9465md-t.dtb
