@@ -702,3 +702,11 @@
 	pinctrl-1 = <&vpu_jtag_enabled>;
 	status = "okay";
 };
+
+&seninf {
+	status = "okay";
+};
+
+&camsv0 {
+	status = "okay";
+};
