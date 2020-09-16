@@ -711,3 +711,11 @@
 	memory-region = <&vpu_ram>;
 	status = "okay";
 };
+
+&seninf {
+	status = "okay";
+};
+
+&camsv0 {
+	status = "okay";
+};
