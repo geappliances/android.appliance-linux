@@ -33,6 +33,24 @@
 			method = "smc";
 		};
 	};
+
+	mt8167_audio_codec: mt8167_audio_codec {
+		compatible = "mediatek,mt8167-codec";
+		clocks = <&topckgen CLK_TOP_AUDIO>;
+		clock-names = "bus";
+		mediatek,afe-regmap = <&afe>;
+		mediatek,apmixedsys-regmap = <&apmixedsys>;
+		mediatek,pwrap-regmap = <&pwrap>;
+		mediatek,speaker-mode = <0>; /* 0(CLASSD) 1(CLASSAB) */
+		mediatek,dmic-wire-mode = <1>; /* 0(ONE_WIRE) 1(TWO_WIRE) */
+	};
+
+	sound: sound {
+		compatible = "mediatek,mt8516-soc-pumpkin";
+		mediatek,platform = <&afe>;
+		mediatek,audio-codec = <&mt8167_audio_codec>;
+		status = "okay";
+	};
 };
 
 &cpu0 {
@@ -360,4 +378,13 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&usb1_default_pins>;
 	status = "okay";
+};
+
+&afe {
+	/* 0(HDMI) 1(I2S) 2(TDM) */
+	mediatek,tdm-out-mode = <1>;
+	/* 0(IR1) 1(IRQ2) 4(IRQ7)*/
+	mediatek,awb-irq-mode = <4>;
+	/*0(Spearated Mode) 1(Share Mode)*/
+	mediatek,i2s-clock-modes = <1 1>;
 };
