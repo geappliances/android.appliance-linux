@@ -66,6 +66,8 @@ config RPMSG_VIRTIO
 
 config RPMSG_APU
 	tristate "APU RPMSG driver"
+	select REMOTEPROC
+	select RPMSG_VIRTIO
 	help
 	  This provides a RPMSG driver that provides some facilities to
 	  communicate with an accelerated processing unit (APU).
