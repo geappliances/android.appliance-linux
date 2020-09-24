@@ -107,8 +107,8 @@ struct mtk_seninf {
 	struct v4l2_subdev_format fmt[NUM_PADS];
 
 	struct mtk_seninf_input inputs[NUM_INPUTS];
+	int active_input;
 
-	unsigned int port;
 	unsigned int mux_sel;
 	bool is_testmode;
 };
@@ -134,7 +134,7 @@ static unsigned int mtk_seninf_get_dpcm(struct mtk_seninf *priv)
 {
 	unsigned int dpcm;
 
-	switch (priv->fmt[priv->port].format.code) {
+	switch (priv->fmt[priv->active_input].format.code) {
 	case MEDIA_BUS_FMT_SGRBG10_DPCM8_1X8:
 	case MEDIA_BUS_FMT_SRGGB10_DPCM8_1X8:
 	case MEDIA_BUS_FMT_SBGGR10_DPCM8_1X8:
@@ -153,7 +153,7 @@ static unsigned int mtk_seninf_map_fmt(struct mtk_seninf *priv)
 {
 	int fmtidx = RAW_10BIT_FMT;
 
-	switch (priv->fmt[priv->port].format.code) {
+	switch (priv->fmt[priv->active_input].format.code) {
 	case MEDIA_BUS_FMT_SBGGR8_1X8:
 	case MEDIA_BUS_FMT_SGBRG8_1X8:
 	case MEDIA_BUS_FMT_SGRBG8_1X8:
@@ -305,10 +305,9 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 static void mtk_seninf_rx_config(struct mtk_seninf *priv,
 				 unsigned int seninf)
 {
-	unsigned int port = priv->port;
 	void __iomem *pseninf = priv->base + 0x1000 * seninf;
 
-	if (is_4d1c(port)) {
+	if (is_4d1c(priv->active_input)) {
 		SENINF_BITS(pseninf, MIPI_RX_CON24_CSI0,
 			    CSI0_BIST_LN0_MUX, 1);
 		SENINF_BITS(pseninf, MIPI_RX_CON24_CSI0,
@@ -335,15 +334,16 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	void __iomem *seninf_base = priv->base;
 	void __iomem *pseninf = priv->base + 0x1000 * seninf;
 	unsigned int dpcm = mtk_seninf_get_dpcm(priv);
-	unsigned int data_lane_num = priv->inputs[priv->port].num_data_lanes;
+	unsigned int data_lane_num =
+		priv->inputs[priv->active_input].num_data_lanes;
 	unsigned int cal_sel;
 	unsigned int data_header_order = 1;
 	unsigned int val = 0;
 
 	dev_dbg(priv->dev, "IS_4D1C %d port %d\n",
-		is_4d1c(priv->port), priv->port);
+		is_4d1c(priv->active_input), priv->active_input);
 
-	switch (priv->port) {
+	switch (priv->active_input) {
 	case CFG_CSI_PORT_1:
 		cal_sel = 1;
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
@@ -453,7 +453,7 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 	unsigned int seninf;
 	int ret;
 
-	seninf = mtk_seninf_csi_port_to_seninf(priv->port);
+	seninf = mtk_seninf_csi_port_to_seninf(priv->active_input);
 	if (seninf < 0) {
 		dev_err(dev, "seninf port mapping fail\n");
 		return -EINVAL;
@@ -490,7 +490,7 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 
 static void mtk_seninf_power_off(struct mtk_seninf *priv)
 {
-	unsigned int seninf = mtk_seninf_csi_port_to_seninf(priv->port);
+	unsigned int seninf = mtk_seninf_csi_port_to_seninf(priv->active_input);
 	void __iomem *pseninf = priv->base + 0x1000 * seninf;
 
 	/* Disable CSI2(2.5G) first */
@@ -761,7 +761,7 @@ static int seninf_link_setup(struct media_entity *entity,
 		return 0;
 
 	/* Select port */
-	priv->port = local->index;
+	priv->active_input = local->index;
 
 	return 0;
 }
@@ -790,7 +790,7 @@ static int mtk_seninf_notifier_bound(
 	dev_dbg(priv->dev, "%s bound to input %u\n", sd->entity.name,
 		s_asd->port);
 
-	priv->port = s_asd->port;
+	priv->active_input = s_asd->port;
 
 	ret = media_create_pad_link(&sd->entity, 0, &priv->subdev.entity,
 				    s_asd->port, MEDIA_LNK_FL_ENABLED);
