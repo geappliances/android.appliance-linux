@@ -92,18 +92,23 @@ struct mtk_seninf_sensor_cfg {
 };
 
 struct mtk_seninf {
-	struct v4l2_subdev subdev;
-	struct v4l2_async_notifier notifier;
-	struct v4l2_ctrl_handler ctrl_handler;
-	struct v4l2_subdev_format fmt[NUM_PADS];
 	struct device *dev;
-	struct media_pad pads[NUM_PADS];
-	struct mtk_seninf_sensor_cfg sensor[NUM_SENSORS];
 	struct phy *dphy;
 	unsigned int num_clks;
 	struct clk_bulk_data *clks;
 	void __iomem *base;
 	void __iomem *rx;
+
+	struct v4l2_subdev subdev;
+	struct media_pad pads[NUM_PADS];
+	struct v4l2_async_notifier notifier;
+
+	struct v4l2_ctrl_handler ctrl_handler;
+
+	struct v4l2_subdev_format fmt[NUM_PADS];
+
+	struct mtk_seninf_sensor_cfg sensor[NUM_SENSORS];
+
 	unsigned int port;
 	unsigned int mux_sel;
 	bool is_testmode;
