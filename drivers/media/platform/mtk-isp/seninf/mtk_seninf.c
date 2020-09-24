@@ -895,6 +895,10 @@ static int seninf_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	/* TODO: For some unknown reason, seninf_link_setup is not called,
+	so priv->mux_sel is not set. mux_sel = 0 is OK for now as we only
+	have one sensor. Try to fix it when multiple sensors are used. */
+
 	ret = mtk_seninf_media_register(priv);
 	if (!ret) /* register success */
 		pm_runtime_enable(dev);
