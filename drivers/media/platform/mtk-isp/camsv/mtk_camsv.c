@@ -33,30 +33,6 @@ static const u32 mtk_camsv_mbus_formats[] = {
  * V4L2 Subdev Operations
  */
 
-static struct v4l2_subdev *
-mtk_camsv_cio_get_active_sensor(struct mtk_camsv_dev *cam)
-{
-	struct media_device *mdev = cam->seninf->entity.graph_obj.mdev;
-	struct device *dev = cam->dev;
-	struct media_entity *entity;
-	struct v4l2_subdev *sensor;
-
-	sensor = NULL;
-	media_device_for_each_entity(entity, mdev) {
-		if (entity->function == MEDIA_ENT_F_CAM_SENSOR &&
-		    entity->stream_count) {
-			sensor = media_entity_to_v4l2_subdev(entity);
-			dev_dbg(dev, "sensor found: %s\n", entity->name);
-			break;
-		}
-	}
-
-	if (!sensor)
-		dev_err(dev, "no sensor connected\n");
-
-	return sensor;
-}
-
 static int mtk_camsv_cio_stream_on(struct mtk_camsv_dev *cam)
 {
 	struct device *dev = cam->dev;
@@ -74,9 +50,6 @@ static int mtk_camsv_cio_stream_on(struct mtk_camsv_dev *cam)
 			cam->seninf->entity.name, ret);
 		return ret;
 	}
-
-	/* Get active sensor from graph topology */
-	cam->sensor = mtk_camsv_cio_get_active_sensor(cam);
 
 	cam->streaming = true;
 
