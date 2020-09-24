@@ -264,6 +264,8 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	val = (readl(pseninf_top + SENINF_TOP_MUX_CTRL) &
 		(~(0xF << (mux * 4))))	| ((seninf & 0xF) << (mux * 4));
 	writel(val, pseninf_top + SENINF_TOP_MUX_CTRL);
+	/* HQ */
+	writel(0xC2000, pseninf + SENINF_MUX_SPARE);
 }
 
 static void mtk_seninf_rx_config(struct mtk_seninf *priv,
@@ -360,9 +362,16 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	val = 1 << ((dpcm == 0x2a) ? 15 : ((dpcm & 0xF) + 7));
 	writel(val, pseninf + SENINF_CSI2_DPCM);
 
+	/* HQ */
+	// writel(0x1, pseninf + SENINF_CSI2_DPCM);
+
 	/* Settle delay */
 	SENINF_BITS(pseninf, SENINF_CSI2_LNRD_TIMING,
 		    DATA_SETTLE_PARAMETER, SENINF_SETTLE_DELAY);
+
+	/* HQ */
+	writel(0x10, pseninf + SENINF_CSI2_LNRC_FSM);
+
 	/* CSI2 control */
 	val = readl(pseninf + SENINF_CSI2_CTL) | (data_header_order << 16) |
 		0x10 | ((1 << data_lane_num) - 1);
@@ -387,6 +396,10 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	/* Set debug port to output packet number */
 	SENINF_BITS(pseninf, SENINF_CSI2_DGB_SEL, DEBUG_EN, 1);
 	SENINF_BITS(pseninf, SENINF_CSI2_DGB_SEL, DEBUG_SEL, 0x1a);
+
+	/* HQ */
+	writel(0xfffffffe, pseninf + SENINF_CSI2_SPARE0);
+
 	/* Enable CSI2 IRQ mask */
 	/* Turn on all interrupt */
 	writel(0xffffffff, pseninf + SENINF_CSI2_INT_EN);
@@ -429,11 +442,15 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 
 	mtk_seninf_rx_config(priv, seninf);
 
+	/* HQ */
+	writel(0x0, pseninf + SENINF_TG1_PH_CNT);
+	writel(0x10001, pseninf + SENINF_TG1_SEN_CK);
+
 	mtk_seninf_set_csi_mipi(priv, seninf);
 
 	mtk_seninf_set_mux(priv, seninf);
-
-	writel(0x0, pseninf + SENINF_TOP_CAM_MUX_CTRL);
+	/* HQ */
+	writel(0x76543010, pseninf + SENINF_TOP_CAM_MUX_CTRL);
 
 	return 0;
 }
