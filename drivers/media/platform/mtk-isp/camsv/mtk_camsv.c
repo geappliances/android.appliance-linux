@@ -85,8 +85,7 @@ static int mtk_camsv_cio_stream_off(struct mtk_camsv_dev *cam)
 
 static int mtk_camsv_sd_s_stream(struct v4l2_subdev *sd, int enable)
 {
-	struct mtk_camsv_dev *cam =
-		container_of(sd, struct mtk_camsv_dev, subdev);
+	struct mtk_camsv_dev *cam = to_mtk_camsv_dev(sd);
 
 	if (enable) {
 		/* Align vb2_core_streamon design */
