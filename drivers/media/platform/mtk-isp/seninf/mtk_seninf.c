@@ -38,8 +38,8 @@
 #define MIPI_SENSOR			0x8
 
 enum TEST_MODE {
-	TEST_GEN_PATTERN = 0x0,
-	TEST_DUMP_DEBUG_INFO,
+	TEST_PATTERN_DISABLED = 0x0,
+	TEST_PATTERN_ENABLED
 };
 
 enum CFG_CSI_PORT {
@@ -106,6 +106,7 @@ struct mtk_seninf {
 	void __iomem *rx;
 	unsigned int port;
 	unsigned int mux_sel;
+	bool is_testmode;
 };
 
 static inline int is_4d1c(unsigned int port)
@@ -186,6 +187,35 @@ static unsigned int mtk_seninf_map_fmt(struct mtk_seninf *priv)
 	}
 
 	return fmtidx;
+}
+
+static bool is_mbus_fmt_bayer(unsigned int mbus_fmt_code)
+{
+	switch (mbus_fmt_code) {
+	case MEDIA_BUS_FMT_SBGGR8_1X8:
+	case MEDIA_BUS_FMT_SGBRG8_1X8:
+	case MEDIA_BUS_FMT_SGRBG8_1X8:
+	case MEDIA_BUS_FMT_SRGGB8_1X8:
+	case MEDIA_BUS_FMT_SGRBG10_1X10:
+	case MEDIA_BUS_FMT_SRGGB10_1X10:
+	case MEDIA_BUS_FMT_SBGGR10_1X10:
+	case MEDIA_BUS_FMT_SGBRG10_1X10:
+	case MEDIA_BUS_FMT_SBGGR12_1X12:
+	case MEDIA_BUS_FMT_SGBRG12_1X12:
+	case MEDIA_BUS_FMT_SGRBG12_1X12:
+	case MEDIA_BUS_FMT_SRGGB12_1X12:
+	case MEDIA_BUS_FMT_SBGGR14_1X14:
+	case MEDIA_BUS_FMT_SGBRG14_1X14:
+	case MEDIA_BUS_FMT_SGRBG14_1X14:
+	case MEDIA_BUS_FMT_SRGGB14_1X14:
+	case MEDIA_BUS_FMT_SBGGR16_1X16:
+	case MEDIA_BUS_FMT_SGBRG16_1X16:
+	case MEDIA_BUS_FMT_SGRBG16_1X16:
+	case MEDIA_BUS_FMT_SRGGB16_1X16:
+		return true;
+	default:
+		return false;
+	}
 }
 
 static u32 mtk_seninf_csi_port_to_seninf(u32 port)
@@ -550,15 +580,145 @@ static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static int seninf_enable_test_pattern(struct mtk_seninf *priv)
+{
+	void __iomem *pseninf = priv->base;
+	unsigned int val;
+	unsigned int pixel_mode = TWO_PIXEL_MODE;
+	unsigned int pix_sel_ext;
+	unsigned int pix_sel;
+	unsigned int hs_pol = 0;
+	unsigned int vs_pol = 0;
+	unsigned int seninf = 0;
+	unsigned int mux = 0;
+	bool isBayer;
+	int ret;
+
+	ret = pm_runtime_get_sync(priv->dev);
+	if (ret < 0) {
+		dev_err(priv->dev, "Failed to pm_runtime_get_sync: %d\n", ret);
+		pm_runtime_put_noidle(priv->dev);
+		return ret;
+	}
+
+	SENINF_BITS(pseninf, SENINF_TOP_CTRL, MUX_LP_MODE, 0);
+
+	SENINF_BITS(pseninf, SENINF_TOP_CTRL, SENINF_PCLK_EN, 1);
+	SENINF_BITS(pseninf, SENINF_TOP_CTRL, SENINF2_PCLK_EN, 1);
+
+	SENINF_BITS(pseninf, SENINF_CTRL, SENINF_EN, 1);
+	SENINF_BITS(pseninf, SENINF_CTRL, SENINF_SRC_SEL, 1);
+	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_TESTMDL_IP_EN, 1);
+
+	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_EN, 1);
+	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_PAT, 0xC);
+	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_VSYNC, 4);
+	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_DUMMYPXL, 0x28);
+
+	isBayer = is_mbus_fmt_bayer(priv->fmt[NUM_PADS - 1].format.code);
+
+	if (isBayer)
+		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x0);
+	else
+		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x1);
+
+	switch (priv->fmt[NUM_PADS - 1].format.code) {
+	case MEDIA_BUS_FMT_UYVY8_2X8:
+	case MEDIA_BUS_FMT_VYUY8_2X8:
+	case MEDIA_BUS_FMT_YUYV8_2X8:
+	case MEDIA_BUS_FMT_YVYU8_2X8:
+		writel((priv->fmt[NUM_PADS - 1].format.height + 8) << 16 |
+			       priv->fmt[NUM_PADS - 1].format.width * 2,
+		       pseninf + SENINF_TG1_TM_SIZE);
+		break;
+	default:
+		writel((priv->fmt[NUM_PADS - 1].format.height + 8) << 16 |
+			       priv->fmt[NUM_PADS - 1].format.width,
+		       pseninf + SENINF_TG1_TM_SIZE);
+		break;
+	}
+
+	writel(0x8, pseninf + SENINF_TG1_TM_CLK);
+	writel(0x1, pseninf + SENINF_TG1_TM_STP);
+
+	/* Set top mux */
+	val = (readl(pseninf + SENINF_TOP_MUX_CTRL) & (~(0xF << (mux * 4)))) |
+	      ((seninf & 0xF) << (mux * 4));
+	writel(val, pseninf + SENINF_TOP_MUX_CTRL);
+
+	/* TODO : if mux != 0 => use pseninf + 0x1000 * mux */
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
+		    TEST_MODEL);
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_SRC_SEL, 1);
+
+	switch (pixel_mode) {
+	case 1:
+		pix_sel_ext = 0;
+		pix_sel = 1;
+		break;
+	case 2:
+		pix_sel_ext = 1;
+		pix_sel = 0;
+		break;
+	default:
+		pix_sel_ext = 0;
+		pix_sel = 0;
+		break;
+	}
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL_EXT, SENINF_PIX_SEL_EXT,
+		    pix_sel_ext);
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
+
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_PUSH_EN,
+		    0x1f);
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FLUSH_EN,
+		    0x1b);
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FULL_WR_EN,
+		    2);
+
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_HSYNC_MASK, 1);
+
+	writel(SENINF_IRQ_CLR_SEL | SENINF_ALL_ERR_IRQ_EN,
+	       pseninf + SENINF_MUX_INTEN);
+
+	writel(0x3 | readl(pseninf + SENINF_MUX_CTRL),
+	       pseninf + SENINF_MUX_CTRL);
+	udelay(1);
+	writel(~(0x3) & readl(pseninf + SENINF_MUX_CTRL),
+	       pseninf + SENINF_MUX_CTRL);
+
+	writel(0x76543010, pseninf + SENINF_TOP_CAM_MUX_CTRL);
+
+	dev_dbg(priv->dev, "%s: OK\n", __func__);
+	return 0;
+}
+
 static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
+	int ret = 0;
+	int i;
+	bool has_sensor = false;
 
-	if (on)
-		return mtk_seninf_power_on(priv);
-	mtk_seninf_power_off(priv);
+	if (on) {
+		for (i = 0; i < NUM_SENSORS; ++i)
+			if (priv->sensor[i].num_data_lanes != 0) {
+				has_sensor = true;
+				break;
+			}
 
-	return 0;
+		if (!has_sensor || priv->is_testmode)
+			ret = seninf_enable_test_pattern(priv);
+		else
+			ret = mtk_seninf_power_on(priv);
+	} else {
+		mtk_seninf_power_off(priv);
+	}
+
+	return ret;
 };
 
 static const struct v4l2_subdev_pad_ops seninf_subdev_pad_ops = {
@@ -656,70 +816,6 @@ static const struct v4l2_async_notifier_operations mtk_seninf_async_ops = {
 	.bound = mtk_seninf_notifier_bound,
 };
 
-static int seninf_dump_debug_info(struct mtk_seninf *priv)
-{
-	void __iomem *pseninf = priv->base;
-	struct device *dev = priv->dev;
-
-	/* Sensor Interface Control */
-	dev_dbg(dev,
-		"SENINF_CSI2_CTL SENINF1:0x%x\n",
-		readl(pseninf + SENINF_CSI2_CTL));
-	/* Read width/height */
-	/* Read interrupt status */
-	dev_dbg(dev, "SENINF_IRQ:0x%x\n",
-		readl(pseninf + SENINF_CSI2_INT_STATUS));
-	/* Mux1 */
-	dev_dbg(dev, "SENINF_MUX_CTRL:0x%x, INTSTA:0x%x, DEBUG_2(0x%x)\n",
-		readl(pseninf + SENINF_MUX_CTRL),
-		readl(pseninf + SENINF_MUX_INTSTA),
-		readl(pseninf + SENINF_MUX_DEBUG_2));
-	if (readl(pseninf + SENINF_MUX_INTSTA) & 0x1) {
-		writel(0xffffffff, pseninf + SENINF_MUX_INTSTA);
-		usleep_range(1000, 1000 * 2);
-		dev_warn(dev, "overrun CTRL:%x INTSTA:%x DEBUG_2:%x\n",
-			 readl(pseninf + SENINF_MUX_CTRL),
-			 readl(pseninf + SENINF_MUX_INTSTA),
-			 readl(pseninf + SENINF_MUX_DEBUG_2));
-	}
-
-	return 0;
-}
-
-static int seninf_enable_test_pattern(struct mtk_seninf *priv)
-{
-	void __iomem *pseninf = priv->base;
-	unsigned int val;
-
-	SENINF_BITS(pseninf, SENINF_TOP_CTRL, SENINF_PCLK_EN, 1);
-	SENINF_BITS(pseninf, SENINF_TOP_CTRL, SENINF2_PCLK_EN, 1);
-	SENINF_BITS(pseninf, SENINF_CTRL, SENINF_EN, 1);
-	SENINF_BITS(pseninf, SENINF_CTRL, SENINF_SRC_SEL, 1);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_HSYNC_MASK, 1);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_SRC_SEL, 1);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1f);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1b);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 1);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
-	writel(SENINF_IRQ_CLR_SEL | SENINF_ALL_ERR_IRQ_EN,
-	       pseninf + SENINF_MUX_INTEN);
-	writel(0x0, pseninf + SENINF_MUX_SPARE);
-	writel(0xE2000, pseninf + SENINF_MUX_CTRL_EXT);
-	writel(0x0, pseninf + SENINF_MUX_CTRL_EXT);
-	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_EN, 1);
-	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_PAT, 0xC);
-	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_VSYNC, 4);
-	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_DUMMYPXL, 4);
-	val = (priv->fmt[priv->port].format.height + 0x100) << 16 |
-		  (priv->fmt[priv->port].format.width + 0x100);
-	writel(val, pseninf + SENINF_TG1_TM_SIZE);
-	writel(0x0, pseninf + SENINF_TG1_TM_CLK);
-	writel(0x1, pseninf + SENINF_TG1_TM_STP);
-	writel(readl(pseninf + SENINF_CTRL_EXT) | 0x02,
-	       pseninf + SENINF_CTRL_EXT);
-
-	return 0;
-}
 
 static int seninf_set_ctrl(struct v4l2_ctrl *ctrl)
 {
@@ -728,10 +824,10 @@ static int seninf_set_ctrl(struct v4l2_ctrl *ctrl)
 
 	switch (ctrl->id) {
 	case V4L2_CID_TEST_PATTERN:
-		if (ctrl->val == TEST_GEN_PATTERN)
-			return seninf_enable_test_pattern(priv);
-		else if (ctrl->val == TEST_DUMP_DEBUG_INFO)
-			return seninf_dump_debug_info(priv);
+		if (ctrl->val == TEST_PATTERN_ENABLED)
+			priv->is_testmode = true;
+		else if (ctrl->val == TEST_PATTERN_DISABLED)
+			priv->is_testmode = false;
 		else
 			return -EINVAL;
 	}
@@ -743,9 +839,9 @@ static const struct v4l2_ctrl_ops seninf_ctrl_ops = {
 	.s_ctrl = seninf_set_ctrl,
 };
 
-static const char * const seninf_test_pattern_menu[] = {
-	"Horizontal bars",
-	"Monitor status",
+static const char *const seninf_test_pattern_menu[] = {
+	"No test pattern",
+	"Static horizontal color bars",
 };
 
 static int seninf_initialize_controls(struct mtk_seninf *priv)
@@ -762,6 +858,8 @@ static int seninf_initialize_controls(struct mtk_seninf *priv)
 				     V4L2_CID_TEST_PATTERN,
 				     ARRAY_SIZE(seninf_test_pattern_menu) - 1,
 				     0, 0, seninf_test_pattern_menu);
+
+	priv->is_testmode = false;
 
 	if (handler->error) {
 		ret = handler->error;
