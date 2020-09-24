@@ -3,7 +3,7 @@
 #ifndef __SENINF_REG_H__
 #define __SENINF_REG_H__
 
-#define BIT(nr) (1UL << (nr))
+#include <linux/bits.h>
 
 #define SENINF_TOP_CTRL                                        0x0000
 #define SENINF_TOP_CTRL_SENINF_PCLK_SEL_SHIFT 8
