@@ -179,13 +179,20 @@ static int mtk_camsv_dev_notifier_complete(struct v4l2_async_notifier *notifier)
 	struct mtk_camsv_dev *cam =
 		container_of(notifier, struct mtk_camsv_dev, notifier);
 	struct device *dev = cam->dev;
+	int seninf_pad;
 	int ret;
 
 	if (!cam->seninf) {
 		dev_err(dev, "No seninf subdev\n");
 		return -ENODEV;
 	}
-	ret = media_create_pad_link(&cam->seninf->entity, MTK_CAMSV_CIO_PAD_SRC,
+
+	seninf_pad = media_get_pad_index(&cam->seninf->entity, false,
+					 PAD_SIGNAL_DEFAULT);
+	if (seninf_pad < 0)
+		return -ENODEV;
+
+	ret = media_create_pad_link(&cam->seninf->entity, seninf_pad,
 				    &cam->subdev.entity, MTK_CAMSV_CIO_PAD_SINK,
 				    MEDIA_LNK_FL_IMMUTABLE |
 					    MEDIA_LNK_FL_ENABLED);
