@@ -178,6 +178,11 @@ struct mtk_camsv_dev {
 	struct list_head buf_list;
 };
 
+static inline struct mtk_camsv_dev *to_mtk_camsv_dev(struct v4l2_subdev *sd)
+{
+	return container_of(sd, struct mtk_camsv_dev, subdev);
+}
+
 struct mtk_camsv_conf {
 	unsigned int tg_sen_mode;
 	unsigned int module_en;
