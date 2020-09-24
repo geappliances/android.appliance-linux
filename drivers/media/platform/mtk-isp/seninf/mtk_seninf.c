@@ -106,7 +106,7 @@ struct mtk_seninf {
 
 	struct v4l2_ctrl_handler ctrl_handler;
 
-	struct v4l2_subdev_format fmt[SENINF_NUM_PADS];
+	struct v4l2_mbus_framefmt fmt[SENINF_NUM_PADS];
 
 	struct mtk_seninf_input inputs[SENINF_NUM_INPUTS];
 	int active_input;
@@ -231,7 +231,7 @@ static const struct mtk_seninf_format_info *mtk_seninf_format_info(u32 code)
 static unsigned int mtk_seninf_get_dpcm(struct mtk_seninf *priv)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
-	u32 code = priv->fmt[priv->active_input].format.code;
+	u32 code = priv->fmt[priv->active_input].code;
 
 	fmtinfo = mtk_seninf_format_info(code);
 	if (fmtinfo && fmtinfo->flags & MTK_SENINF_FORMAT_DPCM)
@@ -243,7 +243,7 @@ static unsigned int mtk_seninf_get_dpcm(struct mtk_seninf *priv)
 static bool mtk_seninf_fmt_is_jpeg(struct mtk_seninf *priv)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
-	u32 code = priv->fmt[priv->active_input].format.code;
+	u32 code = priv->fmt[priv->active_input].code;
 
 	fmtinfo = mtk_seninf_format_info(code);
 	return fmtinfo && fmtinfo->flags & MTK_SENINF_FORMAT_JPEG;
@@ -531,25 +531,25 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_VSYNC, 4);
 	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_DUMMYPXL, 0x28);
 
-	isBayer = is_mbus_fmt_bayer(priv->fmt[SENINF_NUM_PADS - 1].format.code);
+	isBayer = is_mbus_fmt_bayer(priv->fmt[SENINF_NUM_PADS - 1].code);
 
 	if (isBayer)
 		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x0);
 	else
 		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x1);
 
-	switch (priv->fmt[SENINF_NUM_PADS - 1].format.code) {
+	switch (priv->fmt[SENINF_NUM_PADS - 1].code) {
 	case MEDIA_BUS_FMT_UYVY8_2X8:
 	case MEDIA_BUS_FMT_VYUY8_2X8:
 	case MEDIA_BUS_FMT_YUYV8_2X8:
 	case MEDIA_BUS_FMT_YVYU8_2X8:
-		writel((priv->fmt[SENINF_NUM_PADS - 1].format.height + 8) << 16 |
-		       priv->fmt[SENINF_NUM_PADS - 1].format.width * 2,
+		writel((priv->fmt[SENINF_NUM_PADS - 1].height + 8) << 16 |
+		       priv->fmt[SENINF_NUM_PADS - 1].width * 2,
 		       pseninf + SENINF_TG1_TM_SIZE);
 		break;
 	default:
-		writel((priv->fmt[SENINF_NUM_PADS - 1].format.height + 8) << 16 |
-		       priv->fmt[SENINF_NUM_PADS - 1].format.width,
+		writel((priv->fmt[SENINF_NUM_PADS - 1].height + 8) << 16 |
+		       priv->fmt[SENINF_NUM_PADS - 1].width,
 		       pseninf + SENINF_TG1_TM_SIZE);
 		break;
 	}
@@ -751,7 +751,7 @@ static void init_fmt(struct mtk_seninf *priv)
 	unsigned int i;
 
 	for (i = 0; i < SENINF_NUM_PADS; i++)
-		priv->fmt[i].format = mtk_seninf_default_fmt;
+		priv->fmt[i] = mtk_seninf_default_fmt;
 }
 
 static int seninf_init_cfg(struct v4l2_subdev *sd,
@@ -796,7 +796,7 @@ static int seninf_get_fmt(struct v4l2_subdev *sd,
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
 		fmt->format = *v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
 	else
-		fmt->format = priv->fmt[fmt->pad].format;
+		fmt->format = priv->fmt[fmt->pad];
 
 	return 0;
 }
@@ -814,8 +814,7 @@ static int seninf_set_fmt(struct v4l2_subdev *sd,
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
 		mf = v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
 	} else {
-		priv->fmt[fmt->pad].pad = fmt->pad;
-		mf = &priv->fmt[fmt->pad].format;
+		mf = &priv->fmt[fmt->pad];
 	}
 	*mf = fmt->format;
 
