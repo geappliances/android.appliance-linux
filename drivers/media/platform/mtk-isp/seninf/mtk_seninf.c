@@ -75,6 +75,17 @@ enum SENINF_ID {
 		*__p = __v; \
 	} while (0)
 
+enum mtk_seninf_format_flag {
+	MTK_SENINF_FORMAT_BAYER = BIT(0),
+	MTK_SENINF_FORMAT_DPCM = BIT(1),
+	MTK_SENINF_FORMAT_JPEG = BIT(2),
+};
+
+struct mtk_seninf_format_info {
+	u32 code;
+	u32 flags;
+};
+
 struct mtk_seninf_input {
 	struct v4l2_subdev *subdev;
 	unsigned short num_data_lanes;
@@ -120,64 +131,135 @@ inline struct mtk_seninf *sd_to_mtk_seninf(struct v4l2_subdev *sd)
 	return container_of(sd, struct mtk_seninf, subdev);
 }
 
-static unsigned int mtk_seninf_get_dpcm(struct mtk_seninf *priv)
-{
-	unsigned int dpcm;
+static const struct mtk_seninf_format_info mtk_seninf_formats[] = {
+	{
+		.code = MEDIA_BUS_FMT_SBGGR8_1X8,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SGBRG8_1X8,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SGRBG8_1X8,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SRGGB8_1X8,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SGRBG10_DPCM8_1X8,
+		.flags = MTK_SENINF_FORMAT_DPCM,
+	}, {
+		.code = MEDIA_BUS_FMT_SRGGB10_DPCM8_1X8,
+		.flags = MTK_SENINF_FORMAT_DPCM,
+	}, {
+		.code = MEDIA_BUS_FMT_SBGGR10_DPCM8_1X8,
+		.flags = MTK_SENINF_FORMAT_DPCM,
+	}, {
+		.code = MEDIA_BUS_FMT_SGBRG10_DPCM8_1X8,
+		.flags = MTK_SENINF_FORMAT_DPCM,
+	}, {
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SBGGR16_1X16,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SGBRG16_1X16,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SGRBG16_1X16,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_SRGGB16_1X16,
+		.flags = MTK_SENINF_FORMAT_BAYER,
+	}, {
+		.code = MEDIA_BUS_FMT_UYVY8_1X16,
+	}, {
+		.code = MEDIA_BUS_FMT_VYUY8_1X16,
+	}, {
+		.code = MEDIA_BUS_FMT_YUYV8_1X16,
+	}, {
+		.code = MEDIA_BUS_FMT_YVYU8_1X16,
+	}, {
+		.code = MEDIA_BUS_FMT_JPEG_1X8,
+		.flags = MTK_SENINF_FORMAT_JPEG,
+	}, {
+		.code = MEDIA_BUS_FMT_S5C_UYVY_JPEG_1X8,
+		.flags = MTK_SENINF_FORMAT_JPEG,
+	}
+};
 
-	switch (priv->fmt[priv->active_input].format.code) {
-	case MEDIA_BUS_FMT_SGRBG10_DPCM8_1X8:
-	case MEDIA_BUS_FMT_SRGGB10_DPCM8_1X8:
-	case MEDIA_BUS_FMT_SBGGR10_DPCM8_1X8:
-	case MEDIA_BUS_FMT_SGBRG10_DPCM8_1X8:
-		dpcm = 0x2a;
-		break;
-	default:
-		dpcm = 0;
-		break;
+static const struct mtk_seninf_format_info *mtk_seninf_format_info(u32 code)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(mtk_seninf_formats); ++i) {
+		if (mtk_seninf_formats[i].code == code)
+			return &mtk_seninf_formats[i];
 	}
 
-	return dpcm;
+	return NULL;
+}
+
+static unsigned int mtk_seninf_get_dpcm(struct mtk_seninf *priv)
+{
+	const struct mtk_seninf_format_info *fmtinfo;
+	u32 code = priv->fmt[priv->active_input].format.code;
+
+	fmtinfo = mtk_seninf_format_info(code);
+	if (fmtinfo && fmtinfo->flags & MTK_SENINF_FORMAT_DPCM)
+		return 0x2a;
+	else
+		return 0;
 }
 
 static bool mtk_seninf_fmt_is_jpeg(struct mtk_seninf *priv)
 {
-	switch (priv->fmt[priv->active_input].format.code) {
-	case MEDIA_BUS_FMT_JPEG_1X8:
-	case MEDIA_BUS_FMT_S5C_UYVY_JPEG_1X8:
-		return true;
+	const struct mtk_seninf_format_info *fmtinfo;
+	u32 code = priv->fmt[priv->active_input].format.code;
 
-	default:
-		return false;
-	}
+	fmtinfo = mtk_seninf_format_info(code);
+	return fmtinfo && fmtinfo->flags & MTK_SENINF_FORMAT_JPEG;
 }
 
 static bool is_mbus_fmt_bayer(unsigned int mbus_fmt_code)
 {
-	switch (mbus_fmt_code) {
-	case MEDIA_BUS_FMT_SBGGR8_1X8:
-	case MEDIA_BUS_FMT_SGBRG8_1X8:
-	case MEDIA_BUS_FMT_SGRBG8_1X8:
-	case MEDIA_BUS_FMT_SRGGB8_1X8:
-	case MEDIA_BUS_FMT_SGRBG10_1X10:
-	case MEDIA_BUS_FMT_SRGGB10_1X10:
-	case MEDIA_BUS_FMT_SBGGR10_1X10:
-	case MEDIA_BUS_FMT_SGBRG10_1X10:
-	case MEDIA_BUS_FMT_SBGGR12_1X12:
-	case MEDIA_BUS_FMT_SGBRG12_1X12:
-	case MEDIA_BUS_FMT_SGRBG12_1X12:
-	case MEDIA_BUS_FMT_SRGGB12_1X12:
-	case MEDIA_BUS_FMT_SBGGR14_1X14:
-	case MEDIA_BUS_FMT_SGBRG14_1X14:
-	case MEDIA_BUS_FMT_SGRBG14_1X14:
-	case MEDIA_BUS_FMT_SRGGB14_1X14:
-	case MEDIA_BUS_FMT_SBGGR16_1X16:
-	case MEDIA_BUS_FMT_SGBRG16_1X16:
-	case MEDIA_BUS_FMT_SGRBG16_1X16:
-	case MEDIA_BUS_FMT_SRGGB16_1X16:
-		return true;
-	default:
-		return false;
-	}
+	const struct mtk_seninf_format_info *fmtinfo;
+
+	fmtinfo = mtk_seninf_format_info(mbus_fmt_code);
+	return fmtinfo && fmtinfo->flags & MTK_SENINF_FORMAT_BAYER;
 }
 
 static u32 mtk_seninf_csi_port_to_seninf(u32 port)
