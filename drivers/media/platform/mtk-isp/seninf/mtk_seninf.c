@@ -782,7 +782,7 @@ static const struct media_entity_operations seninf_media_ops = {
 	.link_validate = v4l2_subdev_link_validate,
 };
 
-struct sensor_async_subdev {
+struct mtk_seninf_async_subdev {
 	struct v4l2_async_subdev asd;
 	u32 port;
 	u32 lanes;
@@ -795,8 +795,8 @@ static int mtk_seninf_notifier_bound(
 {
 	struct mtk_seninf *priv =
 		container_of(notifier, struct mtk_seninf, notifier);
-	struct sensor_async_subdev *s_asd =
-		container_of(asd, struct sensor_async_subdev, asd);
+	struct mtk_seninf_async_subdev *s_asd =
+		container_of(asd, struct mtk_seninf_async_subdev, asd);
 	int ret;
 
 	dev_dbg(priv->dev, "%s bound with port:%d lanes: %d\n",
@@ -882,8 +882,8 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 				   struct v4l2_fwnode_endpoint *vep,
 				   struct v4l2_async_subdev *asd)
 {
-	struct sensor_async_subdev *s_asd =
-		container_of(asd, struct sensor_async_subdev, asd);
+	struct mtk_seninf_async_subdev *s_asd =
+		container_of(asd, struct mtk_seninf_async_subdev, asd);
 
 	if (vep->bus_type != V4L2_MBUS_CSI2_DPHY) {
 		dev_err(dev, "Only CSI2 bus type is currently supported\n");
@@ -939,7 +939,7 @@ static int mtk_seninf_media_register(struct mtk_seninf *priv)
 	for (i = 0; i < NUM_SENSORS; ++i) {
 		ret = v4l2_async_notifier_parse_fwnode_endpoints_by_port(
 			dev, &priv->notifier,
-			sizeof(struct sensor_async_subdev), i,
+			sizeof(struct mtk_seninf_async_subdev), i,
 			mtk_seninf_fwnode_parse);
 		if (ret < 0)
 			goto err_clean_entity;
