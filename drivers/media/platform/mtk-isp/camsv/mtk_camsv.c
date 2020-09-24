@@ -8,7 +8,6 @@
 #include <media/media-device.h>
 #include <media/media-entity.h>
 #include <media/v4l2-async.h>
-#include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
 #include <media/v4l2-fwnode.h>
@@ -161,61 +160,6 @@ static const struct media_entity_operations mtk_camsv_media_entity_ops = {
 	.link_validate = v4l2_subdev_link_validate,
 };
 
-static int camsv_set_ctrl(struct v4l2_ctrl *ctrl)
-{
-	struct mtk_camsv_dev *cam =
-		container_of(ctrl->handler, struct mtk_camsv_dev, ctrl_handler);
-
-	switch (ctrl->id) {
-	case V4L2_CID_TEST_PATTERN:
-		if (ctrl->val == TEST_PATTERN_SENINF)
-			cam->is_testmode = true;
-		else if (ctrl->val == TEST_PATTERN_DISABLED)
-			cam->is_testmode = false;
-		else
-			return -EINVAL;
-	}
-
-	return 0;
-}
-
-static const struct v4l2_ctrl_ops camsv_ctrl_ops = {
-	.s_ctrl = camsv_set_ctrl,
-};
-
-static const char *const camsv_test_pattern_menu[] = {
-	"No test pattern", "Test pattern from seninf"
-};
-
-static int camsv_initialize_controls(struct mtk_camsv_dev *cam)
-{
-	struct v4l2_ctrl_handler *handler;
-	int ret;
-
-	handler = &cam->ctrl_handler;
-	ret = v4l2_ctrl_handler_init(handler, 2);
-	if (ret)
-		return ret;
-
-	v4l2_ctrl_new_std_menu_items(handler, &camsv_ctrl_ops,
-				     V4L2_CID_TEST_PATTERN,
-				     ARRAY_SIZE(camsv_test_pattern_menu) - 1, 0,
-				     0, camsv_test_pattern_menu);
-
-	cam->is_testmode = false;
-
-	if (handler->error) {
-		ret = handler->error;
-		dev_err(cam->dev, "Failed to init controls(%d)\n", ret);
-		v4l2_ctrl_handler_free(handler);
-		return ret;
-	}
-
-	cam->subdev.ctrl_handler = handler;
-
-	return 0;
-}
-
 static int mtk_camsv_media_register(struct mtk_camsv_dev *cam,
 				    struct media_device *media_dev)
 {
@@ -291,12 +235,6 @@ static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 
 	/* Initialize subdev */
 	v4l2_subdev_init(&cam->subdev, &mtk_camsv_subdev_ops);
-
-	ret = camsv_initialize_controls(cam);
-	if (ret) {
-		dev_err(dev, "Failed to initialize controls\n");
-		goto fail_media_unreg;
-	}
 
 	cam->subdev.entity.function = MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER;
 	cam->subdev.entity.ops = &mtk_camsv_media_entity_ops;

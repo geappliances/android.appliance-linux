@@ -36,7 +36,6 @@
 #include <linux/types.h>
 #include <linux/videodev2.h>
 #include <media/v4l2-common.h>
-#include <media/v4l2-ctrls.h>
 #include <media/v4l2-dev.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
@@ -148,7 +147,6 @@ struct mtk_camsv_video_device {
  * @subdev: The V4L2 sub-device instance.
  * @v4l2_dev: The V4L2 device driver instance.
  * @notifier: The v4l2_device notifier data.
- * @ctrl_handler: The v4l2_ctrl_handler object.
  * @subdev_pads: Pointer to the number of media pads of this sub-device.
  * @vdev_nodes: The array list of mtk_camsv_video_device nodes.
  * @seninf: Pointer to the seninf sub-device.
@@ -165,14 +163,12 @@ struct mtk_camsv_dev {
 	struct v4l2_subdev subdev;
 	struct v4l2_device v4l2_dev;
 	struct v4l2_async_notifier notifier;
-	struct v4l2_ctrl_handler ctrl_handler;
 	struct media_pad *subdev_pads;
 	struct mtk_camsv_video_device vdev_nodes[MTK_CAMSV_P1_TOTAL_NODES];
 	struct v4l2_subdev *seninf;
 	struct v4l2_subdev *sensor;
 	unsigned int streaming;
 	unsigned int stream_count;
-	bool is_testmode;
 
 	struct mutex op_lock;
 
