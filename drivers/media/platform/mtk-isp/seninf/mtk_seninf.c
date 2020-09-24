@@ -22,20 +22,20 @@
 #define SENINF_SETTLE_DELAY		0x15
 #define SENINF_HS_TRAIL_PARAMETER	0x8
 
-#define NUM_PADS			12
-#define NUM_INPUTS			4
-#define CAM_MUX_IDX_MIN		NUM_INPUTS
-#define DEFAULT_WIDTH			1920
-#define DEFAULT_HEIGHT			1080
+#define SENINF_NUM_INPUTS		4
+#define SENINF_NUM_PADS			12
 
-#define PAD_10BIT			0
+#define SENINF_DEFAULT_WIDTH		1920
+#define SENINF_DEFAULT_HEIGHT		1080
 
-#define TEST_MODEL          0
-#define NORMAL_MODEL        1
-#define SENINF_ALL_ERR_IRQ_EN	0x7F
-#define SENINF_IRQ_CLR_SEL	0x80000000
+#define SENINF_PAD_10BIT		0
 
-#define MIPI_SENSOR			0x8
+#define SENINF_TEST_MODEL          	0
+#define SENINF_NORMAL_MODEL        	1
+#define SENINF_ALL_ERR_IRQ_EN		0x7F
+#define SENINF_IRQ_CLR_SEL		0x80000000
+
+#define SENINF_MIPI_SENSOR		0x8
 
 enum TEST_MODE {
 	TEST_PATTERN_DISABLED = 0x0,
@@ -101,14 +101,14 @@ struct mtk_seninf {
 	void __iomem *rx;
 
 	struct v4l2_subdev subdev;
-	struct media_pad pads[NUM_PADS];
+	struct media_pad pads[SENINF_NUM_PADS];
 	struct v4l2_async_notifier notifier;
 
 	struct v4l2_ctrl_handler ctrl_handler;
 
-	struct v4l2_subdev_format fmt[NUM_PADS];
+	struct v4l2_subdev_format fmt[SENINF_NUM_PADS];
 
-	struct mtk_seninf_input inputs[NUM_INPUTS];
+	struct mtk_seninf_input inputs[SENINF_NUM_INPUTS];
 	int active_input;
 
 	unsigned int mux_sel;
@@ -295,9 +295,10 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 
 	/* Enable mux */
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_SRC_SEL, MIPI_SENSOR);
+	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_SRC_SEL,
+		    SENINF_MIPI_SENSOR);
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
-		    NORMAL_MODEL);
+		    SENINF_NORMAL_MODEL);
 
 	switch (pixel_mode) {
 	case 1: /* 2 Pixel */
@@ -428,7 +429,7 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 
 	/* First Enable Sensor interface and select pad (0x1a04_0200) */
 	SENINF_BITS(pseninf, SENINF_CTRL, SENINF_EN, 1);
-	SENINF_BITS(pseninf, SENINF_CTRL, PAD2CAM_DATA_SEL, PAD_10BIT);
+	SENINF_BITS(pseninf, SENINF_CTRL, PAD2CAM_DATA_SEL, SENINF_PAD_10BIT);
 	SENINF_BITS(pseninf, SENINF_CTRL, SENINF_SRC_SEL, 0);
 	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_CSI2_IP_EN, 1);
 	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_NCSI2_IP_EN, 0);
@@ -547,8 +548,8 @@ static void mtk_seninf_power_off(struct mtk_seninf *priv)
 
 static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
 	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
-	.width = DEFAULT_WIDTH,
-	.height = DEFAULT_HEIGHT,
+	.width = SENINF_DEFAULT_WIDTH,
+	.height = SENINF_DEFAULT_HEIGHT,
 	.field = V4L2_FIELD_NONE,
 	.colorspace = V4L2_COLORSPACE_SRGB,
 	.xfer_func = V4L2_XFER_FUNC_DEFAULT,
@@ -560,7 +561,7 @@ static void init_fmt(struct mtk_seninf *priv)
 {
 	unsigned int i;
 
-	for (i = 0; i < NUM_PADS; i++)
+	for (i = 0; i < SENINF_NUM_PADS; i++)
 		priv->fmt[i].format = mtk_seninf_default_fmt;
 }
 
@@ -624,7 +625,7 @@ static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
 
 	fmtinfo = &mtk_seninf_formats[code->index];
 	if (fmtinfo->flags & MTK_SENINF_FORMAT_INPUT_ONLY &&
-	    code->pad >= NUM_INPUTS)
+	    code->pad >= SENINF_NUM_INPUTS)
 		return -EINVAL;
 
 	code->code = fmtinfo->code;
@@ -667,25 +668,25 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_VSYNC, 4);
 	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_DUMMYPXL, 0x28);
 
-	isBayer = is_mbus_fmt_bayer(priv->fmt[NUM_PADS - 1].format.code);
+	isBayer = is_mbus_fmt_bayer(priv->fmt[SENINF_NUM_PADS - 1].format.code);
 
 	if (isBayer)
 		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x0);
 	else
 		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x1);
 
-	switch (priv->fmt[NUM_PADS - 1].format.code) {
+	switch (priv->fmt[SENINF_NUM_PADS - 1].format.code) {
 	case MEDIA_BUS_FMT_UYVY8_2X8:
 	case MEDIA_BUS_FMT_VYUY8_2X8:
 	case MEDIA_BUS_FMT_YUYV8_2X8:
 	case MEDIA_BUS_FMT_YVYU8_2X8:
-		writel((priv->fmt[NUM_PADS - 1].format.height + 8) << 16 |
-			       priv->fmt[NUM_PADS - 1].format.width * 2,
+		writel((priv->fmt[SENINF_NUM_PADS - 1].format.height + 8) << 16 |
+		       priv->fmt[SENINF_NUM_PADS - 1].format.width * 2,
 		       pseninf + SENINF_TG1_TM_SIZE);
 		break;
 	default:
-		writel((priv->fmt[NUM_PADS - 1].format.height + 8) << 16 |
-			       priv->fmt[NUM_PADS - 1].format.width,
+		writel((priv->fmt[SENINF_NUM_PADS - 1].format.height + 8) << 16 |
+		       priv->fmt[SENINF_NUM_PADS - 1].format.width,
 		       pseninf + SENINF_TG1_TM_SIZE);
 		break;
 	}
@@ -701,7 +702,7 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	/* TODO : if mux != 0 => use pseninf + 0x1000 * mux */
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
-		    TEST_MODEL);
+		    SENINF_TEST_MODEL);
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_SRC_SEL, 1);
 
 	switch (pixel_mode) {
@@ -986,18 +987,18 @@ static int mtk_seninf_media_register(struct mtk_seninf *priv)
 	sd->entity.function = MEDIA_ENT_F_VID_IF_BRIDGE;
 	sd->entity.ops = &seninf_media_ops;
 
-	for (i = 0; i < NUM_INPUTS; i++)
+	for (i = 0; i < SENINF_NUM_INPUTS; i++)
 		pads[i].flags = MEDIA_PAD_FL_SINK;
-
-	for (i = CAM_MUX_IDX_MIN; i < NUM_PADS; i++)
+	for (i = SENINF_NUM_INPUTS; i < SENINF_NUM_PADS; i++)
 		pads[i].flags = MEDIA_PAD_FL_SOURCE;
-	ret = media_entity_pads_init(&sd->entity, NUM_PADS, pads);
+
+	ret = media_entity_pads_init(&sd->entity, SENINF_NUM_PADS, pads);
 	if (ret < 0)
 		goto err_free_handler;
 
 	v4l2_async_notifier_init(&priv->notifier);
 
-	for (i = 0; i < NUM_INPUTS; ++i) {
+	for (i = 0; i < SENINF_NUM_INPUTS; ++i) {
 		ret = v4l2_async_notifier_parse_fwnode_endpoints_by_port(
 			dev, &priv->notifier,
 			sizeof(struct mtk_seninf_async_subdev), i,
