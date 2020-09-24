@@ -87,7 +87,6 @@ enum IMAGE_FMT {
 	} while (0)
 
 struct mtk_seninf_input {
-	unsigned char clock_lane;
 	unsigned short num_data_lanes;
 };
 
