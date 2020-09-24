@@ -622,6 +622,7 @@ static int mtk_seninf_notifier_bound(
 		sd->entity.name, s_asd->port, s_asd->lanes);
 
 	priv->sensor[s_asd->port].num_data_lanes = s_asd->lanes;
+	priv->port = s_asd->port;
 
 	ret = media_create_pad_link(&sd->entity, 0, &priv->subdev.entity,
 				    s_asd->port, MEDIA_LNK_FL_ENABLED);
