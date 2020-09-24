@@ -893,8 +893,8 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	priv->inputs[port].num_data_lanes = vep->bus.mipi_csi2.num_data_lanes;
 	s_asd->port = port;
 
-	dev_info(dev, "%s: input %u uses %u data lanes\n", __func__, port,
-		 vep->bus.mipi_csi2.num_data_lanes);
+	dev_dbg(dev, "%s: input %u uses %u data lanes\n", __func__, port,
+		vep->bus.mipi_csi2.num_data_lanes);
 
 	return 0;
 }
