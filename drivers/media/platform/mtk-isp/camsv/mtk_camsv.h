@@ -49,10 +49,10 @@
 
 #include "mtk_camsv_regs.h"
 
-#define IMG_MAX_WIDTH 1920
-#define IMG_MAX_HEIGHT 1080
-#define IMG_MIN_WIDTH 80
-#define IMG_MIN_HEIGHT 60
+#define IMG_MAX_WIDTH			5376
+#define IMG_MAX_HEIGHT			4032
+#define IMG_MIN_WIDTH			80
+#define IMG_MIN_HEIGHT			60
 
 enum TEST_MODE { TEST_PATTERN_DISABLED = 0x0, TEST_PATTERN_SENINF };
 
