@@ -490,12 +490,15 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 
 static void mtk_seninf_power_off(struct mtk_seninf *priv)
 {
-	unsigned int seninf = mtk_seninf_csi_port_to_seninf(priv->active_input);
-	void __iomem *pseninf = priv->base + 0x1000 * seninf;
+	if (priv->active_input != -1) {
+		unsigned int seninf =
+			mtk_seninf_csi_port_to_seninf(priv->active_input);
+		void __iomem *pseninf = priv->base + 0x1000 * seninf;
 
-	/* Disable CSI2(2.5G) first */
-	writel(readl(pseninf + SENINF_CSI2_CTL) & 0xFFFFFFE0,
-	       pseninf + SENINF_CSI2_CTL);
+		/* Disable CSI2(2.5G) first */
+		writel(readl(pseninf + SENINF_CSI2_CTL) & 0xFFFFFFE0,
+		       pseninf + SENINF_CSI2_CTL);
+	}
 
 	phy_power_off(priv->dphy);
 	pm_runtime_put(priv->dev);
@@ -703,17 +706,9 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
 	int ret = 0;
-	int i;
-	bool has_sensor = false;
 
 	if (on) {
-		for (i = 0; i < NUM_INPUTS; ++i)
-			if (priv->inputs[i].num_data_lanes != 0) {
-				has_sensor = true;
-				break;
-			}
-
-		if (!has_sensor || priv->is_testmode)
+		if (priv->active_input == -1 || priv->is_testmode)
 			ret = seninf_enable_test_pattern(priv);
 		else
 			ret = mtk_seninf_power_on(priv);
@@ -757,11 +752,14 @@ static int seninf_link_setup(struct media_entity *entity,
 	if (!(local->flags & MEDIA_PAD_FL_SINK))
 		return 0;
 
-	if (!(flags & MEDIA_LNK_FL_ENABLED))
-		return 0;
+	if (flags & MEDIA_LNK_FL_ENABLED) {
+		if (priv->active_input != -1)
+			return -EBUSY;
 
-	/* Select port */
-	priv->active_input = local->index;
+		priv->active_input = local->index;
+	} else {
+		priv->active_input = -1;
+	}
 
 	return 0;
 }
@@ -790,10 +788,8 @@ static int mtk_seninf_notifier_bound(
 	dev_dbg(priv->dev, "%s bound to input %u\n", sd->entity.name,
 		s_asd->port);
 
-	priv->active_input = s_asd->port;
-
 	ret = media_create_pad_link(&sd->entity, 0, &priv->subdev.entity,
-				    s_asd->port, MEDIA_LNK_FL_ENABLED);
+				    s_asd->port, 0);
 	if (ret) {
 		dev_err(priv->dev, "failed to create link for %s\n",
 			sd->entity.name);
@@ -1003,6 +999,8 @@ static int seninf_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to get seninf clock:%d\n", ret);
 		return ret;
 	}
+
+	priv->active_input = -1;
 
 	/*
 	 * TODO: Support multiple source connections. For now only the first
