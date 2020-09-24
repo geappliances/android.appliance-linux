@@ -115,22 +115,14 @@ struct mtk_seninf {
 	bool is_testmode;
 };
 
-static inline int is_4d1c(unsigned int port)
-{
-	return port < CFG_CSI_PORT_0A;
-}
-
-static inline int is_cdphy_combo(unsigned int port)
-{
-	return port == CFG_CSI_PORT_0A ||
-		port == CFG_CSI_PORT_0B ||
-		port == CFG_CSI_PORT_0;
-}
-
 inline struct mtk_seninf *sd_to_mtk_seninf(struct v4l2_subdev *sd)
 {
 	return container_of(sd, struct mtk_seninf, subdev);
 }
+
+/* -----------------------------------------------------------------------------
+ * Formats
+ */
 
 static const struct mtk_seninf_format_info mtk_seninf_formats[] = {
 	{
@@ -263,6 +255,22 @@ static bool is_mbus_fmt_bayer(unsigned int mbus_fmt_code)
 
 	fmtinfo = mtk_seninf_format_info(mbus_fmt_code);
 	return fmtinfo && fmtinfo->flags & MTK_SENINF_FORMAT_BAYER;
+}
+
+/* -----------------------------------------------------------------------------
+ * Hardware Configuration
+ */
+
+static inline int is_4d1c(unsigned int port)
+{
+	return port < CFG_CSI_PORT_0A;
+}
+
+static inline int is_cdphy_combo(unsigned int port)
+{
+	return port == CFG_CSI_PORT_0A ||
+		port == CFG_CSI_PORT_0B ||
+		port == CFG_CSI_PORT_0;
 }
 
 static u32 mtk_seninf_csi_port_to_seninf(u32 port)
@@ -488,151 +496,6 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	SENINF_BITS(pseninf, SENINF_CTRL, CSI2_SW_RST, 0);
 }
 
-static int mtk_seninf_power_on(struct mtk_seninf *priv)
-{
-	void __iomem *pseninf = priv->base;
-	struct device *dev = priv->dev;
-	unsigned int seninf;
-	int ret;
-
-	seninf = mtk_seninf_csi_port_to_seninf(priv->active_input);
-	if (seninf < 0) {
-		dev_err(dev, "seninf port mapping fail\n");
-		return -EINVAL;
-	}
-
-	ret = pm_runtime_get_sync(priv->dev);
-	if (ret < 0) {
-		dev_err(priv->dev, "Failed to pm_runtime_get_sync: %d\n", ret);
-		pm_runtime_put_noidle(priv->dev);
-		return ret;
-	}
-
-	/* Configure timestamp */
-	SENINF_BITS(pseninf, SENINF_CTRL, SENINF_EN, 1);
-	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_CSI2_IP_EN, 1);
-	writel(SENINF_TIMESTAMP_STEP, pseninf + SENINF_TG1_TM_STP);
-
-	phy_power_on(priv->dphy);
-
-	mtk_seninf_rx_config(priv, seninf);
-
-	/* HQ */
-	writel(0x0, pseninf + SENINF_TG1_PH_CNT);
-	writel(0x10001, pseninf + SENINF_TG1_SEN_CK);
-
-	mtk_seninf_set_csi_mipi(priv, seninf);
-
-	mtk_seninf_set_mux(priv, seninf);
-	/* HQ */
-	writel(0x76543010, pseninf + SENINF_TOP_CAM_MUX_CTRL);
-
-	return 0;
-}
-
-static void mtk_seninf_power_off(struct mtk_seninf *priv)
-{
-	if (priv->active_input != -1) {
-		unsigned int seninf =
-			mtk_seninf_csi_port_to_seninf(priv->active_input);
-		void __iomem *pseninf = priv->base + 0x1000 * seninf;
-
-		/* Disable CSI2(2.5G) first */
-		writel(readl(pseninf + SENINF_CSI2_CTL) & 0xFFFFFFE0,
-		       pseninf + SENINF_CSI2_CTL);
-	}
-
-	phy_power_off(priv->dphy);
-	pm_runtime_put(priv->dev);
-}
-
-static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
-	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
-	.width = SENINF_DEFAULT_WIDTH,
-	.height = SENINF_DEFAULT_HEIGHT,
-	.field = V4L2_FIELD_NONE,
-	.colorspace = V4L2_COLORSPACE_SRGB,
-	.xfer_func = V4L2_XFER_FUNC_DEFAULT,
-	.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT,
-	.quantization = V4L2_QUANTIZATION_DEFAULT,
-};
-
-static void init_fmt(struct mtk_seninf *priv)
-{
-	unsigned int i;
-
-	for (i = 0; i < SENINF_NUM_PADS; i++)
-		priv->fmt[i].format = mtk_seninf_default_fmt;
-}
-
-static int seninf_init_cfg(struct v4l2_subdev *sd,
-			   struct v4l2_subdev_pad_config *cfg)
-{
-	struct v4l2_mbus_framefmt *mf;
-	unsigned int i;
-
-	for (i = 0; i < sd->entity.num_pads; i++) {
-		mf = v4l2_subdev_get_try_format(sd, cfg, i);
-		*mf = mtk_seninf_default_fmt;
-	}
-
-	return 0;
-}
-
-static int seninf_set_fmt(struct v4l2_subdev *sd,
-			  struct v4l2_subdev_pad_config *cfg,
-			  struct v4l2_subdev_format *fmt)
-{
-	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
-	struct v4l2_mbus_framefmt *mf;
-
-	if (fmt->format.code == ~0U || fmt->format.code == 0)
-		fmt->format.code = MEDIA_BUS_FMT_SRGGB10_1X10;
-
-	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
-		mf = v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
-	} else {
-		priv->fmt[fmt->pad].pad = fmt->pad;
-		mf = &priv->fmt[fmt->pad].format;
-	}
-	*mf = fmt->format;
-
-	return 0;
-}
-
-static int seninf_get_fmt(struct v4l2_subdev *sd,
-			  struct v4l2_subdev_pad_config *cfg,
-			  struct v4l2_subdev_format *fmt)
-{
-	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
-
-	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
-		fmt->format = *v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
-	else
-		fmt->format = priv->fmt[fmt->pad].format;
-
-	return 0;
-}
-
-static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
-				 struct v4l2_subdev_pad_config *cfg,
-				 struct v4l2_subdev_mbus_code_enum *code)
-{
-	const struct mtk_seninf_format_info *fmtinfo;
-
-	if (code->index >= ARRAY_SIZE(mtk_seninf_formats))
-		return -EINVAL;
-
-	fmtinfo = &mtk_seninf_formats[code->index];
-	if (fmtinfo->flags & MTK_SENINF_FORMAT_INPUT_ONLY &&
-	    code->pad >= SENINF_NUM_INPUTS)
-		return -EINVAL;
-
-	code->code = fmtinfo->code;
-
-	return 0;
-}
-
 static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 {
 	void __iomem *pseninf = priv->base;
@@ -749,6 +612,216 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	return 0;
 }
 
+static int mtk_seninf_power_on(struct mtk_seninf *priv)
+{
+	void __iomem *pseninf = priv->base;
+	struct device *dev = priv->dev;
+	unsigned int seninf;
+	int ret;
+
+	seninf = mtk_seninf_csi_port_to_seninf(priv->active_input);
+	if (seninf < 0) {
+		dev_err(dev, "seninf port mapping fail\n");
+		return -EINVAL;
+	}
+
+	ret = pm_runtime_get_sync(priv->dev);
+	if (ret < 0) {
+		dev_err(priv->dev, "Failed to pm_runtime_get_sync: %d\n", ret);
+		pm_runtime_put_noidle(priv->dev);
+		return ret;
+	}
+
+	/* Configure timestamp */
+	SENINF_BITS(pseninf, SENINF_CTRL, SENINF_EN, 1);
+	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_CSI2_IP_EN, 1);
+	writel(SENINF_TIMESTAMP_STEP, pseninf + SENINF_TG1_TM_STP);
+
+	phy_power_on(priv->dphy);
+
+	mtk_seninf_rx_config(priv, seninf);
+
+	/* HQ */
+	writel(0x0, pseninf + SENINF_TG1_PH_CNT);
+	writel(0x10001, pseninf + SENINF_TG1_SEN_CK);
+
+	mtk_seninf_set_csi_mipi(priv, seninf);
+
+	mtk_seninf_set_mux(priv, seninf);
+	/* HQ */
+	writel(0x76543010, pseninf + SENINF_TOP_CAM_MUX_CTRL);
+
+	return 0;
+}
+
+static void mtk_seninf_power_off(struct mtk_seninf *priv)
+{
+	if (priv->active_input != -1) {
+		unsigned int seninf =
+			mtk_seninf_csi_port_to_seninf(priv->active_input);
+		void __iomem *pseninf = priv->base + 0x1000 * seninf;
+
+		/* Disable CSI2(2.5G) first */
+		writel(readl(pseninf + SENINF_CSI2_CTL) & 0xFFFFFFE0,
+		       pseninf + SENINF_CSI2_CTL);
+	}
+
+	phy_power_off(priv->dphy);
+	pm_runtime_put(priv->dev);
+}
+
+/* -----------------------------------------------------------------------------
+ * V4L2 Controls
+ */
+
+static int seninf_set_ctrl(struct v4l2_ctrl *ctrl)
+{
+	struct mtk_seninf *priv = container_of(ctrl->handler,
+					     struct mtk_seninf, ctrl_handler);
+
+	switch (ctrl->id) {
+	case V4L2_CID_TEST_PATTERN:
+		if (ctrl->val == TEST_PATTERN_ENABLED)
+			priv->is_testmode = true;
+		else if (ctrl->val == TEST_PATTERN_DISABLED)
+			priv->is_testmode = false;
+		else
+			return -EINVAL;
+	}
+
+	return 0;
+}
+
+static const struct v4l2_ctrl_ops seninf_ctrl_ops = {
+	.s_ctrl = seninf_set_ctrl,
+};
+
+static const char *const seninf_test_pattern_menu[] = {
+	"No test pattern",
+	"Static horizontal color bars",
+};
+
+static int seninf_initialize_controls(struct mtk_seninf *priv)
+{
+	struct v4l2_ctrl_handler *handler;
+	int ret;
+
+	handler = &priv->ctrl_handler;
+	ret = v4l2_ctrl_handler_init(handler, 2);
+	if (ret)
+		return ret;
+
+	v4l2_ctrl_new_std_menu_items(handler, &seninf_ctrl_ops,
+				     V4L2_CID_TEST_PATTERN,
+				     ARRAY_SIZE(seninf_test_pattern_menu) - 1,
+				     0, 0, seninf_test_pattern_menu);
+
+	priv->is_testmode = false;
+
+	if (handler->error) {
+		ret = handler->error;
+		dev_err(priv->dev,
+			"Failed to init controls(%d)\n", ret);
+		v4l2_ctrl_handler_free(handler);
+		return ret;
+	}
+
+	priv->subdev.ctrl_handler = handler;
+
+	return 0;
+}
+
+/* -----------------------------------------------------------------------------
+ * V4L2 Subdev Operations
+ */
+
+static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
+	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+	.width = SENINF_DEFAULT_WIDTH,
+	.height = SENINF_DEFAULT_HEIGHT,
+	.field = V4L2_FIELD_NONE,
+	.colorspace = V4L2_COLORSPACE_SRGB,
+	.xfer_func = V4L2_XFER_FUNC_DEFAULT,
+	.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT,
+	.quantization = V4L2_QUANTIZATION_DEFAULT,
+};
+
+static void init_fmt(struct mtk_seninf *priv)
+{
+	unsigned int i;
+
+	for (i = 0; i < SENINF_NUM_PADS; i++)
+		priv->fmt[i].format = mtk_seninf_default_fmt;
+}
+
+static int seninf_init_cfg(struct v4l2_subdev *sd,
+			   struct v4l2_subdev_pad_config *cfg)
+{
+	struct v4l2_mbus_framefmt *mf;
+	unsigned int i;
+
+	for (i = 0; i < sd->entity.num_pads; i++) {
+		mf = v4l2_subdev_get_try_format(sd, cfg, i);
+		*mf = mtk_seninf_default_fmt;
+	}
+
+	return 0;
+}
+
+static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
+				 struct v4l2_subdev_pad_config *cfg,
+				 struct v4l2_subdev_mbus_code_enum *code)
+{
+	const struct mtk_seninf_format_info *fmtinfo;
+
+	if (code->index >= ARRAY_SIZE(mtk_seninf_formats))
+		return -EINVAL;
+
+	fmtinfo = &mtk_seninf_formats[code->index];
+	if (fmtinfo->flags & MTK_SENINF_FORMAT_INPUT_ONLY &&
+	    code->pad >= SENINF_NUM_INPUTS)
+		return -EINVAL;
+
+	code->code = fmtinfo->code;
+
+	return 0;
+}
+
+static int seninf_get_fmt(struct v4l2_subdev *sd,
+			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_format *fmt)
+{
+	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
+
+	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
+		fmt->format = *v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
+	else
+		fmt->format = priv->fmt[fmt->pad].format;
+
+	return 0;
+}
+
+static int seninf_set_fmt(struct v4l2_subdev *sd,
+			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_format *fmt)
+{
+	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
+	struct v4l2_mbus_framefmt *mf;
+
+	if (fmt->format.code == ~0U || fmt->format.code == 0)
+		fmt->format.code = MEDIA_BUS_FMT_SRGGB10_1X10;
+
+	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
+		mf = v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
+	} else {
+		priv->fmt[fmt->pad].pad = fmt->pad;
+		mf = &priv->fmt[fmt->pad].format;
+	}
+	*mf = fmt->format;
+
+	return 0;
+}
+
 static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
@@ -816,6 +889,10 @@ static struct v4l2_subdev_ops seninf_subdev_ops = {
 	.pad	= &seninf_subdev_pad_ops,
 };
 
+/* -----------------------------------------------------------------------------
+ * Media Entity Operations
+ */
+
 static int seninf_link_setup(struct media_entity *entity,
 			     const struct media_pad *local,
 			     const struct media_pad *remote, u32 flags)
@@ -842,6 +919,10 @@ static const struct media_entity_operations seninf_media_ops = {
 	.link_setup = seninf_link_setup,
 	.link_validate = v4l2_subdev_link_validate,
 };
+
+/* -----------------------------------------------------------------------------
+ * Async Subdev Notifier
+ */
 
 struct mtk_seninf_async_subdev {
 	struct v4l2_async_subdev asd;
@@ -879,64 +960,6 @@ static const struct v4l2_async_notifier_operations mtk_seninf_async_ops = {
 	.bound = mtk_seninf_notifier_bound,
 };
 
-
-static int seninf_set_ctrl(struct v4l2_ctrl *ctrl)
-{
-	struct mtk_seninf *priv = container_of(ctrl->handler,
-					     struct mtk_seninf, ctrl_handler);
-
-	switch (ctrl->id) {
-	case V4L2_CID_TEST_PATTERN:
-		if (ctrl->val == TEST_PATTERN_ENABLED)
-			priv->is_testmode = true;
-		else if (ctrl->val == TEST_PATTERN_DISABLED)
-			priv->is_testmode = false;
-		else
-			return -EINVAL;
-	}
-
-	return 0;
-}
-
-static const struct v4l2_ctrl_ops seninf_ctrl_ops = {
-	.s_ctrl = seninf_set_ctrl,
-};
-
-static const char *const seninf_test_pattern_menu[] = {
-	"No test pattern",
-	"Static horizontal color bars",
-};
-
-static int seninf_initialize_controls(struct mtk_seninf *priv)
-{
-	struct v4l2_ctrl_handler *handler;
-	int ret;
-
-	handler = &priv->ctrl_handler;
-	ret = v4l2_ctrl_handler_init(handler, 2);
-	if (ret)
-		return ret;
-
-	v4l2_ctrl_new_std_menu_items(handler, &seninf_ctrl_ops,
-				     V4L2_CID_TEST_PATTERN,
-				     ARRAY_SIZE(seninf_test_pattern_menu) - 1,
-				     0, 0, seninf_test_pattern_menu);
-
-	priv->is_testmode = false;
-
-	if (handler->error) {
-		ret = handler->error;
-		dev_err(priv->dev,
-			"Failed to init controls(%d)\n", ret);
-		v4l2_ctrl_handler_free(handler);
-		return ret;
-	}
-
-	priv->subdev.ctrl_handler = handler;
-
-	return 0;
-}
-
 static int mtk_seninf_fwnode_parse(struct device *dev,
 				   struct v4l2_fwnode_endpoint *vep,
 				   struct v4l2_async_subdev *asd)
@@ -959,6 +982,10 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 
 	return 0;
 }
+
+/* -----------------------------------------------------------------------------
+ * Probe & Remove
+ */
 
 static int mtk_seninf_media_register(struct mtk_seninf *priv)
 {
