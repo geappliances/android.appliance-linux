@@ -160,7 +160,6 @@ struct mtk_camsv_video_device {
  * @formats: Media bus format for all pads.
  * @vdev_nodes: The array list of mtk_camsv_video_device nodes.
  * @seninf: Pointer to the seninf sub-device.
- * @sensor: Pointer to the active sensor V4L2 sub-device when streaming on.
  * @streaming: Indicate the overall streaming status is on or off.
  * @stream_count: Number of streaming video nodes
  * @op_lock: Serializes driver's VB2 callback operations.
@@ -177,7 +176,6 @@ struct mtk_camsv_dev {
 	struct v4l2_mbus_framefmt formats[MTK_CAMSV_CIO_NUM_PADS];
 	struct mtk_camsv_video_device vdev_nodes[MTK_CAMSV_P1_TOTAL_NODES];
 	struct v4l2_subdev *seninf;
-	struct v4l2_subdev *sensor;
 	unsigned int streaming;
 	unsigned int stream_count;
 
