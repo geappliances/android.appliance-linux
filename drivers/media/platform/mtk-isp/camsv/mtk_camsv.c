@@ -206,24 +206,11 @@ static int mtk_camsv_cio_stream_on(struct mtk_camsv_dev *cam)
 
 	/* Get active sensor from graph topology */
 	cam->sensor = mtk_camsv_cio_get_active_sensor(cam);
-	if (!cam->sensor || cam->is_testmode)
-		goto no_sensor;
 
-	ret = v4l2_subdev_call(cam->sensor, video, s_stream, 1);
-	if (ret) {
-		dev_err(dev, "failed to stream on %s:%d\n",
-			cam->sensor->entity.name, ret);
-		goto fail_sensor_off;
-	}
-
-	/* No sensor, use seninf test pattern mode */
-no_sensor:
 	cam->streaming = true;
 
 	return 0;
 
-fail_sensor_off:
-	v4l2_subdev_call(cam->sensor, video, s_stream, 0);
 fail_seninf_off:
 	v4l2_subdev_call(cam->seninf, video, s_stream, 0);
 
@@ -234,15 +221,6 @@ static int mtk_camsv_cio_stream_off(struct mtk_camsv_dev *cam)
 {
 	struct device *dev = cam->dev;
 	int ret;
-
-	if (cam->sensor && !cam->is_testmode) {
-		ret = v4l2_subdev_call(cam->sensor, video, s_stream, 0);
-		if (ret) {
-			dev_err(dev, "failed to stream off %s:%d\n",
-				cam->sensor->entity.name, ret);
-			return ret;
-		}
-	}
 
 	if (cam->seninf) {
 		ret = v4l2_subdev_call(cam->seninf, video, s_stream, 0);

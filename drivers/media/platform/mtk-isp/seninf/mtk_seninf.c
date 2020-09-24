@@ -87,6 +87,7 @@ enum IMAGE_FMT {
 	} while (0)
 
 struct mtk_seninf_input {
+	struct v4l2_subdev *subdev;
 	unsigned short num_data_lanes;
 };
 
@@ -705,18 +706,45 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
-	int ret = 0;
+	struct v4l2_subdev *source;
+	int ret;
 
-	if (on) {
-		if (priv->active_input == -1 || priv->is_testmode)
-			ret = seninf_enable_test_pattern(priv);
-		else
-			ret = mtk_seninf_power_on(priv);
-	} else {
+	if (!on) {
+		if (priv->active_input != -1 && !priv->is_testmode) {
+			source = priv->inputs[priv->active_input].subdev;
+			ret = v4l2_subdev_call(source, video, s_stream, 0);
+			if (ret)
+				dev_err(priv->dev,
+					"failed to stop source %s: %d\n",
+					source->entity.name, ret);
+		}
+
 		mtk_seninf_power_off(priv);
+		return 0;
 	}
 
-	return ret;
+	/*
+	 * If no input is selected, or test mode is enabled, just enable the
+	 * test pattern generator.
+	 */
+	if (priv->active_input == -1 || priv->is_testmode)
+		return seninf_enable_test_pattern(priv);
+
+	/* Start the SENINF first and then the source. */
+	ret = mtk_seninf_power_on(priv);
+	if (ret < 0)
+		return ret;
+
+	source = priv->inputs[priv->active_input].subdev;
+	ret = v4l2_subdev_call(source, video, s_stream, 1);
+	if (ret) {
+		dev_err(priv->dev, "failed to start source %s: %d\n",
+			source->entity.name, ret);
+		mtk_seninf_power_off(priv);
+		return ret;
+	}
+
+	return 0;
 };
 
 static const struct v4l2_subdev_pad_ops seninf_subdev_pad_ops = {
@@ -787,6 +815,8 @@ static int mtk_seninf_notifier_bound(
 
 	dev_dbg(priv->dev, "%s bound to input %u\n", sd->entity.name,
 		s_asd->port);
+
+	priv->inputs[s_asd->port].subdev = sd;
 
 	ret = media_create_pad_link(&sd->entity, 0, &priv->subdev.entity,
 				    s_asd->port, 0);
