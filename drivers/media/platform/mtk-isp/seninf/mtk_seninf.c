@@ -746,14 +746,6 @@ static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
 	.quantization = V4L2_QUANTIZATION_DEFAULT,
 };
 
-static void init_fmt(struct mtk_seninf *priv)
-{
-	unsigned int i;
-
-	for (i = 0; i < SENINF_NUM_PADS; i++)
-		priv->fmt[i] = mtk_seninf_default_fmt;
-}
-
 static struct v4l2_mbus_framefmt *
 seninf_get_pad_format(struct mtk_seninf *priv, struct v4l2_subdev_pad_config *cfg,
 		      unsigned int pad, u32 which)
@@ -771,12 +763,14 @@ seninf_get_pad_format(struct mtk_seninf *priv, struct v4l2_subdev_pad_config *cf
 static int seninf_init_cfg(struct v4l2_subdev *sd,
 			   struct v4l2_subdev_pad_config *cfg)
 {
-	struct v4l2_mbus_framefmt *mf;
+	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
+	u32 which = cfg ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
+	struct v4l2_mbus_framefmt *format;
 	unsigned int i;
 
 	for (i = 0; i < sd->entity.num_pads; i++) {
-		mf = v4l2_subdev_get_try_format(sd, cfg, i);
-		*mf = mtk_seninf_default_fmt;
+		format = seninf_get_pad_format(priv, cfg, i, which);
+		*format = mtk_seninf_default_fmt;
 	}
 
 	return 0;
@@ -1003,7 +997,6 @@ static int mtk_seninf_media_register(struct mtk_seninf *priv)
 
 	v4l2_subdev_init(sd, &seninf_subdev_ops);
 
-	init_fmt(priv);
 	ret = seninf_initialize_controls(priv);
 	if (ret) {
 		dev_err(dev, "Failed to initialize controls\n");
@@ -1028,6 +1021,8 @@ static int mtk_seninf_media_register(struct mtk_seninf *priv)
 	ret = media_entity_pads_init(&sd->entity, SENINF_NUM_PADS, pads);
 	if (ret < 0)
 		goto err_free_handler;
+
+	seninf_init_cfg(sd, NULL);
 
 	v4l2_async_notifier_init(&priv->notifier);
 
