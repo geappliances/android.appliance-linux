@@ -79,6 +79,7 @@ enum mtk_seninf_format_flag {
 	MTK_SENINF_FORMAT_BAYER = BIT(0),
 	MTK_SENINF_FORMAT_DPCM = BIT(1),
 	MTK_SENINF_FORMAT_JPEG = BIT(2),
+	MTK_SENINF_FORMAT_INPUT_ONLY = BIT(3),
 };
 
 struct mtk_seninf_format_info {
@@ -157,18 +158,6 @@ static const struct mtk_seninf_format_info mtk_seninf_formats[] = {
 		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
 		.flags = MTK_SENINF_FORMAT_BAYER,
 	}, {
-		.code = MEDIA_BUS_FMT_SGRBG10_DPCM8_1X8,
-		.flags = MTK_SENINF_FORMAT_DPCM,
-	}, {
-		.code = MEDIA_BUS_FMT_SRGGB10_DPCM8_1X8,
-		.flags = MTK_SENINF_FORMAT_DPCM,
-	}, {
-		.code = MEDIA_BUS_FMT_SBGGR10_DPCM8_1X8,
-		.flags = MTK_SENINF_FORMAT_DPCM,
-	}, {
-		.code = MEDIA_BUS_FMT_SGBRG10_DPCM8_1X8,
-		.flags = MTK_SENINF_FORMAT_DPCM,
-	}, {
 		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
 		.flags = MTK_SENINF_FORMAT_BAYER,
 	}, {
@@ -218,6 +207,20 @@ static const struct mtk_seninf_format_info mtk_seninf_formats[] = {
 	}, {
 		.code = MEDIA_BUS_FMT_S5C_UYVY_JPEG_1X8,
 		.flags = MTK_SENINF_FORMAT_JPEG,
+	},
+	/* Keep the input-only formats last. */
+	{
+		.code = MEDIA_BUS_FMT_SGRBG10_DPCM8_1X8,
+		.flags = MTK_SENINF_FORMAT_DPCM | MTK_SENINF_FORMAT_INPUT_ONLY,
+	}, {
+		.code = MEDIA_BUS_FMT_SRGGB10_DPCM8_1X8,
+		.flags = MTK_SENINF_FORMAT_DPCM | MTK_SENINF_FORMAT_INPUT_ONLY,
+	}, {
+		.code = MEDIA_BUS_FMT_SBGGR10_DPCM8_1X8,
+		.flags = MTK_SENINF_FORMAT_DPCM | MTK_SENINF_FORMAT_INPUT_ONLY,
+	}, {
+		.code = MEDIA_BUS_FMT_SGBRG10_DPCM8_1X8,
+		.flags = MTK_SENINF_FORMAT_DPCM | MTK_SENINF_FORMAT_INPUT_ONLY,
 	}
 };
 
@@ -614,12 +617,17 @@ static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_pad_config *cfg,
 				 struct v4l2_subdev_mbus_code_enum *code)
 {
-	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
+	const struct mtk_seninf_format_info *fmtinfo;
 
-	if (code->index >= NUM_PADS)
+	if (code->index >= ARRAY_SIZE(mtk_seninf_formats))
 		return -EINVAL;
 
-	code->code = priv->fmt[code->index].format.code;
+	fmtinfo = &mtk_seninf_formats[code->index];
+	if (fmtinfo->flags & MTK_SENINF_FORMAT_INPUT_ONLY &&
+	    code->pad >= NUM_INPUTS)
+		return -EINVAL;
+
+	code->code = fmtinfo->code;
 
 	return 0;
 }
