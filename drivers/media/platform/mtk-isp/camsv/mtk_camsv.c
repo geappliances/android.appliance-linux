@@ -14,6 +14,21 @@
 
 #include "mtk_camsv.h"
 
+static const u32 mtk_camsv_mbus_formats[] = {
+	MEDIA_BUS_FMT_SBGGR8_1X8,
+	MEDIA_BUS_FMT_SGBRG8_1X8,
+	MEDIA_BUS_FMT_SGRBG8_1X8,
+	MEDIA_BUS_FMT_SRGGB8_1X8,
+	MEDIA_BUS_FMT_SBGGR10_1X10,
+	MEDIA_BUS_FMT_SGBRG10_1X10,
+	MEDIA_BUS_FMT_SGRBG10_1X10,
+	MEDIA_BUS_FMT_SRGGB10_1X10,
+	MEDIA_BUS_FMT_UYVY8_2X8,
+	MEDIA_BUS_FMT_VYUY8_2X8,
+	MEDIA_BUS_FMT_YUYV8_2X8,
+	MEDIA_BUS_FMT_YVYU8_2X8,
+};
+
 /* -----------------------------------------------------------------------------
  * V4L2 Subdev Operations
  */
@@ -108,12 +123,123 @@ static int mtk_camsv_sd_s_stream(struct v4l2_subdev *sd, int enable)
 	return mtk_camsv_cio_stream_off(cam);
 }
 
+static struct v4l2_mbus_framefmt *
+mtk_camsv_get_pad_format(struct mtk_camsv_dev *cam,
+			 struct v4l2_subdev_pad_config *cfg,
+			 unsigned int pad, u32 which)
+{
+	switch (which) {
+	case V4L2_SUBDEV_FORMAT_TRY:
+		return v4l2_subdev_get_try_format(&cam->subdev, cfg, pad);
+	case V4L2_SUBDEV_FORMAT_ACTIVE:
+		return &cam->formats[pad];
+	default:
+		return NULL;
+	}
+}
+
+static int mtk_camsv_init_cfg(struct v4l2_subdev *sd,
+			      struct v4l2_subdev_pad_config *cfg)
+{
+	static const struct v4l2_mbus_framefmt def_format = {
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.width = IMG_DEF_WIDTH,
+		.height = IMG_DEF_HEIGHT,
+		.field = V4L2_FIELD_NONE,
+		.colorspace = V4L2_COLORSPACE_SRGB,
+		.xfer_func = V4L2_XFER_FUNC_DEFAULT,
+		.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT,
+		.quantization = V4L2_QUANTIZATION_DEFAULT,
+	};
+
+	struct mtk_camsv_dev *cam = to_mtk_camsv_dev(sd);
+	u32 which = cfg ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
+	struct v4l2_mbus_framefmt *format;
+	unsigned int i;
+
+	for (i = 0; i < sd->entity.num_pads; i++) {
+		format = mtk_camsv_get_pad_format(cam, cfg, i, which);
+		*format = def_format;
+	}
+
+	return 0;
+}
+
+static int mtk_camsv_enum_mbus_code(struct v4l2_subdev *sd,
+				    struct v4l2_subdev_pad_config *cfg,
+				    struct v4l2_subdev_mbus_code_enum *code)
+{
+	if (code->index >= ARRAY_SIZE(mtk_camsv_mbus_formats))
+		return -EINVAL;
+
+	code->code = mtk_camsv_mbus_formats[code->index];
+
+	return 0;
+}
+
+static int mtk_camsv_get_fmt(struct v4l2_subdev *sd,
+			     struct v4l2_subdev_pad_config *cfg,
+			     struct v4l2_subdev_format *fmt)
+{
+	struct mtk_camsv_dev *cam = to_mtk_camsv_dev(sd);
+
+	fmt->format = *mtk_camsv_get_pad_format(cam, cfg, fmt->pad, fmt->which);
+
+	return 0;
+}
+
+static int mtk_camsv_set_fmt(struct v4l2_subdev *sd,
+			     struct v4l2_subdev_pad_config *cfg,
+			     struct v4l2_subdev_format *fmt)
+{
+	struct mtk_camsv_dev *cam = to_mtk_camsv_dev(sd);
+	struct v4l2_mbus_framefmt *format;
+	unsigned int i;
+
+	/*
+	 * We only support pass-through mode, the format on source pads can't
+	 * be modified.
+	 */
+	if (fmt->pad != MTK_CAMSV_CIO_PAD_SENINF)
+		return mtk_camsv_get_fmt(sd, cfg, fmt);
+
+	for (i = 0; i < ARRAY_SIZE(mtk_camsv_mbus_formats); ++i) {
+		if (mtk_camsv_mbus_formats[i] == fmt->format.code)
+			break;
+	}
+
+	if (i == ARRAY_SIZE(mtk_camsv_mbus_formats))
+		fmt->format.code = mtk_camsv_mbus_formats[0];
+
+	format = mtk_camsv_get_pad_format(cam, cfg, fmt->pad, fmt->which);
+	*format = fmt->format;
+
+	/* Propagate the format to the source pads. */
+	for (i = 0; i < MTK_CAMSV_P1_TOTAL_NODES; ++i) {
+		unsigned int pad = MTK_CAMSV_CIO_PAD_NODE(i);
+
+		format = mtk_camsv_get_pad_format(cam, cfg, pad, fmt->which);
+		*format = fmt->format;
+	}
+
+	return 0;
+}
+
 static const struct v4l2_subdev_video_ops mtk_camsv_subdev_video_ops = {
 	.s_stream = mtk_camsv_sd_s_stream,
 };
 
+static const struct v4l2_subdev_pad_ops mtk_camsv_subdev_pad_ops = {
+	.init_cfg = mtk_camsv_init_cfg,
+	.enum_mbus_code = mtk_camsv_enum_mbus_code,
+	.set_fmt = mtk_camsv_set_fmt,
+	.get_fmt = mtk_camsv_get_fmt,
+	.link_validate = v4l2_subdev_link_validate_default,
+};
+
 static const struct v4l2_subdev_ops mtk_camsv_subdev_ops = {
 	.video = &mtk_camsv_subdev_video_ops,
+	.pad = &mtk_camsv_subdev_pad_ops,
 };
 
 /* -----------------------------------------------------------------------------
@@ -324,6 +450,8 @@ static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 	snprintf(cam->subdev.name, sizeof(cam->subdev.name), "%s",
 		 dev_driver_string(dev));
 	v4l2_set_subdevdata(&cam->subdev, cam);
+
+	mtk_camsv_init_cfg(&cam->subdev, NULL);
 
 	ret = v4l2_device_register_subdev(&cam->v4l2_dev, &cam->subdev);
 	if (ret) {

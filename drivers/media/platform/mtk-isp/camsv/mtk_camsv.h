@@ -51,6 +51,8 @@
 
 #define IMG_MAX_WIDTH			5376
 #define IMG_MAX_HEIGHT			4032
+#define IMG_DEF_WIDTH			1920
+#define IMG_DEF_HEIGHT			1080
 #define IMG_MIN_WIDTH			80
 #define IMG_MIN_HEIGHT			60
 
@@ -155,6 +157,7 @@ struct mtk_camsv_video_device {
  * @v4l2_dev: The V4L2 device driver instance.
  * @notifier: The v4l2_device notifier data.
  * @subdev_pads: Media pads of this sub-device.
+ * @formats: Media bus format for all pads.
  * @vdev_nodes: The array list of mtk_camsv_video_device nodes.
  * @seninf: Pointer to the seninf sub-device.
  * @sensor: Pointer to the active sensor V4L2 sub-device when streaming on.
@@ -171,6 +174,7 @@ struct mtk_camsv_dev {
 	struct v4l2_device v4l2_dev;
 	struct v4l2_async_notifier notifier;
 	struct media_pad subdev_pads[MTK_CAMSV_CIO_NUM_PADS];
+	struct v4l2_mbus_framefmt formats[MTK_CAMSV_CIO_NUM_PADS];
 	struct mtk_camsv_video_device vdev_nodes[MTK_CAMSV_P1_TOTAL_NODES];
 	struct v4l2_subdev *seninf;
 	struct v4l2_subdev *sensor;
