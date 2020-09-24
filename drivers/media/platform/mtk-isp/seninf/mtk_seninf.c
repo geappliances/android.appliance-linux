@@ -811,10 +811,14 @@ static int seninf_set_fmt(struct v4l2_subdev *sd,
 			  struct v4l2_subdev_format *fmt)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
+	const struct mtk_seninf_format_info *fmtinfo;
 	struct v4l2_mbus_framefmt *format;
 
-	if (fmt->format.code == ~0U || fmt->format.code == 0)
-		fmt->format.code = MEDIA_BUS_FMT_SRGGB10_1X10;
+	fmtinfo = mtk_seninf_format_info(fmt->format.code);
+	if (!fmtinfo) {
+		fmtinfo = &mtk_seninf_formats[0];
+		fmt->format.code = fmtinfo->code;
+	}
 
 	format = seninf_get_pad_format(priv, cfg, fmt->pad, fmt->which);
 	*format = fmt->format;
