@@ -263,21 +263,9 @@ static int mtk_mipi_phy_power_off(struct phy *phy)
 	return 0;
 }
 
-static int mtk_phy_set_mode(struct phy *phy,
-			    enum phy_mode mode, int submode)
-{
-	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
-
-	priv->port = submode;
-	dev_dbg(priv->dev, "port %d\n", priv->port);
-
-	return 0;
-}
-
 static const struct phy_ops mtk_dphy_ops = {
 	.power_on	= mtk_mipi_phy_power_on,
 	.power_off	= mtk_mipi_phy_power_off,
-	.set_mode	= mtk_phy_set_mode,
 	.owner		= THIS_MODULE,
 };
 
