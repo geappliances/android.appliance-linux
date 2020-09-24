@@ -758,6 +758,21 @@ static int seninf_initialize_controls(struct mtk_seninf *priv)
 	return 0;
 }
 
+static int mtk_seninf_fwnode_parse(struct device *dev,
+				   struct v4l2_fwnode_endpoint *vep,
+				   struct v4l2_async_subdev *asd)
+{
+	struct sensor_async_subdev *s_asd =
+		container_of(asd, struct sensor_async_subdev, asd);
+
+	s_asd->port = vep->base.port;
+	s_asd->lanes = vep->bus.mipi_csi2.num_data_lanes;
+	dev_info(dev,
+		 "%s: s_asd->port=%d s_asd->lanes=%d\n", __func__,
+		 s_asd->port, s_asd->lanes);
+	return 0;
+}
+
 static int mtk_seninf_media_register(struct mtk_seninf *priv)
 {
 	struct v4l2_subdev *sd = &priv->subdev;
@@ -797,39 +812,12 @@ static int mtk_seninf_media_register(struct mtk_seninf *priv)
 	v4l2_async_notifier_init(&priv->notifier);
 
 	for (i = 0; i < NUM_SENSORS; ++i) {
-		struct v4l2_fwnode_endpoint vep = {
-			.bus_type = V4L2_MBUS_CSI2_DPHY
-		};
-		struct fwnode_handle *ep;
-		struct sensor_async_subdev *s_asd = NULL;
-
-		ep = fwnode_graph_get_endpoint_by_id(
-				dev_fwnode(priv->dev), i, 0,
-				FWNODE_GRAPH_ENDPOINT_NEXT);
-		if (!ep)
-			continue;
-
-		ret = v4l2_fwnode_endpoint_parse(ep, &vep);
-		if (ret)
-			goto err_parse;
-
-		s_asd = kzalloc(sizeof(*s_asd), GFP_KERNEL);
-		if (!s_asd) {
-			ret = -ENOMEM;
-			goto err_parse;
-		}
-		s_asd->port = vep.base.port;
-		s_asd->lanes = vep.bus.mipi_csi2.num_data_lanes;
-		ret = v4l2_async_notifier_add_fwnode_remote_subdev(
-				&priv->notifier, ep, &s_asd->asd);
-		if (ret)
-			goto err_parse;
-
-		fwnode_handle_put(ep);
-		continue;
-err_parse:
-		fwnode_handle_put(ep);
-		kfree(s_asd);
+		ret = v4l2_async_notifier_parse_fwnode_endpoints_by_port(
+			dev, &priv->notifier,
+			sizeof(struct sensor_async_subdev), i,
+			mtk_seninf_fwnode_parse);
+		if (ret < 0)
+			goto err_clean_entity;
 	}
 
 	priv->subdev.subdev_notifier = &priv->notifier;
@@ -849,6 +837,7 @@ err_parse:
 
 err_clean_notififer:
 	v4l2_async_notifier_cleanup(&priv->notifier);
+err_clean_entity:
 	media_entity_cleanup(&sd->entity);
 err_free_handler:
 	v4l2_ctrl_handler_free(&priv->ctrl_handler);
