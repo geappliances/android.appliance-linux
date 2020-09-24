@@ -67,17 +67,6 @@ enum SENINF_ID {
 	SENINF_NUM,
 };
 
-enum IMAGE_FMT {
-	RAW_8BIT_FMT        = 0x0,
-	RAW_10BIT_FMT       = 0x1,
-	RAW_12BIT_FMT       = 0x2,
-	YUV422_FMT          = 0x3,
-	RAW_14BIT_FMT       = 0x4,
-	RGB565_MIPI_FMT     = 0x5,
-	RGB888_MIPI_FMT     = 0x6,
-	JPEG_FMT            = 0x7
-};
-
 #define SENINF_BITS(base, reg, field, val) do { \
 		u32 __iomem *__p = (base) + (reg); \
 		u32 __v = *__p; \
@@ -150,48 +139,16 @@ static unsigned int mtk_seninf_get_dpcm(struct mtk_seninf *priv)
 	return dpcm;
 }
 
-static unsigned int mtk_seninf_map_fmt(struct mtk_seninf *priv)
+static bool mtk_seninf_fmt_is_jpeg(struct mtk_seninf *priv)
 {
-	int fmtidx = RAW_10BIT_FMT;
-
 	switch (priv->fmt[priv->active_input].format.code) {
-	case MEDIA_BUS_FMT_SBGGR8_1X8:
-	case MEDIA_BUS_FMT_SGBRG8_1X8:
-	case MEDIA_BUS_FMT_SGRBG8_1X8:
-	case MEDIA_BUS_FMT_SRGGB8_1X8:
-		fmtidx = RAW_8BIT_FMT;
-		break;
-	case MEDIA_BUS_FMT_SGRBG10_1X10:
-	case MEDIA_BUS_FMT_SRGGB10_1X10:
-	case MEDIA_BUS_FMT_SBGGR10_1X10:
-	case MEDIA_BUS_FMT_SGBRG10_1X10:
-		fmtidx = RAW_10BIT_FMT;
-		break;
-	case MEDIA_BUS_FMT_SGRBG10_DPCM8_1X8:
-	case MEDIA_BUS_FMT_SRGGB10_DPCM8_1X8:
-	case MEDIA_BUS_FMT_SBGGR10_DPCM8_1X8:
-	case MEDIA_BUS_FMT_SGBRG10_DPCM8_1X8:
-		fmtidx = RAW_8BIT_FMT;
-		break;
-	case MEDIA_BUS_FMT_SBGGR12_1X12:
-	case MEDIA_BUS_FMT_SGBRG12_1X12:
-	case MEDIA_BUS_FMT_SGRBG12_1X12:
-	case MEDIA_BUS_FMT_SRGGB12_1X12:
-		fmtidx = RAW_12BIT_FMT;
-		break;
-	case MEDIA_BUS_FMT_UYVY8_1X16:
-	case MEDIA_BUS_FMT_VYUY8_1X16:
-	case MEDIA_BUS_FMT_YUYV8_1X16:
-	case MEDIA_BUS_FMT_YVYU8_1X16:
-		fmtidx = YUV422_FMT;
-		break;
 	case MEDIA_BUS_FMT_JPEG_1X8:
 	case MEDIA_BUS_FMT_S5C_UYVY_JPEG_1X8:
-		fmtidx = JPEG_FMT;
-		break;
-	}
+		return true;
 
-	return fmtidx;
+	default:
+		return false;
+	}
 }
 
 static bool is_mbus_fmt_bayer(unsigned int mbus_fmt_code)
@@ -250,14 +207,12 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	unsigned int hs_pol = 0;
 	unsigned int vs_pol = 0;
 	unsigned int pixel_mode = TWO_PIXEL_MODE;
-	unsigned int input_data_type;
 
 	/* Enable mux */
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_SRC_SEL, MIPI_SENSOR);
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
 		    NORMAL_MODEL);
-	input_data_type = mtk_seninf_map_fmt(priv);
 
 	switch (pixel_mode) {
 	case 1: /* 2 Pixel */
@@ -278,7 +233,7 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 		    pix_sel_ext);
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
 
-	if (input_data_type != JPEG_FMT) {
+	if (!mtk_seninf_fmt_is_jpeg(priv)) {
 		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
 		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1B);
 		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1F);
