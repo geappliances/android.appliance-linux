@@ -467,7 +467,6 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_CSI2_IP_EN, 1);
 	writel(SENINF_TIMESTAMP_STEP, pseninf + SENINF_TG1_TM_STP);
 
-	phy_set_mode_ext(priv->dphy, PHY_MODE_MIPI_DPHY, priv->port);
 	phy_power_on(priv->dphy);
 
 	mtk_seninf_rx_config(priv, seninf);
