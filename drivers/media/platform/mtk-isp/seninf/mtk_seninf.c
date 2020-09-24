@@ -214,7 +214,7 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	unsigned int pix_sel;
 	unsigned int hs_pol = 0;
 	unsigned int vs_pol = 0;
-	unsigned int pixel_mode = ONE_PIXEL_MODE;
+	unsigned int pixel_mode = TWO_PIXEL_MODE;
 	unsigned int input_data_type;
 
 	/* Enable mux */
