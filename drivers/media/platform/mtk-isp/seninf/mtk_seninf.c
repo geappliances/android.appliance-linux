@@ -23,8 +23,8 @@
 #define SENINF_HS_TRAIL_PARAMETER	0x8
 
 #define NUM_PADS			12
-#define NUM_SENSORS			4
-#define CAM_MUX_IDX_MIN		NUM_SENSORS
+#define NUM_INPUTS			4
+#define CAM_MUX_IDX_MIN		NUM_INPUTS
 #define DEFAULT_WIDTH			1920
 #define DEFAULT_HEIGHT			1080
 
@@ -49,7 +49,7 @@ enum CFG_CSI_PORT {
 	CFG_CSI_PORT_0A,	/* 2D1C */
 	CFG_CSI_PORT_0B,	/* 2D1C */
 	CFG_CSI_PORT_MAX_NUM,
-	CFG_CSI_PORT_NONE	/*for non-MIPI sensor */
+	CFG_CSI_PORT_NONE	/*for non-MIPI input */
 };
 
 enum PIXEL_MODE {
@@ -86,7 +86,7 @@ enum IMAGE_FMT {
 		*__p = __v; \
 	} while (0)
 
-struct mtk_seninf_sensor_cfg {
+struct mtk_seninf_input {
 	unsigned char clock_lane;
 	unsigned short num_data_lanes;
 };
@@ -107,7 +107,7 @@ struct mtk_seninf {
 
 	struct v4l2_subdev_format fmt[NUM_PADS];
 
-	struct mtk_seninf_sensor_cfg sensor[NUM_SENSORS];
+	struct mtk_seninf_input inputs[NUM_INPUTS];
 
 	unsigned int port;
 	unsigned int mux_sel;
@@ -336,7 +336,7 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	void __iomem *seninf_base = priv->base;
 	void __iomem *pseninf = priv->base + 0x1000 * seninf;
 	unsigned int dpcm = mtk_seninf_get_dpcm(priv);
-	unsigned int data_lane_num = priv->sensor[priv->port].num_data_lanes;
+	unsigned int data_lane_num = priv->inputs[priv->port].num_data_lanes;
 	unsigned int cal_sel;
 	unsigned int data_header_order = 1;
 	unsigned int val = 0;
@@ -708,8 +708,8 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 	bool has_sensor = false;
 
 	if (on) {
-		for (i = 0; i < NUM_SENSORS; ++i)
-			if (priv->sensor[i].num_data_lanes != 0) {
+		for (i = 0; i < NUM_INPUTS; ++i)
+			if (priv->inputs[i].num_data_lanes != 0) {
 				has_sensor = true;
 				break;
 			}
@@ -768,7 +768,7 @@ static int seninf_link_setup(struct media_entity *entity,
 	} else {
 		/* Select port */
 		priv->port = local->index;
-		if (priv->port >= NUM_SENSORS) {
+		if (priv->port >= NUM_INPUTS) {
 			dev_err(dev, "port index is over number of ports\n");
 			return -EINVAL;
 		}
@@ -802,7 +802,7 @@ static int mtk_seninf_notifier_bound(
 	dev_dbg(priv->dev, "%s bound with port:%d lanes: %d\n",
 		sd->entity.name, s_asd->port, s_asd->lanes);
 
-	priv->sensor[s_asd->port].num_data_lanes = s_asd->lanes;
+	priv->inputs[s_asd->port].num_data_lanes = s_asd->lanes;
 	priv->port = s_asd->port;
 
 	ret = media_create_pad_link(&sd->entity, 0, &priv->subdev.entity,
@@ -925,7 +925,7 @@ static int mtk_seninf_media_register(struct mtk_seninf *priv)
 	sd->entity.function = MEDIA_ENT_F_VID_IF_BRIDGE;
 	sd->entity.ops = &seninf_media_ops;
 
-	for (i = 0; i < NUM_SENSORS; i++)
+	for (i = 0; i < NUM_INPUTS; i++)
 		pads[i].flags = MEDIA_PAD_FL_SINK;
 
 	for (i = CAM_MUX_IDX_MIN; i < NUM_PADS; i++)
@@ -936,7 +936,7 @@ static int mtk_seninf_media_register(struct mtk_seninf *priv)
 
 	v4l2_async_notifier_init(&priv->notifier);
 
-	for (i = 0; i < NUM_SENSORS; ++i) {
+	for (i = 0; i < NUM_INPUTS; ++i) {
 		ret = v4l2_async_notifier_parse_fwnode_endpoints_by_port(
 			dev, &priv->notifier,
 			sizeof(struct mtk_seninf_async_subdev), i,
