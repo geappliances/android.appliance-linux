@@ -193,9 +193,10 @@ static int mtk_camsv_dev_notifier_complete(struct v4l2_async_notifier *notifier)
 		return -ENODEV;
 
 	ret = media_create_pad_link(&cam->seninf->entity, seninf_pad,
-				    &cam->subdev.entity, MTK_CAMSV_CIO_PAD_SINK,
+				    &cam->subdev.entity,
+				    MTK_CAMSV_CIO_PAD_SENINF,
 				    MEDIA_LNK_FL_IMMUTABLE |
-					    MEDIA_LNK_FL_ENABLED);
+				    MEDIA_LNK_FL_ENABLED);
 	if (ret) {
 		dev_err(dev, "failed to create pad link %s %s err:%d\n",
 			cam->seninf->entity.name, cam->subdev.entity.name, ret);
@@ -254,7 +255,6 @@ static void mtk_camsv_v4l2_async_unregister(struct mtk_camsv_dev *cam)
 static int mtk_camsv_media_register(struct mtk_camsv_dev *cam,
 				    struct media_device *media_dev)
 {
-	unsigned int num_pads = ARRAY_SIZE(cam->subdev_pads);
 	struct device *dev = cam->dev;
 	unsigned int i;
 	int ret;
@@ -274,19 +274,18 @@ static int mtk_camsv_media_register(struct mtk_camsv_dev *cam,
 	}
 
 	/* Initialize subdev pads */
-	ret = media_entity_pads_init(&cam->subdev.entity, num_pads,
+	ret = media_entity_pads_init(&cam->subdev.entity,
+				     ARRAY_SIZE(cam->subdev_pads),
 				     cam->subdev_pads);
 	if (ret) {
 		dev_err(dev, "failed to initialize media pads:%d\n", ret);
 		goto fail_media_unreg;
 	}
 
-	/* Initialize all pads with MEDIA_PAD_FL_SOURCE */
-	for (i = 0; i < num_pads; i++)
-		cam->subdev_pads[i].flags = MEDIA_PAD_FL_SOURCE;
-
-	/* Customize the last one pad as CIO sink pad. */
-	cam->subdev_pads[MTK_CAMSV_CIO_PAD_SINK].flags = MEDIA_PAD_FL_SINK;
+	cam->subdev_pads[MTK_CAMSV_CIO_PAD_SENINF].flags = MEDIA_PAD_FL_SINK;
+	for (i = 0; i < MTK_CAMSV_P1_TOTAL_NODES; ++i)
+		cam->subdev_pads[MTK_CAMSV_CIO_PAD_NODE(i)].flags =
+			MEDIA_PAD_FL_SOURCE;
 
 	return 0;
 

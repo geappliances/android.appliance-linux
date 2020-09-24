@@ -631,7 +631,7 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
 		node->enabled = false;
 	mtk_camsv_dev_load_default_fmt(cam, node->desc, &node->vdev_fmt);
 
-	cam->subdev_pads[node->id].flags =
+	cam->subdev_pads[MTK_CAMSV_CIO_PAD_NODE(node->id)].flags =
 		output ? MEDIA_PAD_FL_SINK : MEDIA_PAD_FL_SOURCE;
 
 	/* Initialize media entities */
@@ -690,10 +690,13 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
 	/* Create link between video node and the subdev pad */
 	if (output)
 		ret = media_create_pad_link(&vdev->entity, 0,
-		&cam->subdev.entity, node->id, link_flags);
+					    &cam->subdev.entity,
+					    MTK_CAMSV_CIO_PAD_NODE(node->id),
+					    link_flags);
 	else
-		ret = media_create_pad_link(&cam->subdev.entity, node->id,
-		&vdev->entity, 0, link_flags);
+		ret = media_create_pad_link(&cam->subdev.entity,
+					    MTK_CAMSV_CIO_PAD_NODE(node->id),
+					    &vdev->entity, 0, link_flags);
 
 	if (ret)
 		goto fail_vdev_ureg;
