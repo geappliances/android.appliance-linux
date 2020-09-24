@@ -880,7 +880,7 @@ static int seninf_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->base))
 		return PTR_ERR(priv->base);
 
-	priv->dphy = devm_phy_get(dev, "seninf");
+	priv->dphy = devm_phy_get(dev, "mipi_dphy_rx");
 	if (IS_ERR(priv->dphy)) {
 		dev_err(dev, "failed to get phy:%d\n", PTR_ERR(priv->dphy));
 		return PTR_ERR(priv->dphy);
