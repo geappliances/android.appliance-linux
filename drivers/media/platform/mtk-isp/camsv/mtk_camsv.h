@@ -130,7 +130,7 @@ struct mtk_camsv_dev_node_desc {
 struct mtk_camsv_video_device {
 	unsigned int id;
 	unsigned int enabled;
-	struct mtk_camsv_dev_node_desc desc;
+	const struct mtk_camsv_dev_node_desc *desc;
 	struct v4l2_format vdev_fmt;
 	struct media_pad vdev_pad;
 	struct vb2_queue vbq;
