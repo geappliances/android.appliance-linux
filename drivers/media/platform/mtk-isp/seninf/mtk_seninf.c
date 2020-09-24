@@ -765,6 +765,11 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	struct sensor_async_subdev *s_asd =
 		container_of(asd, struct sensor_async_subdev, asd);
 
+	if (vep->bus_type != V4L2_MBUS_CSI2) {
+		dev_err(dev, "Only CSI2 bus type is currently supported\n");
+		return -EINVAL;
+	}
+
 	s_asd->port = vep->base.port;
 	s_asd->lanes = vep->bus.mipi_csi2.num_data_lanes;
 	dev_info(dev,
