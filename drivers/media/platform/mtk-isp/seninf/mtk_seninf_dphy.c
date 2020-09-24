@@ -317,6 +317,10 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 	priv->csi2_rx[MTK_MIPI_PHY_PORT_1] = priv->rx + CSI_PORT_1_ADDR_OFST;
 	priv->csi2_rx[MTK_MIPI_PHY_PORT_2] = priv->rx + CSI_PORT_2_ADDR_OFST;
 
+	/* TODO : As I don't know how to get the sensor port from the DT,
+	hard-coded it to 3 here to use the PORT_0A which is a 2-lanes port */
+	priv->port = 3;
+
 	phy = devm_phy_create(dev, NULL, &mtk_dphy_ops);
 	if (IS_ERR(phy)) {
 		dev_err(dev, "failed to create phy\n");
