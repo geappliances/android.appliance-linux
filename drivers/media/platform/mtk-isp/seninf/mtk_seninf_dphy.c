@@ -56,8 +56,10 @@ static inline int is_cdphy_combo(unsigned int port)
 		port == MTK_MIPI_PHY_PORT_0;
 }
 
-static void mtk_dphy_enable(struct mtk_mipi_dphy *priv)
+static int mtk_mipi_phy_power_on(struct phy *phy)
 {
+	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
+
 	void __iomem *pmipi_rx_base = priv->csi2_rx[MTK_MIPI_PHY_PORT_0];
 	unsigned int port = priv->port;
 	void __iomem *pmipi_rx = priv->csi2_rx[port];
@@ -222,10 +224,14 @@ static void mtk_dphy_enable(struct mtk_mipi_dphy *priv)
 	if (is_4d1c(port))
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSI0A,
 			  RG_CSI0A_BG_LPF_EN, 1);
+
+	return 0;
 }
 
-static void mtk_dphy_disable(struct mtk_mipi_dphy *priv)
+static int mtk_mipi_phy_power_off(struct phy *phy)
 {
+	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
+
 	void __iomem *pmipi_rx = priv->csi2_rx[priv->port];
 
 	/* Disable mipi BG */
@@ -253,22 +259,6 @@ static void mtk_dphy_disable(struct mtk_mipi_dphy *priv)
 			  RG_CSI0A_BG_LPF_EN, 0);
 		break;
 	}
-}
-
-static int mtk_mipi_phy_power_on(struct phy *phy)
-{
-	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
-
-	mtk_dphy_enable(priv);
-
-	return 0;
-}
-
-static int mtk_mipi_phy_power_off(struct phy *phy)
-{
-	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
-
-	mtk_dphy_disable(priv);
 
 	return 0;
 }
