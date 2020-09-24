@@ -492,7 +492,7 @@ static int mtk_camsv_vidioc_try_fmt(struct file *file, void *fh,
 	v4l2_fill_mbus_format_mplane(&sd_format.format, pix_mp);
 	sd_format.format.code = fourcc_to_mbus_format(pix_mp->pixelformat);
 
-	if (cam->sensor && !cam->is_testmode) {
+	if (cam->sensor) {
 		ret = v4l2_subdev_call(cam->sensor, pad, set_fmt, &pad_cfg,
 				       &sd_format);
 		if (ret < 0)
@@ -545,7 +545,7 @@ static int mtk_camsv_vidioc_s_fmt(struct file *file, void *fh,
 	sd_format.format.code =
 		fourcc_to_mbus_format(f->fmt.pix_mp.pixelformat);
 
-	if (cam->sensor && !cam->is_testmode) {
+	if (cam->sensor) {
 		ret = v4l2_subdev_call(cam->sensor, pad, set_fmt, NULL,
 				       &sd_format);
 		if (ret < 0)
