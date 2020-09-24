@@ -365,6 +365,28 @@ out:
 	mutex_unlock(&p1_dev->protect_mutex);
 }
 
+static int mtk_camsv_verify_format(struct mtk_camsv_dev *cam,
+				   struct mtk_camsv_video_device *node)
+{
+	struct v4l2_pix_format_mplane *pixfmt = &node->vdev_fmt.fmt.pix_mp;
+	struct v4l2_subdev_format fmt = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+		.pad = node->id,
+	};
+	int ret;
+
+	ret = v4l2_subdev_call(&cam->subdev, pad, get_fmt, NULL, &fmt);
+	if (ret < 0)
+		return ret == -ENOIOCTLCMD ? -EINVAL : ret;
+
+	if (fourcc_to_mbus_format(pixfmt->pixelformat) != fmt.format.code ||
+	    pixfmt->height != fmt.format.height ||
+	    pixfmt->width != fmt.format.width)
+		return -EINVAL;
+
+	return 0;
+}
+
 static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 					 unsigned int count)
 {
@@ -388,6 +410,10 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 	mtk_camsv_cmos_vf_enable(p1_dev, true, pak_en);
 
 	mutex_lock(&cam->op_lock);
+
+	ret = mtk_camsv_verify_format(cam, node);
+	if (ret < 0)
+		goto fail_unlock;
 
 	/* Start streaming of the whole pipeline now*/
 	if (!cam->pipeline.streaming_count) {
@@ -506,43 +532,19 @@ static int mtk_camsv_vidioc_try_fmt(struct file *file, void *fh,
 	struct mtk_camsv_dev *cam = video_drvdata(file);
 	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(file);
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
-	const struct v4l2_format *dev_fmt, *tmp;
-	unsigned int def_pixfmt;
 	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
-	struct v4l2_subdev_pad_config pad_cfg;
-	struct v4l2_subdev_format sd_format = {
-		.which = V4L2_SUBDEV_FORMAT_TRY,
-	};
-	int ret;
+	const struct v4l2_format *dev_fmt;
 
 	/* Validate pixelformat */
-	dev_fmt =
-		mtk_camsv_dev_find_fmt(node->desc, f->fmt.pix_mp.pixelformat);
+	dev_fmt = mtk_camsv_dev_find_fmt(node->desc, pix_mp->pixelformat);
 	if (!dev_fmt) {
-		tmp = &node->desc->fmts[node->desc->default_fmt_idx];
-		def_pixfmt = tmp->fmt.pix_mp.pixelformat;
-		f->fmt.pix_mp.pixelformat = def_pixfmt;
+		dev_fmt = &node->desc->fmts[node->desc->default_fmt_idx];
+		pix_mp->pixelformat = dev_fmt->fmt.pix_mp.pixelformat;
 	}
 
 	pix_mp->width = clamp_val(pix_mp->width, IMG_MIN_WIDTH, IMG_MAX_WIDTH);
-	pix_mp->height =
-		clamp_val(pix_mp->height, IMG_MIN_HEIGHT, IMG_MAX_HEIGHT);
-
-	v4l2_fill_mbus_format_mplane(&sd_format.format, pix_mp);
-	sd_format.format.code = fourcc_to_mbus_format(pix_mp->pixelformat);
-
-	if (cam->sensor) {
-		ret = v4l2_subdev_call(cam->sensor, pad, set_fmt, &pad_cfg,
-				       &sd_format);
-		if (ret < 0)
-			return ret;
-	}
-
-	ret = v4l2_subdev_call(cam->seninf, pad, set_fmt, &pad_cfg, &sd_format);
-	if (ret < 0)
-		return ret;
-
-	v4l2_fill_pix_format_mplane(pix_mp, &sd_format.format);
+	pix_mp->height = clamp_val(pix_mp->height, IMG_MIN_HEIGHT,
+				   IMG_MAX_HEIGHT);
 
 	pix_mp->num_planes = p1_dev->conf->enableFH ? 2 : 1;
 
@@ -563,12 +565,6 @@ static int mtk_camsv_vidioc_s_fmt(struct file *file, void *fh,
 {
 	struct mtk_camsv_dev *cam = video_drvdata(file);
 	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(file);
-
-	struct v4l2_subdev_format sd_format = {
-		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
-		.pad = 4, /* TODO: use a macro for test pattern */
-	};
-
 	int ret;
 
 	if (vb2_is_busy(node->vdev.queue)) {
@@ -578,21 +574,6 @@ static int mtk_camsv_vidioc_s_fmt(struct file *file, void *fh,
 
 	ret = mtk_camsv_vidioc_try_fmt(file, fh, f);
 	if (ret)
-		return ret;
-
-	v4l2_fill_mbus_format_mplane(&sd_format.format, &f->fmt.pix_mp);
-	sd_format.format.code =
-		fourcc_to_mbus_format(f->fmt.pix_mp.pixelformat);
-
-	if (cam->sensor) {
-		ret = v4l2_subdev_call(cam->sensor, pad, set_fmt, NULL,
-				       &sd_format);
-		if (ret < 0)
-			return ret;
-	}
-
-	ret = v4l2_subdev_call(cam->seninf, pad, set_fmt, NULL, &sd_format);
-	if (ret < 0)
 		return ret;
 
 	/* Configure to video device */
