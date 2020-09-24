@@ -754,6 +754,20 @@ static void init_fmt(struct mtk_seninf *priv)
 		priv->fmt[i] = mtk_seninf_default_fmt;
 }
 
+static struct v4l2_mbus_framefmt *
+seninf_get_pad_format(struct mtk_seninf *priv, struct v4l2_subdev_pad_config *cfg,
+		      unsigned int pad, u32 which)
+{
+	switch (which) {
+	case V4L2_SUBDEV_FORMAT_TRY:
+		return v4l2_subdev_get_try_format(&priv->subdev, cfg, pad);
+	case V4L2_SUBDEV_FORMAT_ACTIVE:
+		return &priv->fmt[pad];
+	default:
+		return NULL;
+	}
+}
+
 static int seninf_init_cfg(struct v4l2_subdev *sd,
 			   struct v4l2_subdev_pad_config *cfg)
 {
@@ -793,10 +807,7 @@ static int seninf_get_fmt(struct v4l2_subdev *sd,
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
 
-	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
-		fmt->format = *v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
-	else
-		fmt->format = priv->fmt[fmt->pad];
+	fmt->format = *seninf_get_pad_format(priv, cfg, fmt->pad, fmt->which);
 
 	return 0;
 }
@@ -806,17 +817,13 @@ static int seninf_set_fmt(struct v4l2_subdev *sd,
 			  struct v4l2_subdev_format *fmt)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
-	struct v4l2_mbus_framefmt *mf;
+	struct v4l2_mbus_framefmt *format;
 
 	if (fmt->format.code == ~0U || fmt->format.code == 0)
 		fmt->format.code = MEDIA_BUS_FMT_SRGGB10_1X10;
 
-	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
-		mf = v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
-	} else {
-		mf = &priv->fmt[fmt->pad];
-	}
-	*mf = fmt->format;
+	format = seninf_get_pad_format(priv, cfg, fmt->pad, fmt->which);
+	*format = fmt->format;
 
 	return 0;
 }
