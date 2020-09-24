@@ -6,6 +6,8 @@
 #include <linux/bits.h>
 
 #define SENINF_TOP_CTRL                                        0x0000
+#define SENINF_TOP_CTRL_MUX_LP_MODE_SHIFT 31
+#define SENINF_TOP_CTRL_MUX_LP_MODE_MASK BIT(31)
 #define SENINF_TOP_CTRL_SENINF_PCLK_SEL_SHIFT 8
 #define SENINF_TOP_CTRL_SENINF_PCLK_SEL_MASK  BIT(8)
 #define SENINF_TOP_CTRL_SENINF2_PCLK_SEL_SHIFT 9
