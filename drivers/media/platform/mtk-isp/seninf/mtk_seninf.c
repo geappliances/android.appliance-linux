@@ -752,26 +752,21 @@ static int seninf_link_setup(struct media_entity *entity,
 			     const struct media_pad *local,
 			     const struct media_pad *remote, u32 flags)
 {
-	struct v4l2_subdev *sd;
-	struct mtk_seninf *priv;
-	struct device *dev;
+	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(entity);
+	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
+	struct device *dev = priv->dev;
 
-	sd = media_entity_to_v4l2_subdev(entity);
-	priv = v4l2_get_subdevdata(sd);
-	dev = priv->dev;
+	if (!(local->flags & MEDIA_PAD_FL_SINK))
+		return 0;
 
 	if (!(flags & MEDIA_LNK_FL_ENABLED))
 		return 0;
 
-	if (local->flags & MEDIA_PAD_FL_SOURCE) {
-		priv->mux_sel = local->index - CAM_MUX_IDX_MIN;
-	} else {
-		/* Select port */
-		priv->port = local->index;
-		if (priv->port >= NUM_INPUTS) {
-			dev_err(dev, "port index is over number of ports\n");
-			return -EINVAL;
-		}
+	/* Select port */
+	priv->port = local->index;
+	if (priv->port >= NUM_INPUTS) {
+		dev_err(dev, "port index is over number of ports\n");
+		return -EINVAL;
 	}
 
 	return 0;
@@ -1015,9 +1010,11 @@ static int seninf_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	/* TODO: For some unknown reason, seninf_link_setup is not called,
-	so priv->mux_sel is not set. mux_sel = 0 is OK for now as we only
-	have one sensor. Try to fix it when multiple sensors are used. */
+	/*
+	 * TODO: Support multiple source connections. For now only the first
+	 * source port is used, hardcode mux_sel to 0.
+	 */
+	priv->mux_sel = 0;
 
 	ret = mtk_seninf_media_register(priv);
 	if (!ret) /* register success */
