@@ -452,7 +452,7 @@ static void mtk_seninf_power_off(struct mtk_seninf *priv)
 }
 
 static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
-	.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
 	.width = DEFAULT_WIDTH,
 	.height = DEFAULT_HEIGHT,
 	.field = V4L2_FIELD_NONE,
@@ -492,7 +492,7 @@ static int seninf_set_fmt(struct v4l2_subdev *sd,
 	struct v4l2_mbus_framefmt *mf;
 
 	if (fmt->format.code == ~0U || fmt->format.code == 0)
-		fmt->format.code = MEDIA_BUS_FMT_SBGGR10_1X10;
+		fmt->format.code = MEDIA_BUS_FMT_SRGGB10_1X10;
 
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
 		mf = v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
