@@ -624,7 +624,7 @@ static int mtk_seninf_notifier_bound(
 	priv->sensor[s_asd->port].num_data_lanes = s_asd->lanes;
 
 	ret = media_create_pad_link(&sd->entity, 0, &priv->subdev.entity,
-				    s_asd->port, 0);
+				    s_asd->port, MEDIA_LNK_FL_ENABLED);
 	if (ret) {
 		dev_err(priv->dev, "failed to create link for %s\n",
 			sd->entity.name);
