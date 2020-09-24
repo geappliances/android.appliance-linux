@@ -228,35 +228,6 @@ static const struct mtk_seninf_format_info *mtk_seninf_format_info(u32 code)
 	return NULL;
 }
 
-static unsigned int mtk_seninf_get_dpcm(struct mtk_seninf *priv)
-{
-	const struct mtk_seninf_format_info *fmtinfo;
-	u32 code = priv->fmt[priv->active_input].code;
-
-	fmtinfo = mtk_seninf_format_info(code);
-	if (fmtinfo && fmtinfo->flags & MTK_SENINF_FORMAT_DPCM)
-		return 0x2a;
-	else
-		return 0;
-}
-
-static bool mtk_seninf_fmt_is_jpeg(struct mtk_seninf *priv)
-{
-	const struct mtk_seninf_format_info *fmtinfo;
-	u32 code = priv->fmt[priv->active_input].code;
-
-	fmtinfo = mtk_seninf_format_info(code);
-	return fmtinfo && fmtinfo->flags & MTK_SENINF_FORMAT_JPEG;
-}
-
-static bool is_mbus_fmt_bayer(unsigned int mbus_fmt_code)
-{
-	const struct mtk_seninf_format_info *fmtinfo;
-
-	fmtinfo = mtk_seninf_format_info(mbus_fmt_code);
-	return fmtinfo && fmtinfo->flags & MTK_SENINF_FORMAT_BAYER;
-}
-
 /* -----------------------------------------------------------------------------
  * Hardware Configuration
  */
@@ -291,6 +262,7 @@ static u32 mtk_seninf_csi_port_to_seninf(u32 port)
 static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 			       unsigned int seninf)
 {
+	const struct mtk_seninf_format_info *fmtinfo;
 	unsigned int mux = priv->mux_sel;
 	void __iomem *pseninf_top = priv->base;
 	void __iomem *pseninf = priv->base + 0x1000 * mux;
@@ -300,6 +272,8 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	unsigned int hs_pol = 0;
 	unsigned int vs_pol = 0;
 	unsigned int pixel_mode = TWO_PIXEL_MODE;
+
+	fmtinfo = mtk_seninf_format_info(priv->fmt[priv->active_input].code);
 
 	/* Enable mux */
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
@@ -327,7 +301,7 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 		    pix_sel_ext);
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
 
-	if (!mtk_seninf_fmt_is_jpeg(priv)) {
+	if (!(fmtinfo->flags & MTK_SENINF_FORMAT_JPEG)) {
 		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
 		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1B);
 		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1F);
@@ -381,14 +355,17 @@ static void mtk_seninf_rx_config(struct mtk_seninf *priv,
 static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 				    unsigned int seninf)
 {
+	const struct mtk_seninf_format_info *fmtinfo;
 	void __iomem *seninf_base = priv->base;
 	void __iomem *pseninf = priv->base + 0x1000 * seninf;
-	unsigned int dpcm = mtk_seninf_get_dpcm(priv);
+	unsigned int dpcm;
 	unsigned int data_lane_num =
 		priv->inputs[priv->active_input].num_data_lanes;
 	unsigned int cal_sel;
 	unsigned int data_header_order = 1;
 	unsigned int val = 0;
+
+	fmtinfo = mtk_seninf_format_info(priv->fmt[priv->active_input].code);
 
 	dev_dbg(priv->dev, "IS_4D1C %d port %d\n",
 		is_4d1c(priv->active_input), priv->active_input);
@@ -443,6 +420,7 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_NCSI2_IP_EN, 0);
 
 	/* DPCM Enable */
+	dpcm = fmtinfo->flags & MTK_SENINF_FORMAT_DPCM ? 0x2a : 0;
 	val = 1 << ((dpcm == 0x2a) ? 15 : ((dpcm & 0xF) + 7));
 	writel(val, pseninf + SENINF_CSI2_DPCM);
 
@@ -498,6 +476,7 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 
 static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 {
+	const struct mtk_seninf_format_info *fmtinfo;
 	void __iomem *pseninf = priv->base;
 	unsigned int val;
 	unsigned int pixel_mode = TWO_PIXEL_MODE;
@@ -507,8 +486,9 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	unsigned int vs_pol = 0;
 	unsigned int seninf = 0;
 	unsigned int mux = 0;
-	bool isBayer;
 	int ret;
+
+	fmtinfo = mtk_seninf_format_info(priv->fmt[SENINF_NUM_PADS - 1].code);
 
 	ret = pm_runtime_get_sync(priv->dev);
 	if (ret < 0) {
@@ -531,9 +511,7 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_VSYNC, 4);
 	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_DUMMYPXL, 0x28);
 
-	isBayer = is_mbus_fmt_bayer(priv->fmt[SENINF_NUM_PADS - 1].code);
-
-	if (isBayer)
+	if (fmtinfo->flags & MTK_SENINF_FORMAT_BAYER)
 		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x0);
 	else
 		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x1);
