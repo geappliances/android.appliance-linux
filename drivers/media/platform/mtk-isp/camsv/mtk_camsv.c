@@ -642,7 +642,7 @@ static int mtk_camsv_vidioc_s_fmt(struct file *file, void *fh,
 
 	struct v4l2_subdev_format sd_format = {
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
-		.pad = 11, /* TODO: use a macro for test pattern */
+		.pad = 4, /* TODO: use a macro for test pattern */
 	};
 
 	int ret;
