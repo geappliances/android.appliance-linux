@@ -52,11 +52,26 @@ mtk_camsv_dev_find_fmt(const struct mtk_camsv_dev_node_desc *desc, u32 format)
 static unsigned int fourcc_to_mbus_format(unsigned int fourcc)
 {
 	switch (fourcc) {
+	case V4L2_PIX_FMT_SBGGR10:
+	case V4L2_PIX_FMT_SBGGR10P:
+		return MEDIA_BUS_FMT_SBGGR10_1X10;
+	case V4L2_PIX_FMT_SGBRG10:
+	case V4L2_PIX_FMT_SGBRG10P:
+		return MEDIA_BUS_FMT_SGBRG10_1X10;
+	case V4L2_PIX_FMT_SGRBG10:
+	case V4L2_PIX_FMT_SGRBG10P:
+		return MEDIA_BUS_FMT_SGRBG10_1X10;
 	case V4L2_PIX_FMT_SRGGB10:
 	case V4L2_PIX_FMT_SRGGB10P:
 		return MEDIA_BUS_FMT_SRGGB10_1X10;
+	case V4L2_PIX_FMT_SBGGR8:
+		return MEDIA_BUS_FMT_SBGGR8_1X8;
+	case V4L2_PIX_FMT_SGBRG8:
+		return MEDIA_BUS_FMT_SGBRG8_1X8;
 	case V4L2_PIX_FMT_SGRBG8:
 		return MEDIA_BUS_FMT_SGRBG8_1X8;
+	case V4L2_PIX_FMT_SRGGB8:
+		return MEDIA_BUS_FMT_SRGGB8_1X8;
 	case V4L2_PIX_FMT_YUYV:
 		return MEDIA_BUS_FMT_YUYV8_2X8;
 	case V4L2_PIX_FMT_YVYU:
@@ -73,8 +88,14 @@ static unsigned int fourcc_to_mbus_format(unsigned int fourcc)
 static bool is_format_pak(unsigned int mbus_fmt)
 {
 	switch (mbus_fmt) {
+	case MEDIA_BUS_FMT_SBGGR10_1X10:
+	case MEDIA_BUS_FMT_SGBRG10_1X10:
+	case MEDIA_BUS_FMT_SGRBG10_1X10:
 	case MEDIA_BUS_FMT_SRGGB10_1X10:
+	case MEDIA_BUS_FMT_SBGGR8_1X8:
+	case MEDIA_BUS_FMT_SGBRG8_1X8:
 	case MEDIA_BUS_FMT_SGRBG8_1X8:
+	case MEDIA_BUS_FMT_SRGGB8_1X8:
 		return true;
 	case MEDIA_BUS_FMT_YUYV8_2X8:
 		return false;
@@ -86,10 +107,19 @@ static bool is_format_pak(unsigned int mbus_fmt)
 static unsigned int calc_bpp(unsigned int fourcc)
 {
 	switch (fourcc) {
+	case V4L2_PIX_FMT_SBGGR10:
+	case V4L2_PIX_FMT_SBGGR10P:
+	case V4L2_PIX_FMT_SGBRG10:
+	case V4L2_PIX_FMT_SGBRG10P:
+	case V4L2_PIX_FMT_SGRBG10:
+	case V4L2_PIX_FMT_SGRBG10P:
 	case V4L2_PIX_FMT_SRGGB10:
 	case V4L2_PIX_FMT_SRGGB10P:
 		return 10;
+	case V4L2_PIX_FMT_SBGGR8:
+	case V4L2_PIX_FMT_SGBRG8:
 	case V4L2_PIX_FMT_SGRBG8:
+	case V4L2_PIX_FMT_SRGGB8:
 	case V4L2_PIX_FMT_YUYV:
 	case V4L2_PIX_FMT_YVYU:
 	case V4L2_PIX_FMT_UYVY:
@@ -105,9 +135,18 @@ static unsigned int calc_bpl(unsigned int width, unsigned int fourcc)
 	unsigned int bpp = calc_bpp(fourcc);
 
 	switch (fourcc) {
+	case V4L2_PIX_FMT_SBGGR10:
+	case V4L2_PIX_FMT_SBGGR10P:
+	case V4L2_PIX_FMT_SGBRG10:
+	case V4L2_PIX_FMT_SGBRG10P:
+	case V4L2_PIX_FMT_SGRBG10:
+	case V4L2_PIX_FMT_SGRBG10P:
 	case V4L2_PIX_FMT_SRGGB10:
 	case V4L2_PIX_FMT_SRGGB10P:
+	case V4L2_PIX_FMT_SBGGR8:
+	case V4L2_PIX_FMT_SGBRG8:
 	case V4L2_PIX_FMT_SGRBG8:
+	case V4L2_PIX_FMT_SRGGB8:
 		return DIV_ROUND_UP(width * bpp, 8);
 	case V4L2_PIX_FMT_YUYV:
 	case V4L2_PIX_FMT_YVYU:
@@ -728,7 +767,7 @@ static const struct v4l2_format stream_out_fmts[] = {
 		.fmt.pix_mp = {
 			.width = 1920,
 			.height = 1080,
-			.pixelformat = V4L2_PIX_FMT_SRGGB10,
+			.pixelformat = V4L2_PIX_FMT_SGRBG10,
 		},
 	},
 
