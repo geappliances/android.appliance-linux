@@ -332,7 +332,7 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static const struct of_device_id mtk_mipi_dphy_of_match[] = {
-	{.compatible = "mediatek,mt8183-mipi_dphy"},
+	{.compatible = "mediatek,mt8183-mipi-dphy"},
 	{},
 };
 MODULE_DEVICE_TABLE(of, mtk_mipi_dphy_of_match);
@@ -341,7 +341,7 @@ MODULE_DEVICE_TABLE(of, mtk_mipi_dphy_of_match);
 static struct platform_driver mipi_dphy_pdrv = {
 	.probe	= mipi_dphy_probe,
 	.driver	= {
-		.name	= "mipi_dphy",
+		.name	= "mtk-mipi-dphy",
 		.of_match_table = of_match_ptr(mtk_mipi_dphy_of_match),
 	},
 };
