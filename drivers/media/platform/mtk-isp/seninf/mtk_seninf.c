@@ -256,8 +256,9 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
 
-	val = (readl(pseninf + SENINF_MUX_CTRL) | 0x3) & 0xFFFFFFFC;
-	writel(val, pseninf + SENINF_MUX_CTRL);
+	val = readl(pseninf + SENINF_MUX_CTRL);
+	writel(val | 0x00000003, pseninf + SENINF_MUX_CTRL);
+	writel(val & 0xFFFFFFFC, pseninf + SENINF_MUX_CTRL);
 
 	/* Set top mux */
 	val = (readl(pseninf_top + SENINF_TOP_MUX_CTRL) &
