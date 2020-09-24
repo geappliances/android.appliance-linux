@@ -20,6 +20,9 @@ static const struct mtk_camsv_conf camsv_conf = {
 static void fmt_to_sparams(u32 mbus_fmt, struct mtk_camsv_sparams *sparams)
 {
 	switch (mbus_fmt) {
+	case MEDIA_BUS_FMT_SBGGR10_1X10:
+	case MEDIA_BUS_FMT_SGBRG10_1X10:
+	case MEDIA_BUS_FMT_SGRBG10_1X10:
 	case MEDIA_BUS_FMT_SRGGB10_1X10:
 		sparams->w_factor = 1;
 		sparams->module_en_pak = 0x4;
@@ -27,7 +30,10 @@ static void fmt_to_sparams(u32 mbus_fmt, struct mtk_camsv_sparams *sparams)
 		sparams->pak = 0x11;
 		sparams->imgo_stride = 0x01030000;
 		break;
+	case MEDIA_BUS_FMT_SBGGR8_1X8:
+	case MEDIA_BUS_FMT_SGBRG8_1X8:
 	case MEDIA_BUS_FMT_SGRBG8_1X8:
+	case MEDIA_BUS_FMT_SRGGB8_1X8:
 		sparams->w_factor = 1;
 		sparams->module_en_pak = 0x4;
 		sparams->fmt_sel = 0x0;
