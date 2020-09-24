@@ -201,7 +201,7 @@ static int mtk_camsv_cio_stream_on(struct mtk_camsv_dev *cam)
 	if (ret) {
 		dev_err(dev, "failed to stream on %s:%d\n",
 			cam->seninf->entity.name, ret);
-		goto fail_seninf_off;
+		return ret;
 	}
 
 	/* Get active sensor from graph topology */
@@ -210,11 +210,6 @@ static int mtk_camsv_cio_stream_on(struct mtk_camsv_dev *cam)
 	cam->streaming = true;
 
 	return 0;
-
-fail_seninf_off:
-	v4l2_subdev_call(cam->seninf, video, s_stream, 0);
-
-	return ret;
 }
 
 static int mtk_camsv_cio_stream_off(struct mtk_camsv_dev *cam)
