@@ -754,7 +754,6 @@ static int seninf_link_setup(struct media_entity *entity,
 {
 	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(entity);
 	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
-	struct device *dev = priv->dev;
 
 	if (!(local->flags & MEDIA_PAD_FL_SINK))
 		return 0;
@@ -764,10 +763,6 @@ static int seninf_link_setup(struct media_entity *entity,
 
 	/* Select port */
 	priv->port = local->index;
-	if (priv->port >= NUM_INPUTS) {
-		dev_err(dev, "port index is over number of ports\n");
-		return -EINVAL;
-	}
 
 	return 0;
 }
