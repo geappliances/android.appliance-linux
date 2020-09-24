@@ -9,7 +9,6 @@
 #include <media/media-entity.h>
 #include <media/v4l2-async.h>
 #include <media/v4l2-device.h>
-#include <media/v4l2-event.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
@@ -109,20 +108,6 @@ static int mtk_camsv_sd_s_stream(struct v4l2_subdev *sd, int enable)
 	return mtk_camsv_cio_stream_off(cam);
 }
 
-static int mtk_camsv_sd_subscribe_event(struct v4l2_subdev *subdev,
-					struct v4l2_fh *fh,
-					struct v4l2_event_subscription *sub)
-{
-	switch (sub->type) {
-	case V4L2_EVENT_FRAME_SYNC:
-		return v4l2_event_subscribe(fh, sub, 0, NULL);
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 static int mtk_camsv_media_link_setup(struct media_entity *entity,
 				      const struct media_pad *local,
 				      const struct media_pad *remote, u32 flags)
@@ -141,17 +126,11 @@ static int mtk_camsv_media_link_setup(struct media_entity *entity,
 	return 0;
 }
 
-static const struct v4l2_subdev_core_ops mtk_camsv_subdev_core_ops = {
-	.subscribe_event = mtk_camsv_sd_subscribe_event,
-	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
-};
-
 static const struct v4l2_subdev_video_ops mtk_camsv_subdev_video_ops = {
 	.s_stream = mtk_camsv_sd_s_stream,
 };
 
 static const struct v4l2_subdev_ops mtk_camsv_subdev_ops = {
-	.core = &mtk_camsv_subdev_core_ops,
 	.video = &mtk_camsv_subdev_video_ops,
 };
 
@@ -238,8 +217,7 @@ static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 
 	cam->subdev.entity.function = MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER;
 	cam->subdev.entity.ops = &mtk_camsv_media_entity_ops;
-	cam->subdev.flags =
-		V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
+	cam->subdev.flags = V4L2_SUBDEV_FL_HAS_DEVNODE;
 	snprintf(cam->subdev.name, sizeof(cam->subdev.name), "%s",
 		 dev_driver_string(dev));
 	v4l2_set_subdevdata(&cam->subdev, cam);
