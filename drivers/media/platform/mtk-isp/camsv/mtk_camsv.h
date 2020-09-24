@@ -54,6 +54,9 @@
 #define IMG_MIN_WIDTH 80
 #define IMG_MIN_HEIGHT 60
 
+#define MTK_CAMSV_CIO_PAD_SRC 4
+#define MTK_CAMSV_CIO_PAD_SINK 11
+
 enum TEST_MODE { TEST_PATTERN_DISABLED = 0x0, TEST_PATTERN_SENINF };
 
 /*
@@ -147,7 +150,7 @@ struct mtk_camsv_video_device {
  * @subdev: The V4L2 sub-device instance.
  * @v4l2_dev: The V4L2 device driver instance.
  * @notifier: The v4l2_device notifier data.
- * @subdev_pads: Pointer to the number of media pads of this sub-device.
+ * @subdev_pads: Mmedia pads of this sub-device.
  * @vdev_nodes: The array list of mtk_camsv_video_device nodes.
  * @seninf: Pointer to the seninf sub-device.
  * @sensor: Pointer to the active sensor V4L2 sub-device when streaming on.
@@ -163,7 +166,7 @@ struct mtk_camsv_dev {
 	struct v4l2_subdev subdev;
 	struct v4l2_device v4l2_dev;
 	struct v4l2_async_notifier notifier;
-	struct media_pad *subdev_pads;
+	struct media_pad subdev_pads[MTK_CAMSV_CIO_PAD_SINK+1];
 	struct mtk_camsv_video_device vdev_nodes[MTK_CAMSV_P1_TOTAL_NODES];
 	struct v4l2_subdev *seninf;
 	struct v4l2_subdev *sensor;

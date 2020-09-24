@@ -14,9 +14,6 @@
 
 #include "mtk_camsv.h"
 
-#define MTK_CAMSV_CIO_PAD_SRC 4
-#define MTK_CAMSV_CIO_PAD_SINK 11
-
 static struct v4l2_subdev *
 mtk_camsv_cio_get_active_sensor(struct mtk_camsv_dev *cam)
 {
@@ -142,10 +139,10 @@ static const struct media_entity_operations mtk_camsv_media_entity_ops = {
 static int mtk_camsv_media_register(struct mtk_camsv_dev *cam,
 				    struct media_device *media_dev)
 {
-	/* Reserved MTK_CAMSV_CIO_PAD_SINK + 1 pads to use */
-	unsigned int num_pads = MTK_CAMSV_CIO_PAD_SINK + 1;
+	unsigned int num_pads = ARRAY_SIZE(cam->subdev_pads);
 	struct device *dev = cam->dev;
-	int i, ret;
+	unsigned int i;
+	int ret;
 
 	media_dev->dev = cam->dev;
 	strscpy(media_dev->model, dev_driver_string(dev),
@@ -162,14 +159,6 @@ static int mtk_camsv_media_register(struct mtk_camsv_dev *cam,
 	}
 
 	/* Initialize subdev pads */
-	cam->subdev_pads = devm_kcalloc(dev, num_pads,
-					sizeof(*cam->subdev_pads), GFP_KERNEL);
-	if (!cam->subdev_pads) {
-		dev_err(dev, "failed to allocate subdev_pads\n");
-		ret = -ENOMEM;
-		goto fail_media_unreg;
-	}
-
 	ret = media_entity_pads_init(&cam->subdev.entity, num_pads,
 				     cam->subdev_pads);
 	if (ret) {
