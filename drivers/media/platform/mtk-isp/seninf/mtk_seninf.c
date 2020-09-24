@@ -960,7 +960,7 @@ MODULE_DEVICE_TABLE(of, mtk_seninf_of_match);
 
 static struct platform_driver seninf_pdrv = {
 	.driver	= {
-		.name	= "seninf",
+		.name	= "mtk-seninf",
 		.pm  = &runtime_pm_ops,
 		.of_match_table = of_match_ptr(mtk_seninf_of_match),
 	},
