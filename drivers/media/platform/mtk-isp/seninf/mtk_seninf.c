@@ -25,8 +25,8 @@
 #define NUM_PADS			12
 #define NUM_SENSORS			4
 #define CAM_MUX_IDX_MIN		NUM_SENSORS
-#define DEFAULT_WIDTH			1600
-#define DEFAULT_HEIGHT			1200
+#define DEFAULT_WIDTH			1920
+#define DEFAULT_HEIGHT			1080
 
 #define PAD_10BIT			0
 
