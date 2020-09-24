@@ -20,14 +20,13 @@
 #define CSI1A_OFST              0
 #define CSI1B_OFST              0x1000
 
-enum CFG_CSI_PORT {
-	CFG_CSI_PORT_0 = 0x0,	/* 4D1C */
-	CFG_CSI_PORT_1,		/* 4D1C */
-	CFG_CSI_PORT_2,		/* 4D1C */
-	CFG_CSI_PORT_0A,	/* 2D1C */
-	CFG_CSI_PORT_0B,	/* 2D1C */
-	CFG_CSI_PORT_MAX_NUM,
-	CFG_CSI_PORT_NONE	/*for non-MIPI sensor */
+enum {
+	MTK_MIPI_PHY_PORT_0 = 0x0, /* 4D1C */
+	MTK_MIPI_PHY_PORT_1, /* 4D1C */
+	MTK_MIPI_PHY_PORT_2, /* 4D1C */
+	MTK_MIPI_PHY_PORT_0A, /* 2D1C */
+	MTK_MIPI_PHY_PORT_0B, /* 2D1C */
+	MTK_MIPI_PHY_PORT_MAX_NUM
 };
 
 #define MIPI_BITS(base, reg, field, val) do { \
@@ -41,25 +40,25 @@ enum CFG_CSI_PORT {
 struct mtk_mipi_dphy {
 	struct device *dev;
 	void __iomem *rx;
-	unsigned char __iomem *csi2_rx[CFG_CSI_PORT_MAX_NUM];
+	unsigned char __iomem *csi2_rx[MTK_MIPI_PHY_PORT_MAX_NUM];
 	unsigned int port;
 };
 
 static inline int is_4d1c(unsigned int port)
 {
-	return port < CFG_CSI_PORT_0A;
+	return port < MTK_MIPI_PHY_PORT_0A;
 }
 
 static inline int is_cdphy_combo(unsigned int port)
 {
-	return port == CFG_CSI_PORT_0A ||
-		port == CFG_CSI_PORT_0B ||
-		port == CFG_CSI_PORT_0;
+	return port == MTK_MIPI_PHY_PORT_0A ||
+		port == MTK_MIPI_PHY_PORT_0B ||
+		port == MTK_MIPI_PHY_PORT_0;
 }
 
 static void mtk_dphy_enable(struct mtk_mipi_dphy *priv)
 {
-	void __iomem *pmipi_rx_base = priv->csi2_rx[CFG_CSI_PORT_0];
+	void __iomem *pmipi_rx_base = priv->csi2_rx[MTK_MIPI_PHY_PORT_0];
 	unsigned int port = priv->port;
 	void __iomem *pmipi_rx = priv->csi2_rx[port];
 
@@ -231,13 +230,13 @@ static void mtk_dphy_disable(struct mtk_mipi_dphy *priv)
 
 	/* Disable mipi BG */
 	switch (priv->port) {
-	case CFG_CSI_PORT_0A:
+	case MTK_MIPI_PHY_PORT_0A:
 		MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSI0A,
 			  RG_CSI0A_BG_CORE_EN, 0);
 		MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSI0A,
 			  RG_CSI0A_BG_LPF_EN, 0);
 		break;
-	case CFG_CSI_PORT_0B:
+	case MTK_MIPI_PHY_PORT_0B:
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSI0A,
 			  RG_CSI0A_BG_CORE_EN, 0);
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSI0A,
@@ -312,11 +311,11 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->rx))
 		return PTR_ERR(priv->rx);
 
-	priv->csi2_rx[CFG_CSI_PORT_0]  = priv->rx;
-	priv->csi2_rx[CFG_CSI_PORT_0A] = priv->rx + CSI_PORT_0A_ADDR_OFST;
-	priv->csi2_rx[CFG_CSI_PORT_0B] = priv->rx + CSI_PORT_0B_ADDR_OFST;
-	priv->csi2_rx[CFG_CSI_PORT_1]  = priv->rx + CSI_PORT_1_ADDR_OFST;
-	priv->csi2_rx[CFG_CSI_PORT_2]  = priv->rx + CSI_PORT_2_ADDR_OFST;
+	priv->csi2_rx[MTK_MIPI_PHY_PORT_0] = priv->rx;
+	priv->csi2_rx[MTK_MIPI_PHY_PORT_0A] = priv->rx + CSI_PORT_0A_ADDR_OFST;
+	priv->csi2_rx[MTK_MIPI_PHY_PORT_0B] = priv->rx + CSI_PORT_0B_ADDR_OFST;
+	priv->csi2_rx[MTK_MIPI_PHY_PORT_1] = priv->rx + CSI_PORT_1_ADDR_OFST;
+	priv->csi2_rx[MTK_MIPI_PHY_PORT_2] = priv->rx + CSI_PORT_2_ADDR_OFST;
 
 	phy = devm_phy_create(dev, NULL, &mtk_dphy_ops);
 	if (IS_ERR(phy)) {
