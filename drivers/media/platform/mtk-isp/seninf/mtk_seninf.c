@@ -785,7 +785,6 @@ static const struct media_entity_operations seninf_media_ops = {
 struct mtk_seninf_async_subdev {
 	struct v4l2_async_subdev asd;
 	u32 port;
-	u32 lanes;
 };
 
 static int mtk_seninf_notifier_bound(
@@ -799,10 +798,9 @@ static int mtk_seninf_notifier_bound(
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
 	int ret;
 
-	dev_dbg(priv->dev, "%s bound with port:%d lanes: %d\n",
-		sd->entity.name, s_asd->port, s_asd->lanes);
+	dev_dbg(priv->dev, "%s bound to input %u\n", sd->entity.name,
+		s_asd->port);
 
-	priv->inputs[s_asd->port].num_data_lanes = s_asd->lanes;
 	priv->port = s_asd->port;
 
 	ret = media_create_pad_link(&sd->entity, 0, &priv->subdev.entity,
@@ -882,19 +880,22 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 				   struct v4l2_fwnode_endpoint *vep,
 				   struct v4l2_async_subdev *asd)
 {
+	struct mtk_seninf *priv = dev_get_drvdata(dev);
 	struct mtk_seninf_async_subdev *s_asd =
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
+	unsigned int port = vep->base.port;
 
 	if (vep->bus_type != V4L2_MBUS_CSI2_DPHY) {
 		dev_err(dev, "Only CSI2 bus type is currently supported\n");
 		return -EINVAL;
 	}
 
-	s_asd->port = vep->base.port;
-	s_asd->lanes = vep->bus.mipi_csi2.num_data_lanes;
-	dev_info(dev,
-		 "%s: s_asd->port=%d s_asd->lanes=%d\n", __func__,
-		 s_asd->port, s_asd->lanes);
+	priv->inputs[port].num_data_lanes = vep->bus.mipi_csi2.num_data_lanes;
+	s_asd->port = port;
+
+	dev_info(dev, "%s: input %u uses %u data lanes\n", __func__, port,
+		 vep->bus.mipi_csi2.num_data_lanes);
+
 	return 0;
 }
 
