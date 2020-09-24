@@ -814,7 +814,7 @@ static int mtk_seninf_media_register(struct mtk_seninf *priv)
 	if (ret < 0)
 		goto err_free_handler;
 
-	v4l2_async_notifier_init(&priv->notifier);
+	// v4l2_async_notifier_init(&priv->notifier);
 
 	for (i = 0; i < NUM_SENSORS; ++i) {
 		ret = v4l2_async_notifier_parse_fwnode_endpoints_by_port(
