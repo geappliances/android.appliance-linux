@@ -991,7 +991,7 @@ static int seninf_probe(struct platform_device *pdev)
 
 	priv->dphy = devm_phy_get(dev, "mipi_dphy_rx");
 	if (IS_ERR(priv->dphy)) {
-		dev_err(dev, "failed to get phy:%d\n", PTR_ERR(priv->dphy));
+		dev_err(dev, "failed to get phy:%ld\n", PTR_ERR(priv->dphy));
 		return PTR_ERR(priv->dphy);
 	}
 	priv->num_clks = ARRAY_SIZE(clk_names);
