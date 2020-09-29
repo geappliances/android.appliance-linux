@@ -136,6 +136,10 @@
 	};
 
 	hdmi_pins_default: hdmi_pins_default {
+		pins_pwr {
+			pinmux = <MT8167_PIN_20_EINT20__FUNC_GPIO20>;
+			output-high;
+		};
 	};
 
 	hdmi_pins_hpd: hdmi_pins_hpd {
