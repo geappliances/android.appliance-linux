@@ -767,6 +767,14 @@ static const struct v4l2_format stream_out_fmts[] = {
 			.pixelformat = V4L2_PIX_FMT_YUYV,
 		},
 	},
+
+	{
+		.fmt.pix_mp = {
+			.width = 1920,
+			.height = 1080,
+			.pixelformat = V4L2_PIX_FMT_SRGGB10,
+		},
+	},
 };
 
 static const struct mtk_camsv_dev_node_desc capture_queues[] = {
