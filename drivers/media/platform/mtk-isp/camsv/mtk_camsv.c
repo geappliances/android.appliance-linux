@@ -115,7 +115,7 @@ static int mtk_camsv_init_cfg(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_pad_config *cfg)
 {
 	static const struct v4l2_mbus_framefmt def_format = {
-		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
 		.width = IMG_DEF_WIDTH,
 		.height = IMG_DEF_HEIGHT,
 		.field = V4L2_FIELD_NONE,

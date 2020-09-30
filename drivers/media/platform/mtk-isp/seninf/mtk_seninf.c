@@ -714,7 +714,7 @@ static int seninf_initialize_controls(struct mtk_seninf *priv)
  */
 
 static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
-	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+	.code = MEDIA_BUS_FMT_SGRBG10_1X10,
 	.width = SENINF_DEFAULT_WIDTH,
 	.height = SENINF_DEFAULT_HEIGHT,
 	.field = V4L2_FIELD_NONE,
