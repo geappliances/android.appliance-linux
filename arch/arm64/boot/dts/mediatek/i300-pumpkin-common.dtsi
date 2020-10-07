@@ -499,8 +499,12 @@
 	sd-uhs-sdr104;
 	vmmc-supply = <&mt6392_vmch_reg>;
 	vqmmc-supply = <&mt6392_vio18_reg>;
-//	vqmmc-supply = <&mt6392_vmc_reg>;
 	status = "okay";
+};
+
+&mt6392_vmc_reg {
+	/* to power on U9737 which is needed for SD card support */
+	regulator-always-on;
 };
 
 &ethernet {
