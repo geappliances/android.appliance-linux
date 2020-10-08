@@ -616,7 +616,6 @@ static void rpmsg_apu_release_device(struct device *dev)
 	ida_simple_remove(&rpmsg_ctrl_ida, dev->id);
 	ida_simple_remove(&rpmsg_minor_ida, MINOR(dev->devt));
 	cdev_del(&apu->cdev);
-	kfree(apu);
 }
 
 static int apu_rpmsg_probe(struct rpmsg_device *rpdev)
