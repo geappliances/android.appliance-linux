@@ -3,7 +3,7 @@
 Mediatek MIPI-CSI2 receiver is the MIPI Signal capture hardware present in Mediatek SoCs
 
 Required properties:
-- compatible: should be "mediatek,mt2712-mipicsi"
+- compatible: should be "mediatek,mt8167-mipicsi"
 - reg : physical base address of the mipicsi receiver registers and length of
   memory mapped region.
 - power-domains: a phandle to the power domain, see
@@ -14,45 +14,22 @@ Required properties:
 - iommus: should point to the respective IOMMU block with master port as
   argument, see Documentation/devicetree/bindings/iommu/mediatek,iommu.txt
   for details.
-- mediatek,seninf_mux_camsv: seninf_mux_camsv the data go through of the mipicsi port
-  any mipicsi port can contain max four seninf_mux_camsv
-  The Total seninf_mux_camsv is six for mt2712
-- mediatek,mipicsiid: the id of the mipicsi port, there are two port for mt2712
-- mediatek,mipicsi: the common component of the two mipicsi port
-- mediatek,mipicsi_max_vc: the number of virtual channel which subdev used
-- mediatek,serdes_link_reg: the register of subdev to get the link status
+- mediatek,seninf_mux_camsv: seninf_mux_camsv the data go through of the mipicsi port.
+- mediatek,mipicsiid: the id of the mipicsi port, there is only one port for mt8167
+- mediatek,mipicsi: the common component of the mipicsi port
 
 Example:
-	mipicsi0: mipicsi@10217000 {
-		compatible = "mediatek,mt2712-mipicsi";
+	mipicsi0: mipicsi@10011800 {
+		compatible = "mediatek,mt8167-mipicsi";
 		mediatek,mipicsi = <&mipicsi>;
-		iommus = <&iommu0 M4U_PORT_CAM_DMA0>,
-			 <&iommu0 M4U_PORT_CAM_DMA1>;
-		mediatek,larb = <&larb2>;
-		power-domains = <&scpsys MT2712_POWER_DOMAIN_ISP>;
+		iommus = <&iommu0 M4U_PORT_CAM_IMGO>;
+		mediatek,larb = <&larb1>;
+		power-domains = <&scpsys MT8167_POWER_DOMAIN_ISP>;
 
-		mediatek,seninf_mux_camsv = <&seninf1_mux_camsv0
-					     &seninf2_mux_camsv1
-					     &seninf3_mux_camsv2
-					     &seninf4_mux_camsv3>;
-		reg = <0 0x10217000 0 0x60>,
-		      <0 0x15002100 0 0x4>,
-		      <0 0x15002300 0 0x100>;
+		mediatek,seninf_mux_camsv = <&seninf1_mux_camsv0>;
+		reg = <0 0x10011800 0 0x60>,
+			  <0 0x15008100 0 0x4>,
+			  <0 0x15008300 0 0x100>;
+
 		mediatek,mipicsiid = <0>;
-		mediatek,mipicsi_max_vc = <4>;
-		mediatek,serdes_link_reg = <0x49>;
-	};
-
-	mipicsi1: mipicsi@10218000 {
-		compatible = "mediatek,mt2712-mipicsi";
-		mediatek,mipicsi = <&mipicsi>;
-		iommus = <&iommu0 M4U_PORT_CAM_DMA2>;
-		mediatek,larb = <&larb2>;
-		power-domains = <&scpsys MT2712_POWER_DOMAIN_ISP>;
-		mediatek,seninf_mux_camsv = <&seninf5_mux_camsv4
-					     &seninf6_mux_camsv5>;
-		reg = <0 0x10218000 0 0x60>,
-		      <0 0x15002500 0 0x4>,
-		      <0 0x15002700 0 0x100>;
-		mediatek,mipicsiid = <1>;
 	};
