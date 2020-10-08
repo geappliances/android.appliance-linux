@@ -852,10 +852,12 @@ static int mtk_mipicsi_set_fmt(struct mtk_mipicsi_dev *mipicsi,
 	struct v4l2_subdev *sd = mipicsi->mipicsi_sd.subdev;
 	struct device *dev = &mipicsi->pdev->dev;
 	struct v4l2_pix_format *pix = &f->fmt.pix;
+	struct mtk_mipicsi_channel *ch = mipicsi->channel;
 	struct v4l2_subdev_format format = {
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
 	};
 	const struct mtk_format *current_fmt;
+	unsigned int i;
 	int ret;
 
 	ret = mtk_mipicsi_try_fmt(mipicsi, f, &current_fmt);
@@ -871,6 +873,13 @@ static int mtk_mipicsi_set_fmt(struct mtk_mipicsi_dev *mipicsi,
 
 	mipicsi->fmt = *f;
 	mipicsi->current_fmt = current_fmt;
+	for (i = 0; i < mipicsi->camsv_num; i++) {
+		u32 b = mipicsi->fmt.fmt.pix.width * 2;
+		u32 h = mipicsi->fmt.fmt.pix.height;
+
+		mtk_mipicsi_seninf_mux_init(ch[i].seninf_mux, i);
+		mtk_mipicsi_camsv_init(ch[i].camsv, b, h);
+	}
 
 	dev_info(dev, "width/height/sizeimage %u/%u/%u", pix->width,
 							 pix->height,
