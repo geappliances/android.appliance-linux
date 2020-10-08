@@ -699,6 +699,9 @@ static int mtk_mipicsi_vb2_start_streaming(struct vb2_queue *vq,
 		unsigned int count)
 {
 	struct mtk_mipicsi_dev *mipicsi = vb2_get_drv_priv(vq);
+	struct v4l2_subdev *sd = mipicsi->mipicsi_sd.subdev;
+
+	v4l2_subdev_call(sd, video, s_stream, 1);
 
 	mtk_mipicsi_cmos_vf_enable(mipicsi, mipicsi->camsv_num, true);
 
@@ -710,12 +713,14 @@ static int mtk_mipicsi_vb2_start_streaming(struct vb2_queue *vq,
 static void mtk_mipicsi_vb2_stop_streaming(struct vb2_queue *vq)
 {
 	struct mtk_mipicsi_dev *mipicsi = vb2_get_drv_priv(vq);
+	struct v4l2_subdev *sd = mipicsi->mipicsi_sd.subdev;
 	struct mtk_mipicsi_buf *buf = NULL;
 	struct mtk_mipicsi_buf *tmp = NULL;
 	unsigned int index = 0;
 
 	mtk_mipicsi_cmos_vf_enable(mipicsi, mipicsi->camsv_num, false);
 
+	v4l2_subdev_call(sd, video, s_stream, 0);
 	spin_lock(&mipicsi->queue_lock);
 	while (list_empty(&(mipicsi->fb_list)) == 0) {
 		list_for_each_entry_safe(buf, tmp, &(mipicsi->fb_list), queue) {
