@@ -1389,46 +1389,18 @@ static const struct v4l2_async_notifier_operations mipicsi_subdev_notify_ops = {
 	.complete = mipicsi_subdev_notify_complete,
 };
 
-static int mtk_mipicsi_graph_parse(struct mtk_mipicsi_dev *mipicsi,
-					struct device_node *node)
-{
-	struct device_node *ep = NULL;
-	struct device_node *remote;
-
-	ep = of_graph_get_next_endpoint(node, ep);
-	if (!ep)
-		return -EINVAL;
-
-	remote = of_graph_get_remote_port_parent(ep);
-	of_node_put(ep);
-	if (!remote)
-		return -EINVAL;
-
-	/* Remote node to connect */
-	mipicsi->mipicsi_sd.node = remote;
-	mipicsi->mipicsi_sd.asd.match_type = V4L2_ASYNC_MATCH_FWNODE;
-	mipicsi->mipicsi_sd.asd.match.fwnode = of_fwnode_handle(remote);
-	return 0;
-}
-
 static int mtk_mipicsi_subdev_init(struct mtk_mipicsi_dev *mipicsi)
 {
 	int ret;
 	struct device *dev = &mipicsi->pdev->dev;
 
-	/* Parse the graph to extract a list of subdevice DT nodes. */
-	ret = mtk_mipicsi_graph_parse(mipicsi, dev->of_node);
-	if (ret < 0) {
-		dev_err(&mipicsi->pdev->dev, "Graph parsing failed\n");
-		return ret;
-	}
+	memset(&mipicsi->notifier, 0, sizeof(struct v4l2_async_notifier));
 
-	v4l2_async_notifier_init(&mipicsi->notifier);
-
-	ret = v4l2_async_notifier_add_subdev(&mipicsi->notifier,
-						&mipicsi->mipicsi_sd.asd);
+	ret = v4l2_async_notifier_parse_fwnode_endpoints(dev,
+		&mipicsi->notifier, sizeof(struct v4l2_async_subdev), NULL);
 	if (ret) {
-		of_node_put(mipicsi->mipicsi_sd.node);
+		dev_err(&mipicsi->pdev->dev,
+			"failed to parse fwnode endpoints:%d\n", ret);
 		return ret;
 	}
 
