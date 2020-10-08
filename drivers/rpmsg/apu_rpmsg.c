@@ -696,7 +696,7 @@ free_minor_ida:
 free_apu:
 	put_device(dev);
 	rproc_put(apu->rproc);
-	kfree(apu);
+	devm_kfree(&rpdev->dev, apu);
 
 	return ret;
 }
@@ -711,7 +711,7 @@ static void apu_rpmsg_remove(struct rpmsg_device *rpdev)
 	device_del(&apu->dev);
 	put_device(&apu->dev);
 	rproc_put(apu->rproc);
-	kfree(apu);
+	devm_kfree(&rpdev->dev, apu);
 }
 
 static const struct rpmsg_device_id apu_rpmsg_match[] = {
