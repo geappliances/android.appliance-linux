@@ -399,6 +399,12 @@ static void mtk_mipicsi_seninf_mux_init(void __iomem *base, unsigned int ch)
 
 	/* select seninf_mux1-4 as input for NCSI2 VC0-3*/
 	writel(mux_ctrl_val, base + SENINF_MUX_CTRL);
+	/* SENINF software reset */
+	writel(0x3U | readl(base + SENINF_MUX_CTRL),
+		base + SENINF_MUX_CTRL);
+	mdelay(1);
+	writel(~(0x3U) & readl(base + SENINF_MUX_CTRL),
+		base + SENINF_MUX_CTRL);
 }
 
 static void mtk_mipicsi_camsv_csr_init(void __iomem *base)
@@ -407,10 +413,18 @@ static void mtk_mipicsi_camsv_csr_init(void __iomem *base)
 	writel(0x40000019U, base + CAMCTL_EN1);
 	/* IMGO DP, PAK DP and TG clk enable */
 	writel(0x00008005U, base + CAMCTL_CLK_EN);
+	/* Enable BIN_SEL on TG1 */
+	writel(0x00800000U, base + CAMCTL_MUX_SEL);
+	/* Enable Pass1 done MUX and set it to IMGO */
+	writel(0x40100100U, base + CAMCTL_MUX_SEL2);
+	/* Select IMGO SOF from TG1 */
+	writel(0x00000400U, base + CAMCTL_SRAM_MUX_CFG);
 	/* 0: raw8, 1:raw10, 2:raw12, 3:YUV422, 4:raw14, 7:JPEG */
-	writel(0x00000003U, base + CAMCTL_FMT_SEL);
+	/* ZSD scenario, UYVY */
+	writel(0x00032012U, base + CAMCTL_FMT_SEL);
 	/* write clear enable. pass1 down interrupt enable */
 	writel(0x80000400U, base + CAMCTL_INT_EN);
+	writel(0x00000001U, base + CAMCTL_DMA_EN);
 }
 
 static void mtk_mipicsi_camsv_tg_init(void __iomem *base, u32 b, u32 h)
@@ -435,8 +449,6 @@ static void mtk_mipicsi_camsv_dma_init(void __iomem *base, u32 b, u32 h)
 	writel(b - 1U, base + CAMIMGO_XSIZE);
 	/* w - 1 lines to write */
 	writel(h - 1U, base + CAMIMGO_YSIZE);
-	/* disable frame header function */
-	writel(0U, base + DMA_FRAME_HEADER_EN);
 }
 
 static void mtk_mipicsi_camsv_init(void __iomem *base, u32 b, u32 h)
