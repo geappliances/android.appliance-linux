@@ -825,6 +825,10 @@ static int ov5645_s_ctrl(struct v4l2_ctrl *ctrl)
 	case V4L2_CID_VFLIP:
 		ret = ov5645_set_vflip(ov5645, ctrl->val);
 		break;
+	case V4L2_CID_PIXEL_RATE:
+	case V4L2_CID_LINK_FREQ:
+		ret = 0;
+		break;
 	default:
 		ret = -EINVAL;
 		break;
