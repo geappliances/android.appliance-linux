@@ -478,6 +478,61 @@
 			clock-names = "vdec_sel",
 			      "normal";
 		};
+
+		seninf1_mux_camsv0: seninf_mux_camsv@15004000 {
+			reg = <0 0x15008120 0 0x40>,
+			      <0 0x15004000 0 0x1000>,
+			      <0 0x15008200 0 0x20>;
+			reg-names = "seninf_mux",
+				    "camsv",
+				    "seninf_TG";
+			clocks = <&imgsys CLK_IMG_SEN_TG>;
+			interrupts = <GIC_SPI 180 IRQ_TYPE_LEVEL_LOW>;
+		};
+
+		mipicsi: mipicsi@15008000 {
+			compatible = "syscon";
+			reg = <0 0x15008000 0 0x10>;
+			reg-names = "seninf_top";
+			clocks = <&imgsys CLK_IMG_LARB1_SMI>,
+				 <&imgsys CLK_IMG_CAM_SMI>,
+				 <&imgsys CLK_IMG_CAM_CAM>,
+				 <&imgsys CLK_IMG_SEN_TG>,
+				 <&imgsys CLK_IMG_SEN_CAM>,
+				 <&mmsys CLK_MM_SMI_COMMON>,
+				 <&topckgen CLK_TOP_CAM_MM>,
+				 <&topckgen CLK_TOP_MIPI_26M>,
+				 <&topckgen CLK_TOP_MIPI_26M_DBG>,
+				 <&mmsys CLK_MM_CAM_MDP>;
+			clock-names = "img_larb1_smi",
+				      "img_cam_smi",
+				      "img_cam_cam",
+				      "img_sen_tg",
+				      "img_sen_cam",
+				      "img_venc",
+				      "top_cam",
+				      "mipi",
+				      "mipi_dbg",
+				      "cam_mdp";
+		};
+
+		mipicsi0: mipicsi@10011800 {
+			compatible = "mediatek,mt8167-mipicsi";
+			mediatek,mipicsi = <&mipicsi>;
+			iommus = <&iommu M4U_PORT_CAM_IMGO>;
+			mediatek,larb = <&larb1>;
+			power-domains = <&scpsys MT8167_POWER_DOMAIN_ISP>;
+
+			mediatek,seninf_mux_camsv = <&seninf1_mux_camsv0>;
+			reg = <0 0x10011800 0 0x60>,
+			      <0 0x15008100 0 0x4>,
+			      <0 0x15008300 0 0x100>;
+			reg-names = "mipi_rx_config",
+				    "seninf",
+				    "ncsi2";
+			mediatek,mipicsiid = <0>;
+			status="okay";
+		};
 	};
 };
 
