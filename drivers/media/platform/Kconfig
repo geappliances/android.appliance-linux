@@ -725,3 +725,12 @@ config VIDEO_RCAR_DRIF
 	  will be called rcar_drif.
 
 endif # SDR_PLATFORM_DRIVERS
+
+config VIDEO_MEDIATEK_MIPICSI
+    tristate "MIPICSI"
+    depends on VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
+	select V4L2_FWNODE
+    default n
+    help
+	  Mediatek mipicsi driver provides support of csi bus
+
