@@ -953,6 +953,10 @@ static int ov5645_set_format(struct v4l2_subdev *sd,
 	__format->field = V4L2_FIELD_NONE;
 	__format->colorspace = V4L2_COLORSPACE_SRGB;
 
+	__format->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
+	__format->quantization = V4L2_QUANTIZATION_DEFAULT;
+	__format->xfer_func = V4L2_XFER_FUNC_DEFAULT;
+
 	format->format = *__format;
 
 	return 0;
