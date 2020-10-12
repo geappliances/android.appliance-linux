@@ -445,6 +445,39 @@
 			clocks = <&mmsys CLK_MM_MDP_TDSHP>;
 			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
 		};
+
+		vcodec_dec: codec@16000000 {
+			compatible = "mediatek,mt8167-vcodec-dec";
+			reg = <0 0x16000000 0 0x100>,		/* VDEC_SYS */
+			      <0 0x16025000 0 0x1000>,		/* VDEC_MISC */
+			      <0 0x16020000 0 0x800>,		/* VDEC_LD */
+			      <0 0x16020800 0 0x800>,		/* VDEC_TOP */
+			      <0 0x16021000 0 0x1000>,		/* VDEC_CM */
+			      <0 0x16022000 0 0x1000>,		/* VDEC_AD */
+			      <0 0x16023000 0 0x1000>,		/* VDEC_AV */
+			      <0 0x16024000 0 0x1000>,		/* VDEC_PP */
+			      <0 0x16026800 0 0x800>,		/* VP8_VD */
+			      <0 0x16026000 0 0x800>,		/* VP6_VD */
+			      <0 0x16027800 0 0x800>,		/* VP8_VL */
+			      <0 0x16028000 0 0x400>,		/* HEVC_VD */
+			      <0 0x16028400 0 0x400>,		/* VP9_VD */
+			      <0 0x16030000 0 0x1000>;		/* IMAGE_RESZ */
+			interrupts = <GIC_SPI 184 IRQ_TYPE_LEVEL_LOW>;
+			mediatek,larb = <&larb2>;
+			iommus = <&iommu M4U_PORT_HW_VDEC_MC_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_PP_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_VLD_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_AVC_MV_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_PRED_RD_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_PRED_WR_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_PPWRAP_EXT>;
+			mediatek,vpu = <&vcu>;
+			power-domains = <&scpsys MT8167_POWER_DOMAIN_VDEC>;
+			clocks = <&topckgen CLK_TOP_VDEC_MM_SEL>,
+			      <&topckgen CLK_TOP_UNIVPLL_D4>;
+			clock-names = "vdec_sel",
+			      "normal";
+		};
 	};
 };
 
