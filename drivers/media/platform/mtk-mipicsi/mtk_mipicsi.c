@@ -53,7 +53,7 @@
 #include <linux/debugfs.h>
 
 #define MTK_MIPICSI_DRV_NAME "mtk-mipicsi"
-#define MTK_PLATFORM_STR "platform:mt2712"
+#define MTK_PLATFORM_STR "platform:mt8167"
 #define MTK_DATAWIDTH_8					(0x01U << 7U)
 #define MAX_SUPPORT_WIDTH             4096U
 #define MAX_SUPPORT_HEIGHT            4096U
@@ -91,25 +91,30 @@
 #define SENINF_MUX_CTRL					0x00
 #define SENINF_MUX_DEBUG_2				0x14
 
-#define CAMSV_MODULE_EN					0x10
-#define CAMSV_FMT_SEL					0x14
-#define CAMSV_INT_EN					0x18
-#define CAMSV_INT_STATUS				0x1C
+#define CAMCTL_EN1					0x04
+#define CAMCTL_DMA_EN					0x0C
+#define CAMCTL_FMT_SEL					0x10
+#define CAMCTL_INT_EN					0x20
+#define CAMCTL_INT_STATUS				0x24
 #define PASS1_DONE_STATUS				10
-#define CAMSV_SW_CTL					0x20
-#define CAMSV_CLK_EN					0x30
 
-#define CAMSV_TG_SEN_MODE				0x500
-#define CAMSV_TG_VF_CON					0x504
-#define CAMSV_TG_SEN_GRAB_PXL				0x508
-#define CAMSV_TG_SEN_GRAB_LIN				0x50C
-#define CAMSV_TG_PATH_CFG				0x510
+#define CAMCTL_MUX_SEL					0x74
+#define CAMCTL_MUX_SEL2					0x78
+#define CAMCTL_SRAM_MUX_CFG				0x7C
 
-#define IMGO_BASE_ADDR					0x220
-#define IMGO_XSIZE					0x230
-#define IMGO_YSIZE					0x234
-#define IMGO_STRIDE					0x238
-#define DMA_FRAME_HEADER_EN				0xE00
+#define CAMCTL_CLK_EN					0x150
+
+#define CAMIMGO_BASE_ADDR				0x300
+#define CAMIMGO_XSIZE					0x308
+#define CAMIMGO_YSIZE					0x30C
+#define CAMIMGO_STRIDE					0x310
+
+#define CAMTG_SEN_MODE					0x410
+#define CAMTG_VF_CON					0x414
+#define CAMTG_SEN_GRAB_PXL				0x418
+#define CAMTG_SEN_GRAB_LIN				0x41C
+#define CAMTG_PATH_CFG					0x420
+
 
 #define CONFIG_DEBUG_FS 1
 
@@ -451,13 +456,13 @@ static void mtk_mipicsi_seninf_mux_init(void __iomem *base, unsigned int ch)
 static void mtk_mipicsi_camsv_csr_init(void __iomem *base)
 {
 	/* double buffer enable. IMGO enable. PAK sel. TG enable */
-	writel(0x40000019U, base + CAMSV_MODULE_EN);
+	writel(0x40000019U, base + CAMCTL_EN1);
 	/* IMGO DP, PAK DP and TG clk enable */
-	writel(0x00008005U, base + CAMSV_CLK_EN);
+	writel(0x00008005U, base + CAMCTL_CLK_EN);
 	/* 0: raw8, 1:raw10, 2:raw12, 3:YUV422, 4:raw14, 7:JPEG */
-	writel(0x00000003U, base + CAMSV_FMT_SEL);
+	writel(0x00000003U, base + CAMCTL_FMT_SEL);
 	/* write clear enable. pass1 down interrupt enable */
-	writel(0x80000400U, base + CAMSV_INT_EN);
+	writel(0x80000400U, base + CAMCTL_INT_EN);
 }
 
 static void mtk_mipicsi_camsv_tg_init(void __iomem *base, u32 b, u32 h)
@@ -465,23 +470,23 @@ static void mtk_mipicsi_camsv_tg_init(void __iomem *base, u32 b, u32 h)
 	/* bit[30:16] grab end pixel clock number.
 	 * bit[14:0] grab start pixel clock number
 	 */
-	writel(b << 16U, base + CAMSV_TG_SEN_GRAB_PXL);
+	writel(b << 16U, base + CAMTG_SEN_GRAB_PXL);
 	/* bit[29:16] end line number. bit[13:0] start line number */
-	writel(h << 16U, base + CAMSV_TG_SEN_GRAB_LIN);
+	writel(h << 16U, base + CAMTG_SEN_GRAB_LIN);
 	/* YUV sensor unsigned to signed enable */
-	writel(0x1000U, base + CAMSV_TG_PATH_CFG);
+	writel(0x1000U, base + CAMTG_PATH_CFG);
 	/* cmos enable YUV422 mode */
-	writel(3U, base + CAMSV_TG_SEN_MODE);
+	writel(3U, base + CAMTG_SEN_MODE);
 }
 
 static void mtk_mipicsi_camsv_dma_init(void __iomem *base, u32 b, u32 h)
 {
 	/* enable SW format setting. YUV format. 16bit */
-	writel(0x01810000U | b, base + IMGO_STRIDE);
+	writel(0x01810000U | b, base + CAMIMGO_STRIDE);
 	/* b -1 bytes per line to write */
-	writel(b - 1U, base + IMGO_XSIZE);
+	writel(b - 1U, base + CAMIMGO_XSIZE);
 	/* w - 1 lines to write */
-	writel(h - 1U, base + IMGO_YSIZE);
+	writel(h - 1U, base + CAMIMGO_YSIZE);
 	/* disable frame header function */
 	writel(0U, base + DMA_FRAME_HEADER_EN);
 }
@@ -655,7 +660,7 @@ static int mtk_mipicsi_vb2_prepare(struct vb2_buffer *vb)
 
 static void mtk_mipicsi_fill_buffer(void __iomem *base, dma_addr_t dma_handle)
 {
-	writel(dma_handle, base + IMGO_BASE_ADDR);
+	writel(dma_handle, base + CAMIMGO_BASE_ADDR);
 }
 
 static void mtk_mipicsi_write_camsv(struct mtk_mipicsi_dev *mipicsi,
@@ -713,16 +718,16 @@ static void mtk_mipicsi_cmos_vf_enable(struct mtk_mipicsi_dev *mipicsi,
 				enable_irq(ch[i].irq);
 
 				/*enable cmos_en and vf_en*/
-				writel(readl(base + CAMSV_TG_SEN_MODE) | mask,
-				       base + CAMSV_TG_SEN_MODE);
-				writel(readl(base + CAMSV_TG_VF_CON) | mask,
-				       base + CAMSV_TG_VF_CON);
+				writel(readl(base + CAMTG_SEN_MODE) | mask,
+				       base + CAMTG_SEN_MODE);
+				writel(readl(base + CAMTG_VF_CON) | mask,
+				       base + CAMTG_VF_CON);
 			} else {
 				/*disable cmos_en and vf_en*/
-				writel(readl(base + CAMSV_TG_SEN_MODE) & mask,
-					base + CAMSV_TG_SEN_MODE);
-				writel(readl(base + CAMSV_TG_VF_CON) & mask,
-					base + CAMSV_TG_VF_CON);
+				writel(readl(base + CAMTG_SEN_MODE) & mask,
+					base + CAMTG_SEN_MODE);
+				writel(readl(base + CAMTG_VF_CON) & mask,
+					base + CAMTG_VF_CON);
 
 				disable_irq(ch[i].irq);
 				ch[i].irq_status = false;
@@ -986,7 +991,7 @@ static int get_irq_channel(struct mtk_mipicsi_dev *mipicsi)
 	u32 int_reg_val;
 
 	for (i = 0; i < mipicsi->camsv_num; i++) {
-		int_reg_val = readl(ch[i].camsv + CAMSV_INT_STATUS);
+		int_reg_val = readl(ch[i].camsv + CAMCTL_INT_STATUS);
 		if ((int_reg_val & (1 << PASS1_DONE_STATUS)) != 0)
 			return i;
 	}
@@ -1074,7 +1079,7 @@ static irqreturn_t mtk_mipicsi_isr(int irq, void *data)
 
 	/* clear interrupt */
 	writel(1UL << PASS1_DONE_STATUS,
-		ch[isr_ch].camsv + CAMSV_INT_STATUS);
+		ch[isr_ch].camsv + CAMCTL_INT_STATUS);
 	ch[isr_ch].irq_status = true;
 	for (i = 0U; i < mipicsi->camsv_num; ++i) {
 		if (ch[i].irq_status)
