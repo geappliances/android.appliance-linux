@@ -77,7 +77,6 @@ struct apu_iova_domain {
 };
 
 static dev_t rpmsg_major;
-static DEFINE_IDA(rpmsg_ctrl_ida);
 static DEFINE_IDA(rpmsg_minor_ida);
 static DEFINE_IDA(req_ida);
 static struct apu_iova_domain *apu_iovad;
@@ -613,7 +612,6 @@ static void rpmsg_apu_release_device(struct device *dev)
 {
 	struct rpmsg_apu *apu = dev_to_apu(dev);
 
-	ida_simple_remove(&rpmsg_ctrl_ida, dev->id);
 	ida_simple_remove(&rpmsg_minor_ida, MINOR(dev->devt));
 	cdev_del(&apu->cdev);
 }
@@ -646,11 +644,8 @@ static int apu_rpmsg_probe(struct rpmsg_device *rpdev)
 		goto free_apu;
 	dev->devt = MKDEV(MAJOR(rpmsg_major), ret);
 
-	ret = ida_simple_get(&rpmsg_ctrl_ida, 0, 0, GFP_KERNEL);
-	if (ret < 0)
-		goto free_minor_ida;
-	dev->id = ret;
-	dev_set_name(&apu->dev, "apu%d", ret);
+	dev->id = apu->rproc->index;
+	dev_set_name(&apu->dev, "apu%d", apu->rproc->index);
 
 	init_waitqueue_head(&apu->waitqueue);
 	spin_lock_init(&apu->ctx_lock);
@@ -659,7 +654,7 @@ static int apu_rpmsg_probe(struct rpmsg_device *rpdev)
 
 	ret = cdev_add(&apu->cdev, dev->devt, 1);
 	if (ret)
-		goto free_ctrl_ida;
+		goto free_minor_ida;
 
 	/* We can now rely on the release function for cleanup */
 	dev->release = rpmsg_apu_release_device;
@@ -688,8 +683,6 @@ static int apu_rpmsg_probe(struct rpmsg_device *rpdev)
 
 err_put_device:
 	put_device(dev);
-free_ctrl_ida:
-	ida_simple_remove(&rpmsg_ctrl_ida, dev->id);
 free_minor_ida:
 	ida_simple_remove(&rpmsg_minor_ida, MINOR(dev->devt));
 free_apu:
