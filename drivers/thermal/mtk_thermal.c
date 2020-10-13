@@ -643,6 +643,32 @@ static void mtk_thermal_put_bank(struct mtk_thermal_bank *bank)
 		release_mtk_svs_lock(mt->flags);
 }
 
+static u32 _get_sensor_temp(struct mtk_thermal *mt, int id)
+{
+	u32 raw;
+	int temp;
+
+	const struct mtk_thermal_data *conf = mt->conf;
+
+	raw = readl(mt->thermal_base + conf->msr[id]);
+
+	if (mt->conf->version == MTK_THERMAL_V1)
+		temp = raw_to_mcelsius_v1(mt, id, raw);
+	else
+		temp = raw_to_mcelsius_v2(mt, id, raw);
+
+	/*
+	 * The first read of a sensor often contains very high bogus
+	 * temperature value. Filter these out so that the system does
+	 * not immediately shut down.
+	 */
+
+	if (temp > 200000)
+		return  -EAGAIN;
+	else
+		return	temp;
+}
+
 /**
  * mtk_thermal_bank_temperature - get the temperature of a bank
  * @bank:	The bank
@@ -655,26 +681,10 @@ static int mtk_thermal_bank_temperature(struct mtk_thermal_bank *bank)
 	struct mtk_thermal *mt = bank->mt;
 	const struct mtk_thermal_data *conf = mt->conf;
 	int i, temp = INT_MIN, max = INT_MIN;
-	u32 raw;
 
 	for (i = 0; i < conf->bank_data[bank->id].num_sensors; i++) {
-		raw = readl(mt->thermal_base + conf->msr[i]);
 
-		if (mt->conf->version == MTK_THERMAL_V1) {
-			temp = raw_to_mcelsius_v1(
-				mt, conf->bank_data[bank->id].sensors[i], raw);
-		} else {
-			temp = raw_to_mcelsius_v2(
-				mt, conf->bank_data[bank->id].sensors[i], raw);
-		}
-
-		/*
-		 * The first read of a sensor often contains very high bogus
-		 * temperature value. Filter these out so that the system does
-		 * not immediately shut down.
-		 */
-		if (temp > 200000)
-			temp = -EACCES;
+		temp = _get_sensor_temp(mt, i);
 
 		if (temp > max)
 			max = temp;
@@ -708,28 +718,13 @@ static int mtk_read_sensor_temp(void *data, int *temperature)
 {
 	struct mtk_thermal_zone *tz = data;
 	struct mtk_thermal *mt = tz->mt;
-	const struct mtk_thermal_data *conf = mt->conf;
 	int id = tz->id - 1;
-	int temp = INT_MIN;
-	u32 raw;
 
 	if (id < 0)
 		return  -EACCES;
 
-	raw = readl(mt->thermal_base + conf->msr[id]);
+	*temperature = _get_sensor_temp(mt, id);
 
-	temp = raw_to_mcelsius(mt, id, raw);
-
-	/*
-	 * The first read of a sensor often contains very high bogus
-	 * temperature value. Filter these out so that the system does
-	 * not immediately shut down.
-	 */
-
-	if (temp > 200000)
-		return  -EACCES;
-
-	*temperature = temp;
 	return 0;
 }
 
@@ -1030,8 +1025,8 @@ static int mtk_thermal_probe(struct platform_device *pdev)
 	struct resource *res;
 	u64 auxadc_phys_base, apmixed_phys_base;
 	struct thermal_zone_device *tzdev;
-	struct mtk_thermal_zone *tz;
 	void __iomem *apmixed_base, *auxadc_base;
+	struct mtk_thermal_zone *tz;
 
 	mt = devm_kzalloc(&pdev->dev, sizeof(*mt), GFP_KERNEL);
 	if (!mt)
@@ -1126,12 +1121,17 @@ static int mtk_thermal_probe(struct platform_device *pdev)
 		tz->mt = mt;
 		tz->id = i;
 
-		tzdev = devm_thermal_zone_of_sensor_register(&pdev->dev, i,
-				tz, (i == 0) ?
-				&mtk_thermal_ops : &mtk_thermal_sensor_ops);
+		tzdev = devm_thermal_zone_of_sensor_register(&pdev->dev, i, tz, (i == 0) ?
+							     &mtk_thermal_ops :
+							     &mtk_thermal_sensor_ops);
 
 		if (IS_ERR(tzdev)) {
-			if (PTR_ERR(tzdev) != -EACCES) {
+			if (PTR_ERR(tzdev) == -ENODEV) {
+				dev_warn(&pdev->dev,
+					 "sensor %d not registered in thermal zone in dt\n", i);
+				continue;
+			}
+			if (PTR_ERR(tzdev) == -EACCES) {
 				ret = PTR_ERR(tzdev);
 				goto err_disable_clk_peri_therm;
 			}
