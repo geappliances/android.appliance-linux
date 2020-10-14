@@ -737,9 +737,21 @@ void mtk_camsv_video_unregister(struct mtk_camsv_video_device *node)
 static const u32 stream_out_fmts[] = {
 	/* The 1st entry is the default image format */
 	V4L2_PIX_FMT_SGRBG10,
-	V4L2_PIX_FMT_SGRBG8,
-	V4L2_PIX_FMT_YUYV,
+	V4L2_PIX_FMT_SGRBG10P,
+	V4L2_PIX_FMT_SBGGR10,
+	V4L2_PIX_FMT_SBGGR10P,
+	V4L2_PIX_FMT_SGBRG10,
+	V4L2_PIX_FMT_SGBRG10P,
 	V4L2_PIX_FMT_SRGGB10,
+	V4L2_PIX_FMT_SRGGB10P,
+	V4L2_PIX_FMT_SBGGR8,
+	V4L2_PIX_FMT_SGBRG8,
+	V4L2_PIX_FMT_SGRBG8,
+	V4L2_PIX_FMT_SRGGB8,
+	V4L2_PIX_FMT_UYVY,
+	V4L2_PIX_FMT_VYUY,
+	V4L2_PIX_FMT_YUYV,
+	V4L2_PIX_FMT_YVYU,
 };
 
 static const struct mtk_camsv_dev_node_desc capture_queues[] = {
