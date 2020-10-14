@@ -40,10 +40,10 @@ static void fmt_to_sparams(u32 mbus_fmt, struct mtk_camsv_sparams *sparams)
 		sparams->pak = 0x10;
 		sparams->imgo_stride = 0x01030000;
 		break;
-	case MEDIA_BUS_FMT_UYVY8_2X8:
-	case MEDIA_BUS_FMT_VYUY8_2X8:
-	case MEDIA_BUS_FMT_YUYV8_2X8:
-	case MEDIA_BUS_FMT_YVYU8_2X8:
+	case MEDIA_BUS_FMT_UYVY8_1X16:
+	case MEDIA_BUS_FMT_VYUY8_1X16:
+	case MEDIA_BUS_FMT_YUYV8_1X16:
+	case MEDIA_BUS_FMT_YVYU8_1X16:
 		sparams->w_factor = 2;
 		sparams->module_en_pak = 0x8;
 		sparams->fmt_sel = 0x3;

@@ -73,13 +73,13 @@ static unsigned int fourcc_to_mbus_format(unsigned int fourcc)
 	case V4L2_PIX_FMT_SRGGB8:
 		return MEDIA_BUS_FMT_SRGGB8_1X8;
 	case V4L2_PIX_FMT_YUYV:
-		return MEDIA_BUS_FMT_YUYV8_2X8;
+		return MEDIA_BUS_FMT_YUYV8_1X16;
 	case V4L2_PIX_FMT_YVYU:
-		return MEDIA_BUS_FMT_YVYU8_2X8;
+		return MEDIA_BUS_FMT_YVYU8_1X16;
 	case V4L2_PIX_FMT_UYVY:
-		return MEDIA_BUS_FMT_UYVY8_2X8;
+		return MEDIA_BUS_FMT_UYVY8_1X16;
 	case V4L2_PIX_FMT_VYUY:
-		return MEDIA_BUS_FMT_VYUY8_2X8;
+		return MEDIA_BUS_FMT_VYUY8_1X16;
 	default:
 		return 0;
 	}
