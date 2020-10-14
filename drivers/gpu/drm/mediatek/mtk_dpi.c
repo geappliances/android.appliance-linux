@@ -116,10 +116,18 @@ struct mtk_dpi_yc_limit {
 	u16 c_bottom;
 };
 
+enum mtk_dpi_chip {
+	MTK_DPI_MT2701,
+	MTK_DPI_MT8167,
+	MTK_DPI_MT8173,
+	MTK_DPI_MT8183,
+};
+
 struct mtk_dpi_conf {
 	unsigned int (*cal_factor)(int clock);
 	u32 reg_h_fre_con;
 	bool edge_sel_en;
+	enum mtk_dpi_chip chip;
 };
 
 static void mtk_dpi_mask(struct mtk_dpi *dpi, u32 offset, u32 val, u32 mask)
@@ -460,8 +468,9 @@ static int mtk_dpi_set_display_mode(struct mtk_dpi *dpi,
 	pll_rate = clk_get_rate(dpi->tvd_clk);
 
 	vm.pixelclock = pll_rate / factor;
-	clk_set_rate(dpi->pixel_clk,
-		     vm.pixelclock * (dpi->dual_edge ? 2 : 1));
+	if (dpi->conf->chip != MTK_DPI_MT8167)
+		clk_set_rate(dpi->pixel_clk,
+				 vm.pixelclock * (dpi->dual_edge ? 2 : 1));
 	vm.pixelclock = clk_get_rate(dpi->pixel_clk);
 
 	dev_dbg(dpi->dev, "Got  PLL %lu Hz, pixel clock %lu Hz\n",
@@ -649,6 +658,18 @@ static const struct component_ops mtk_dpi_component_ops = {
 	.unbind = mtk_dpi_unbind,
 };
 
+static unsigned int mt8167_calculate_factor(int clock)
+{
+	if (clock <= 64000)
+		return 16;
+	else if (clock <= 74250)
+		return 8;
+	else if (clock <= 160000)
+		return 4;
+	else
+		return 2;
+}
+
 static unsigned int mt8173_calculate_factor(int clock)
 {
 	if (clock <= 27000)
@@ -681,20 +702,29 @@ static unsigned int mt8183_calculate_factor(int clock)
 		return 2;
 }
 
+static const struct mtk_dpi_conf mt8167_conf = {
+	.cal_factor = mt8167_calculate_factor,
+	.reg_h_fre_con = 0xe0,
+	.chip = MTK_DPI_MT8167,
+};
+
 static const struct mtk_dpi_conf mt8173_conf = {
 	.cal_factor = mt8173_calculate_factor,
 	.reg_h_fre_con = 0xe0,
+	.chip = MTK_DPI_MT8173,
 };
 
 static const struct mtk_dpi_conf mt2701_conf = {
 	.cal_factor = mt2701_calculate_factor,
 	.reg_h_fre_con = 0xb0,
 	.edge_sel_en = true,
+	.chip = MTK_DPI_MT2701,
 };
 
 static const struct mtk_dpi_conf mt8183_conf = {
 	.cal_factor = mt8183_calculate_factor,
 	.reg_h_fre_con = 0xe0,
+	.chip = MTK_DPI_MT8183,
 };
 
 static int mtk_dpi_probe(struct platform_device *pdev)
@@ -825,6 +855,9 @@ static int mtk_dpi_remove(struct platform_device *pdev)
 static const struct of_device_id mtk_dpi_of_ids[] = {
 	{ .compatible = "mediatek,mt2701-dpi",
 	  .data = &mt2701_conf,
+	},
+	{ .compatible = "mediatek,mt8167-dpi",
+	  .data = &mt8167_conf,
 	},
 	{ .compatible = "mediatek,mt8173-dpi",
 	  .data = &mt8173_conf,
