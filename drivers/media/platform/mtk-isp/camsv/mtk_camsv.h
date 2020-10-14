@@ -100,6 +100,8 @@ to_mtk_camsv_dev_buffer(struct vb2_buffer *buf)
  * @cap: supported V4L2 capabilities
  * @buf_type: supported V4L2 buffer type
  * @link_flags: default media link flags
+ * @def_width: the default format width
+ * @def_height: the default format height
  * @num_fmts: the number of supported node formats
  * @max_buf_count: maximum VB2 buffer count
  * @ioctl_ops:  mapped to v4l2_ioctl_ops
@@ -113,10 +115,12 @@ struct mtk_camsv_dev_node_desc {
 	u32 cap;
 	u32 buf_type;
 	u32 link_flags;
+	u32 def_width;
+	u32 def_height;
 	u8 num_fmts;
 	u8 max_buf_count;
 	const struct v4l2_ioctl_ops *ioctl_ops;
-	const struct v4l2_format *fmts;
+	const u32 *fmts;
 	const struct v4l2_frmsizeenum *frmsizes;
 };
 

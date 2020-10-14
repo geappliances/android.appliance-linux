@@ -34,19 +34,17 @@ mtk_camsv_vbq_to_vdev(struct vb2_queue *__vq)
 	return container_of(__vq, struct mtk_camsv_video_device, vbq);
 }
 
-static const struct v4l2_format *
-mtk_camsv_dev_find_fmt(const struct mtk_camsv_dev_node_desc *desc, u32 format)
+static bool mtk_camsv_dev_find_fmt(const struct mtk_camsv_dev_node_desc *desc,
+				   u32 format)
 {
-	int i;
-	const struct v4l2_format *dev_fmt;
+	unsigned int i;
 
 	for (i = 0; i < desc->num_fmts; i++) {
-		dev_fmt = &desc->fmts[i];
-		if (dev_fmt->fmt.pix_mp.pixelformat == format)
-			return dev_fmt;
+		if (desc->fmts[i] == format)
+			return true;
 	}
 
-	return NULL;
+	return false;
 }
 
 static unsigned int fourcc_to_mbus_format(unsigned int fourcc)
@@ -176,13 +174,12 @@ mtk_camsv_dev_load_default_fmt(struct mtk_camsv_dev *cam,
 			       struct v4l2_format *dest)
 {
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
-	const struct v4l2_format *default_fmt = &queue_desc->fmts[0];
 
 	dest->type = queue_desc->buf_type;
 	dest->fmt.pix_mp.num_planes = p1_dev->conf->enableFH ? 2 : 1;
-	dest->fmt.pix_mp.pixelformat = default_fmt->fmt.pix_mp.pixelformat;
-	dest->fmt.pix_mp.width = default_fmt->fmt.pix_mp.width;
-	dest->fmt.pix_mp.height = default_fmt->fmt.pix_mp.height;
+	dest->fmt.pix_mp.pixelformat = queue_desc->fmts[0];
+	dest->fmt.pix_mp.width = queue_desc->def_width;
+	dest->fmt.pix_mp.height = queue_desc->def_height;
 
 	calc_bpl_size_pix_mp(&dest->fmt.pix_mp);
 
@@ -508,7 +505,7 @@ static int mtk_camsv_vidioc_enum_fmt(struct file *file, void *fh,
 		return -EINVAL;
 
 	/* f->description is filled in v4l_fill_fmtdesc function */
-	f->pixelformat = node->desc->fmts[f->index].fmt.pix_mp.pixelformat;
+	f->pixelformat = node->desc->fmts[f->index];
 	f->flags = 0;
 
 	return 0;
@@ -531,14 +528,10 @@ static int mtk_camsv_vidioc_try_fmt(struct file *file, void *fh,
 	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(file);
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
-	const struct v4l2_format *dev_fmt;
 
 	/* Validate pixelformat */
-	dev_fmt = mtk_camsv_dev_find_fmt(node->desc, pix_mp->pixelformat);
-	if (!dev_fmt) {
-		dev_fmt = &node->desc->fmts[0];
-		pix_mp->pixelformat = dev_fmt->fmt.pix_mp.pixelformat;
-	}
+	if (!mtk_camsv_dev_find_fmt(node->desc, pix_mp->pixelformat))
+		pix_mp->pixelformat = node->desc->fmts[0];
 
 	pix_mp->width = clamp_val(pix_mp->width, IMG_MIN_WIDTH, IMG_MAX_WIDTH);
 	pix_mp->height = clamp_val(pix_mp->height, IMG_MIN_HEIGHT,
@@ -584,10 +577,11 @@ static int mtk_camsv_vidioc_enum_framesizes(struct file *filp, void *priv,
 					    struct v4l2_frmsizeenum *sizes)
 {
 	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(filp);
-	const struct v4l2_format *dev_fmt;
 
-	dev_fmt = mtk_camsv_dev_find_fmt(node->desc, sizes->pixel_format);
-	if (!dev_fmt || sizes->index)
+	if (sizes->index)
+		return -EINVAL;
+
+	if (!mtk_camsv_dev_find_fmt(node->desc, sizes->pixel_format))
 		return -EINVAL;
 
 	sizes->type = node->desc->frmsizes->type;
@@ -740,39 +734,12 @@ void mtk_camsv_video_unregister(struct mtk_camsv_video_device *node)
 	mutex_destroy(&node->vdev_lock);
 }
 
-static const struct v4l2_format stream_out_fmts[] = {
+static const u32 stream_out_fmts[] = {
 	/* The 1st entry is the default image format */
-	{
-		.fmt.pix_mp = {
-			.width = 1920,
-			.height = 1080,
-			.pixelformat = V4L2_PIX_FMT_SGRBG10,
-		},
-	},
-
-	{
-		.fmt.pix_mp = {
-			.width = 1920,
-			.height = 1080,
-			.pixelformat = V4L2_PIX_FMT_SGRBG8,
-		},
-	},
-
-	{
-		.fmt.pix_mp = {
-			.width = 1920,
-			.height = 1080,
-			.pixelformat = V4L2_PIX_FMT_YUYV,
-		},
-	},
-
-	{
-		.fmt.pix_mp = {
-			.width = 1920,
-			.height = 1080,
-			.pixelformat = V4L2_PIX_FMT_SRGGB10,
-		},
-	},
+	V4L2_PIX_FMT_SGRBG10,
+	V4L2_PIX_FMT_SGRBG8,
+	V4L2_PIX_FMT_YUYV,
+	V4L2_PIX_FMT_SRGGB10,
 };
 
 static const struct mtk_camsv_dev_node_desc capture_queues[] = {
@@ -784,6 +751,8 @@ static const struct mtk_camsv_dev_node_desc capture_queues[] = {
 		.link_flags = MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED,
 		.fmts = stream_out_fmts,
 		.num_fmts = ARRAY_SIZE(stream_out_fmts),
+		.def_width = 1920,
+		.def_height = 1080,
 		.ioctl_ops = &mtk_camsv_v4l2_vcap_ioctl_ops,
 		.frmsizes =
 			&(struct v4l2_frmsizeenum){
