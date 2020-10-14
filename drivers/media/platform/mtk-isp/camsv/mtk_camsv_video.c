@@ -176,9 +176,7 @@ mtk_camsv_dev_load_default_fmt(struct mtk_camsv_dev *cam,
 			       struct v4l2_format *dest)
 {
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
-
-	const struct v4l2_format *default_fmt =
-		&queue_desc->fmts[queue_desc->default_fmt_idx];
+	const struct v4l2_format *default_fmt = &queue_desc->fmts[0];
 
 	dest->type = queue_desc->buf_type;
 	dest->fmt.pix_mp.num_planes = p1_dev->conf->enableFH ? 2 : 1;
@@ -538,7 +536,7 @@ static int mtk_camsv_vidioc_try_fmt(struct file *file, void *fh,
 	/* Validate pixelformat */
 	dev_fmt = mtk_camsv_dev_find_fmt(node->desc, pix_mp->pixelformat);
 	if (!dev_fmt) {
-		dev_fmt = &node->desc->fmts[node->desc->default_fmt_idx];
+		dev_fmt = &node->desc->fmts[0];
 		pix_mp->pixelformat = dev_fmt->fmt.pix_mp.pixelformat;
 	}
 
@@ -786,7 +784,6 @@ static const struct mtk_camsv_dev_node_desc capture_queues[] = {
 		.link_flags = MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED,
 		.fmts = stream_out_fmts,
 		.num_fmts = ARRAY_SIZE(stream_out_fmts),
-		.default_fmt_idx = 0,
 		.ioctl_ops = &mtk_camsv_v4l2_vcap_ioctl_ops,
 		.frmsizes =
 			&(struct v4l2_frmsizeenum){
