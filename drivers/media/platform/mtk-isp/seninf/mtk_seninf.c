@@ -517,10 +517,10 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x1);
 
 	switch (priv->fmt[SENINF_NUM_PADS - 1].code) {
-	case MEDIA_BUS_FMT_UYVY8_2X8:
-	case MEDIA_BUS_FMT_VYUY8_2X8:
-	case MEDIA_BUS_FMT_YUYV8_2X8:
-	case MEDIA_BUS_FMT_YVYU8_2X8:
+	case MEDIA_BUS_FMT_UYVY8_1X16:
+	case MEDIA_BUS_FMT_VYUY8_1X16:
+	case MEDIA_BUS_FMT_YUYV8_1X16:
+	case MEDIA_BUS_FMT_YVYU8_1X16:
 		writel((priv->fmt[SENINF_NUM_PADS - 1].height + 8) << 16 |
 		       priv->fmt[SENINF_NUM_PADS - 1].width * 2,
 		       pseninf + SENINF_TG1_TM_SIZE);
