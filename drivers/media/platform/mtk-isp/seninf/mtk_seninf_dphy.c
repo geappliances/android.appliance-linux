@@ -219,30 +219,17 @@ static int mtk_mipi_phy_power_off(struct phy *phy)
 	struct mtk_mipi_dphy_port *port = &priv->ports[priv->port];
 	void __iomem *pmipi_rx = port->base;
 
-	/* Disable mipi BG */
-	switch (port->id) {
-	case MTK_MIPI_PHY_PORT_0A:
-		MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
-			  RG_CSIxA_BG_CORE_EN, 0);
-		MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
-			  RG_CSIxA_BG_LPF_EN, 0);
-		break;
-	case MTK_MIPI_PHY_PORT_0B:
+	/* Disable MIPI BG. */
+	MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
+		  RG_CSIxA_BG_CORE_EN, 0);
+	MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
+		  RG_CSIxA_BG_LPF_EN, 0);
+
+	if (port->is_4d1c) {
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_BG_CORE_EN, 0);
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_BG_LPF_EN, 0);
-		break;
-	default:
-		MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
-			  RG_CSIxA_BG_CORE_EN, 0);
-		MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
-			  RG_CSIxA_BG_LPF_EN, 0);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
-			  RG_CSIxA_BG_CORE_EN, 0);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
-			  RG_CSIxA_BG_LPF_EN, 0);
-		break;
 	}
 
 	return 0;
