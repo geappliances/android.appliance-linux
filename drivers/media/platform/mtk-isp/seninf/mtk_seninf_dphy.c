@@ -10,10 +10,7 @@
 #include <linux/phy/phy.h>
 #include "mtk_seninf_rx_reg.h"
 
-/* Mix DPHY/CPHY */
-#define CSI0B_OFST              0x1000
-/* DPHY only */
-#define CSI1B_OFST              0x1000
+#define CSIxB_OFFSET		0x1000
 
 enum mtk_mipi_dphy_port_id {
 	MTK_MIPI_PHY_PORT_0 = 0x0, /* 4D1C */
@@ -92,20 +89,20 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 
 	if (port->is_4d1c) {
 		if (port->is_cdphy)
-			MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA00_CSIxA,
 				  RG_CSI0A_CPHY_EN, 0);
 
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_DPHY_L0_CKMODE_EN, 0);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_DPHY_L0_CKSEL, 1);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_DPHY_L1_CKMODE_EN, 0);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_DPHY_L1_CKSEL, 1);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_DPHY_L2_CKMODE_EN, 0);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_DPHY_L2_CKSEL, 1);
 	}
 
@@ -118,11 +115,11 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 		  RG_CSIxA_CDPHY_L2_T1_BYTECK_INVERT, 1);
 
 	if (port->is_4d1c) {
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANAA8_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANAA8_CSIxA,
 			  RG_CSIxA_CDPHY_L0_T0_BYTECK_INVERT, 1);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANAA8_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANAA8_CSIxA,
 			  RG_CSIxA_DPHY_L1_BYTECK_INVERT, 1);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANAA8_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANAA8_CSIxA,
 			  RG_CSIxA_CDPHY_L2_T1_BYTECK_INVERT, 1);
 	}
 
@@ -142,17 +139,17 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 			  RG_CSI0A_L2_T1BC_EQ_BW, 1);
 
 		if (port->is_4d1c) {
-			MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA18_CSIxA,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA18_CSIxA,
 				  RG_CSI0A_L0_T0AB_EQ_IS, 1);
-			MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA18_CSIxA,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA18_CSIxA,
 				  RG_CSI0A_L0_T0AB_EQ_BW, 1);
-			MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA1C_CSIxA,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA1C_CSIxA,
 				  RG_CSI0A_L1_T1AB_EQ_IS, 1);
-			MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA1C_CSIxA,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA1C_CSIxA,
 				  RG_CSI0A_L1_T1AB_EQ_BW, 1);
-			MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA20_CSI0A,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA20_CSI0A,
 				  RG_CSI0A_L2_T1BC_EQ_IS, 1);
-			MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA20_CSI0A,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA20_CSI0A,
 				  RG_CSI0A_L2_T1BC_EQ_BW, 1);
 		}
 	} else {
@@ -170,17 +167,17 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 			  RG_CSI1A_L2_EQ_BW, 1);
 
 		if (port->is_4d1c) {
-			MIPI_BITS(pmipi_rx + CSI1B_OFST, MIPI_RX_ANA18_CSIxA,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA18_CSIxA,
 				  RG_CSI1A_L0_EQ_IS, 1);
-			MIPI_BITS(pmipi_rx + CSI1B_OFST, MIPI_RX_ANA18_CSIxA,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA18_CSIxA,
 				  RG_CSI1A_L0_EQ_BW, 1);
-			MIPI_BITS(pmipi_rx + CSI1B_OFST, MIPI_RX_ANA18_CSIxA,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA18_CSIxA,
 				  RG_CSI1A_L1_EQ_IS, 1);
-			MIPI_BITS(pmipi_rx + CSI1B_OFST, MIPI_RX_ANA18_CSIxA,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA18_CSIxA,
 				  RG_CSI1A_L1_EQ_BW, 1);
-			MIPI_BITS(pmipi_rx + CSI1B_OFST, MIPI_RX_ANA1C_CSIxA,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA1C_CSIxA,
 				  RG_CSI1A_L2_EQ_IS, 1);
-			MIPI_BITS(pmipi_rx + CSI1B_OFST, MIPI_RX_ANA1C_CSIxA,
+			MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA1C_CSIxA,
 				  RG_CSI1A_L2_EQ_BW, 1);
 		}
 	}
@@ -190,24 +187,24 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 	MIPI_BITS(pmipi_rx, MIPI_RX_ANA24_CSIxA,
 		  RG_CSIxA_RESERVE, 0x40);
 	if (port->is_4d1c)
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA24_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA24_CSIxA,
 			  RG_CSIxA_RESERVE, 0x40);
 	MIPI_BITS(pmipi_rx, MIPI_RX_WRAPPER80_CSIxA,
 		  CSR_CSI_RST_MODE, 0);
 	if (port->is_4d1c)
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_WRAPPER80_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_WRAPPER80_CSIxA,
 			  CSR_CSI_RST_MODE, 0);
 	/* ANA power on */
 	MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
 		  RG_CSIxA_BG_CORE_EN, 1);
 	if (port->is_4d1c)
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_BG_CORE_EN, 1);
 	usleep_range(20, 40);
 	MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
 		  RG_CSIxA_BG_LPF_EN, 1);
 	if (port->is_4d1c)
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_BG_LPF_EN, 1);
 
 	return 0;
@@ -226,9 +223,9 @@ static int mtk_mipi_phy_power_off(struct phy *phy)
 		  RG_CSIxA_BG_LPF_EN, 0);
 
 	if (port->is_4d1c) {
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_BG_CORE_EN, 0);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+		MIPI_BITS(pmipi_rx + CSIxB_OFFSET, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_BG_LPF_EN, 0);
 	}
 
