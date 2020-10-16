@@ -14,7 +14,7 @@
 /* DPHY only */
 #define CSI1B_OFST              0x1000
 
-enum {
+enum mtk_mipi_dphy_port_id {
 	MTK_MIPI_PHY_PORT_0 = 0x0, /* 4D1C */
 	MTK_MIPI_PHY_PORT_1, /* 4D1C */
 	MTK_MIPI_PHY_PORT_2, /* 4D1C */
@@ -32,6 +32,7 @@ enum {
 	} while (0)
 
 struct mtk_mipi_dphy_port {
+	enum mtk_mipi_dphy_port_id id;
 	void __iomem *base;
 };
 
@@ -42,24 +43,24 @@ struct mtk_mipi_dphy {
 	unsigned int port;
 };
 
-static inline int is_4d1c(unsigned int port)
+static inline int is_4d1c(const struct mtk_mipi_dphy_port *port)
 {
-	return port < MTK_MIPI_PHY_PORT_0A;
+	return port->id < MTK_MIPI_PHY_PORT_0A;
 }
 
-static inline int is_cdphy_combo(unsigned int port)
+static inline int is_cdphy_combo(const struct mtk_mipi_dphy_port *port)
 {
-	return port == MTK_MIPI_PHY_PORT_0A ||
-		port == MTK_MIPI_PHY_PORT_0B ||
-		port == MTK_MIPI_PHY_PORT_0;
+	return port->id == MTK_MIPI_PHY_PORT_0A ||
+	       port->id == MTK_MIPI_PHY_PORT_0B ||
+	       port->id == MTK_MIPI_PHY_PORT_0;
 }
 
 static int mtk_mipi_phy_power_on(struct phy *phy)
 {
 	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
 	void __iomem *pmipi_rx_base = priv->rx;
-	unsigned int port = priv->port;
-	void __iomem *pmipi_rx = priv->ports[port].base;
+	struct mtk_mipi_dphy_port *port = &priv->ports[priv->port];
+	void __iomem *pmipi_rx = port->base;
 
 	/* Set analog phy mode to DPHY */
 	if (is_cdphy_combo(port))
@@ -228,10 +229,11 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 static int mtk_mipi_phy_power_off(struct phy *phy)
 {
 	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
-	void __iomem *pmipi_rx = priv->ports[priv->port].base;
+	struct mtk_mipi_dphy_port *port = &priv->ports[priv->port];
+	void __iomem *pmipi_rx = port->base;
 
 	/* Disable mipi BG */
-	switch (priv->port) {
+	switch (port->id) {
 	case MTK_MIPI_PHY_PORT_0A:
 		MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_BG_CORE_EN, 0);
@@ -294,8 +296,10 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->rx))
 		return PTR_ERR(priv->rx);
 
-	for (i = 0; i < ARRAY_SIZE(priv->ports); ++i)
+	for (i = 0; i < ARRAY_SIZE(priv->ports); ++i) {
+		priv->ports[i].id = i;
 		priv->ports[i].base = priv->rx + ports_offsets[i];
+	}
 
 	/* TODO : As I don't know how to get the sensor port from the DT,
 	hard-coded it to 3 here to use the PORT_0A which is a 2-lanes port */
