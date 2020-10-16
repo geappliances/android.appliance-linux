@@ -99,11 +99,12 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 		MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_DPHY_L2_CKSEL, 0);
 	}
-	if (is_cdphy_combo(port))
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
-			  RG_CSI0A_CPHY_EN, 0);
 
 	if (is_4d1c(port)) {
+		if (is_cdphy_combo(port))
+			MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
+				  RG_CSI0A_CPHY_EN, 0);
+
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_DPHY_L0_CKMODE_EN, 0);
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
@@ -116,18 +117,8 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 			  RG_CSIxA_DPHY_L2_CKMODE_EN, 0);
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_DPHY_L2_CKSEL, 1);
-	} else {
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
-			  RG_CSIxA_DPHY_L0_CKSEL, 0);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
-			  RG_CSIxA_DPHY_L1_CKMODE_EN, 1);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
-			  RG_CSIxA_DPHY_L1_CKSEL, 0);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
-			  RG_CSIxA_DPHY_L2_CKMODE_EN, 0);
-		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
-			  RG_CSIxA_DPHY_L2_CKSEL, 0);
 	}
+
 	/* Byte clock invert */
 	MIPI_BITS(pmipi_rx, MIPI_RX_ANAA8_CSIxA,
 		  RG_CSIxA_CDPHY_L0_T0_BYTECK_INVERT, 1);
