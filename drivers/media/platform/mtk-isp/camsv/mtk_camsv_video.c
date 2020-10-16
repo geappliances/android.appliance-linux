@@ -191,31 +191,6 @@ static unsigned int fourcc_to_mbus_format(unsigned int fourcc)
 	}
 }
 
-static bool is_format_pak(unsigned int mbus_fmt)
-{
-	switch (mbus_fmt) {
-	case MEDIA_BUS_FMT_SBGGR12_1X12:
-	case MEDIA_BUS_FMT_SGBRG12_1X12:
-	case MEDIA_BUS_FMT_SGRBG12_1X12:
-	case MEDIA_BUS_FMT_SRGGB12_1X12:
-	case MEDIA_BUS_FMT_SBGGR10_1X10:
-	case MEDIA_BUS_FMT_SGBRG10_1X10:
-	case MEDIA_BUS_FMT_SGRBG10_1X10:
-	case MEDIA_BUS_FMT_SRGGB10_1X10:
-	case MEDIA_BUS_FMT_SBGGR8_1X8:
-	case MEDIA_BUS_FMT_SGBRG8_1X8:
-	case MEDIA_BUS_FMT_SGRBG8_1X8:
-	case MEDIA_BUS_FMT_SRGGB8_1X8:
-	case MEDIA_BUS_FMT_UYVY8_1X16:
-	case MEDIA_BUS_FMT_VYUY8_1X16:
-	case MEDIA_BUS_FMT_YUYV8_1X16:
-	case MEDIA_BUS_FMT_YVYU8_1X16:
-		return true;
-	default:
-		return true;
-	}
-}
-
 static unsigned int calc_bpp(unsigned int fourcc)
 {
 	switch (fourcc) {
@@ -498,8 +473,6 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 	struct mtk_camsv_video_device *node = mtk_camsv_vbq_to_vdev(vq);
 	struct device *dev = cam->dev;
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
-	bool pak_en;
-	unsigned int mbus_fmt;
 	int ret;
 
 	if (!node->enabled) {
@@ -509,9 +482,7 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 	}
 
 	/* Enable CMOS and VF */
-	mbus_fmt = fourcc_to_mbus_format(node->format.pixelformat);
-	pak_en = is_format_pak(mbus_fmt);
-	mtk_camsv_cmos_vf_enable(p1_dev, true, pak_en);
+	mtk_camsv_cmos_vf_enable(p1_dev, true, node->fmtinfo->packed);
 
 	mutex_lock(&cam->op_lock);
 
