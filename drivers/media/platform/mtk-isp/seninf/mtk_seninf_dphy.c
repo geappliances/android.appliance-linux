@@ -3,11 +3,10 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/module.h>
-#include <linux/of_graph.h>
-#include <linux/of_irq.h>
+#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
-#include <linux/phy/phy.h>
+
 #include "mtk_seninf_rx_reg.h"
 
 #define CSIxB_OFFSET		0x1000
