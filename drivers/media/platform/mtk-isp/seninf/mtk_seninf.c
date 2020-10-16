@@ -98,7 +98,6 @@ struct mtk_seninf {
 	unsigned int num_clks;
 	struct clk_bulk_data *clks;
 	void __iomem *base;
-	void __iomem *rx;
 
 	struct v4l2_subdev subdev;
 	struct media_pad pads[SENINF_NUM_PADS];
