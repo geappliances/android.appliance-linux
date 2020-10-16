@@ -132,90 +132,85 @@ examples:
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     #include <dt-bindings/power/mt8183-power.h>
 
-    parent {
-        #address-cells = <2>;
-        #size-cells = <2>;
+    seninf: seninf@1a040000 {
+        compatible = "mediatek,mt8183-seninf";
+        reg = <0x1a040000 0x8000>;
+        interrupts = <GIC_SPI 251 IRQ_TYPE_LEVEL_LOW>;
+        power-domains = <&scpsys MT8183_POWER_DOMAIN_CAM>;
+        clocks = <&camsys CLK_CAM_SENINF>,
+                 <&topckgen CLK_TOP_MUX_SENINF>;
+        clock-names = "cam_seninf", "top_mux_seninf";
+        phys = <&mipi_dphy 0>;
+        phy-names = "seninf";
 
-        seninf: seninf@1a040000 {
-            compatible = "mediatek,mt8183-seninf";
-            reg = <0 0x1a040000 0 0x8000>;
-            interrupts = <GIC_SPI 251 IRQ_TYPE_LEVEL_LOW>;
-            power-domains = <&scpsys MT8183_POWER_DOMAIN_CAM>;
-            clocks = <&camsys CLK_CAM_SENINF>,
-                     <&topckgen CLK_TOP_MUX_SENINF>;
-            clock-names = "cam_seninf", "top_mux_seninf";
-            phys = <&mipi_dphy 0>;
-            phy-names = "seninf";
-
-            ports {
-                #address-cells = <1>;
-                #size-cells = <0>;
-
-                port@0 {
-                    reg = <0>;
-                    mipi_in_bcam: endpoint {
-                        data-lanes = <0 1 3 4>;
-                        remote-endpoint = <&bcam_out>;
-                    };
-                };
-
-                port@1 {
-                    reg = <1>;
-                    mipi_in_fcam: endpoint {
-                        data-lanes = <1>;
-                        remote-endpoint = <&fcam_out>;
-                    };
-                };
-
-                port@4 {
-                    reg = <4>;
-                    seninf_camisp_endpoint: endpoint {
-                        remote-endpoint = <&camisp_endpoint>;
-                    };
-                };
-            };
-        };
-
-        mipi_dphy: phy@11c80000 {
-            compatible = "mediatek,mt8183-mipi_dphy";
-            reg = <0 0x11C80000 0 0x6000>;
-            #phy-cells = <1>;
-        };
-
-        i2c2: i2c@11009000 {
-            reg = <0 0x11009000 0 0x1000>;
-            clock-frequency = <400000>;
+        ports {
             #address-cells = <1>;
             #size-cells = <0>;
 
-            wcam: camera@36 {
-                compatible = "ovti,ov5695";
-                reg = <0x36>;
+            port@0 {
+                reg = <0>;
+                mipi_in_bcam: endpoint {
+                    data-lanes = <0 1 3 4>;
+                    remote-endpoint = <&bcam_out>;
+                };
+            };
 
-                port {
-                    bcam_out: endpoint {
-                        remote-endpoint = <&mipi_in_bcam>;
-                        data-lanes = <0 1 3 4>;
-                    };
+            port@1 {
+                reg = <1>;
+                mipi_in_fcam: endpoint {
+                    data-lanes = <1>;
+                    remote-endpoint = <&fcam_out>;
+                };
+            };
+
+            port@4 {
+                reg = <4>;
+                seninf_camisp_endpoint: endpoint {
+                    remote-endpoint = <&camisp_endpoint>;
                 };
             };
         };
+    };
 
-        i2c4: i2c@11008000 {
-            reg = <0 0x11008000 0 0x1000>;
-            clock-frequency = <400000>;
-            #address-cells = <1>;
-            #size-cells = <0>;
+    mipi_dphy: phy@11c80000 {
+        compatible = "mediatek,mt8183-mipi_dphy";
+        reg = <0x11c80000 0x6000>;
+        #phy-cells = <1>;
+    };
 
-            ucam: camera@3c {
-                compatible = "ovti,ov2685";
-                reg = <0x3c>;
+    i2c2: i2c@11009000 {
+        reg = <0x11009000 0x1000>;
+        clock-frequency = <400000>;
+        #address-cells = <1>;
+        #size-cells = <0>;
 
-                port {
-                    fcam_out: endpoint {
-                        remote-endpoint = <&mipi_in_fcam>;
-                        data-lanes = <1>;
-                    };
+        wcam: camera@36 {
+            compatible = "ovti,ov5695";
+            reg = <0x36>;
+
+            port {
+                bcam_out: endpoint {
+                    remote-endpoint = <&mipi_in_bcam>;
+                    data-lanes = <0 1 3 4>;
+                };
+            };
+        };
+    };
+
+    i2c4: i2c@11008000 {
+        reg = <0x11008000 0x1000>;
+        clock-frequency = <400000>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        ucam: camera@3c {
+            compatible = "ovti,ov2685";
+            reg = <0x3c>;
+
+            port {
+                fcam_out: endpoint {
+                    remote-endpoint = <&mipi_in_fcam>;
+                    data-lanes = <1>;
                 };
             };
         };
