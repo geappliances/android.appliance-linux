@@ -214,7 +214,6 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
 	unsigned int size;
 	unsigned int np_conf;
-	unsigned int bpl;
 	unsigned int mbus_fmt;
 	unsigned int i;
 
@@ -236,8 +235,8 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 	}
 
 	mbus_fmt = fourcc_to_mbus_format(fmt->pixelformat);
-	bpl = calc_bpl(fmt->width, fmt->pixelformat);
-	mtk_camsv_setup(dev, fmt->width, fmt->height, bpl, mbus_fmt);
+	mtk_camsv_setup(dev, fmt->width, fmt->height,
+			fmt->plane_fmt[0].bytesperline, mbus_fmt);
 
 	return 0;
 }
