@@ -34,6 +34,110 @@ mtk_camsv_vbq_to_vdev(struct vb2_queue *__vq)
 	return container_of(__vq, struct mtk_camsv_video_device, vbq);
 }
 
+/* -----------------------------------------------------------------------------
+ * Format Information
+ */
+
+static const struct mtk_camsv_format_info mtk_camsv_format_info[] = {
+	{
+		.fourcc = V4L2_PIX_FMT_MTISP_SBGGR12,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+		.packed = true,
+		.bpp = 12,
+	}, {
+		.fourcc = V4L2_PIX_FMT_MTISP_SGBRG12,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+		.packed = true,
+		.bpp = 12,
+	}, {
+		.fourcc = V4L2_PIX_FMT_MTISP_SGRBG12,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+		.packed = true,
+		.bpp = 12,
+	}, {
+		.fourcc = V4L2_PIX_FMT_MTISP_SRGGB12,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+		.packed = true,
+		.bpp = 12,
+	}, {
+		.fourcc = V4L2_PIX_FMT_MTISP_SBGGR10,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+		.packed = true,
+		.bpp = 10,
+	}, {
+		.fourcc = V4L2_PIX_FMT_MTISP_SGBRG10,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+		.packed = true,
+		.bpp = 10,
+	}, {
+		.fourcc = V4L2_PIX_FMT_MTISP_SGRBG10,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+		.packed = true,
+		.bpp = 10,
+	}, {
+		.fourcc = V4L2_PIX_FMT_MTISP_SRGGB10,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.packed = true,
+		.bpp = 10,
+	}, {
+		.fourcc = V4L2_PIX_FMT_SBGGR8,
+		.code = MEDIA_BUS_FMT_SBGGR8_1X8,
+		.packed = true,
+		.bpp = 8,
+	}, {
+		.fourcc = V4L2_PIX_FMT_SGBRG8,
+		.code = MEDIA_BUS_FMT_SGBRG8_1X8,
+		.packed = true,
+		.bpp = 8,
+	}, {
+		.fourcc = V4L2_PIX_FMT_SGRBG8,
+		.code = MEDIA_BUS_FMT_SGRBG8_1X8,
+		.packed = true,
+		.bpp = 8,
+	}, {
+		.fourcc = V4L2_PIX_FMT_SRGGB8,
+		.code = MEDIA_BUS_FMT_SRGGB8_1X8,
+		.packed = true,
+		.bpp = 8,
+	}, {
+		.fourcc = V4L2_PIX_FMT_YUYV,
+		.code = MEDIA_BUS_FMT_YUYV8_1X16,
+		.packed = true,
+		.bpp = 16,
+	}, {
+		.fourcc = V4L2_PIX_FMT_YVYU,
+		.code = MEDIA_BUS_FMT_YVYU8_1X16,
+		.packed = true,
+		.bpp = 16,
+	}, {
+		.fourcc = V4L2_PIX_FMT_UYVY,
+		.code = MEDIA_BUS_FMT_UYVY8_1X16,
+		.packed = true,
+		.bpp = 16,
+	}, {
+		.fourcc = V4L2_PIX_FMT_VYUY,
+		.code = MEDIA_BUS_FMT_VYUY8_1X16,
+		.packed = true,
+		.bpp = 16,
+	},
+};
+
+static const struct mtk_camsv_format_info *
+mtk_camsv_format_info_by_fourcc(u32 fourcc)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(mtk_camsv_format_info); ++i) {
+		const struct mtk_camsv_format_info *info =
+			&mtk_camsv_format_info[i];
+
+		if (info->fourcc == fourcc)
+			return info;
+	}
+
+	return NULL;
+}
+
 static bool mtk_camsv_dev_find_fmt(const struct mtk_camsv_dev_node_desc *desc,
 				   u32 format)
 {
@@ -177,23 +281,25 @@ static void calc_bpl_size_pix_mp(struct v4l2_pix_format_mplane *pix_mp)
 
 static void
 mtk_camsv_dev_load_default_fmt(struct mtk_camsv_dev *cam,
-			       const struct mtk_camsv_dev_node_desc *queue_desc,
-			       struct v4l2_pix_format_mplane *dest)
+			       struct mtk_camsv_video_device *node)
 {
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
+	struct v4l2_pix_format_mplane *fmt = &node->format;
 
-	dest->num_planes = p1_dev->conf->enableFH ? 2 : 1;
-	dest->pixelformat = queue_desc->fmts[0];
-	dest->width = queue_desc->def_width;
-	dest->height = queue_desc->def_height;
+	fmt->num_planes = p1_dev->conf->enableFH ? 2 : 1;
+	fmt->pixelformat = node->desc->fmts[0];
+	fmt->width = node->desc->def_width;
+	fmt->height = node->desc->def_height;
 
-	calc_bpl_size_pix_mp(dest);
+	calc_bpl_size_pix_mp(fmt);
 
-	dest->colorspace = V4L2_COLORSPACE_SRGB;
-	dest->field = V4L2_FIELD_NONE;
-	dest->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
-	dest->quantization = V4L2_QUANTIZATION_DEFAULT;
-	dest->xfer_func = V4L2_XFER_FUNC_DEFAULT;
+	fmt->colorspace = V4L2_COLORSPACE_SRGB;
+	fmt->field = V4L2_FIELD_NONE;
+	fmt->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
+	fmt->quantization = V4L2_QUANTIZATION_DEFAULT;
+	fmt->xfer_func = V4L2_XFER_FUNC_DEFAULT;
+
+	node->fmtinfo = mtk_camsv_format_info_by_fourcc(fmt->pixelformat);
 }
 
 /* -----------------------------------------------------------------------------
@@ -571,7 +677,9 @@ static int mtk_camsv_vidioc_s_fmt(struct file *file, void *fh,
 		return ret;
 
 	/* Configure to video device */
-	node->format = f->fmt.pix_mp;;
+	node->format = f->fmt.pix_mp;
+	node->fmtinfo =
+		mtk_camsv_format_info_by_fourcc(f->fmt.pix_mp.pixelformat);
 
 	return 0;
 }
@@ -644,7 +752,7 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
 		node->enabled = true;
 	else
 		node->enabled = false;
-	mtk_camsv_dev_load_default_fmt(cam, node->desc, &node->format);
+	mtk_camsv_dev_load_default_fmt(cam, node);
 
 	cam->subdev_pads[MTK_CAMSV_CIO_PAD_NODE(node->id)].flags =
 		output ? MEDIA_PAD_FL_SINK : MEDIA_PAD_FL_SOURCE;
