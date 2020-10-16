@@ -27,6 +27,8 @@ enum mtk_mipi_dphy_port_id {
 struct mtk_mipi_dphy_port {
 	enum mtk_mipi_dphy_port_id id;
 	void __iomem *base;
+	bool is_cdphy;
+	bool is_4d1c;
 };
 
 struct mtk_mipi_dphy {
@@ -49,18 +51,6 @@ static void mtk_mipi_phy_port_update(void __iomem *base,
 	mtk_mipi_phy_port_update((base), reg, reg##_##field##_MASK, \
 				 (val) << reg##_##field##_SHIFT)
 
-static inline int is_4d1c(const struct mtk_mipi_dphy_port *port)
-{
-	return port->id < MTK_MIPI_PHY_PORT_0A;
-}
-
-static inline int is_cdphy_combo(const struct mtk_mipi_dphy_port *port)
-{
-	return port->id == MTK_MIPI_PHY_PORT_0A ||
-	       port->id == MTK_MIPI_PHY_PORT_0B ||
-	       port->id == MTK_MIPI_PHY_PORT_0;
-}
-
 static int mtk_mipi_phy_power_on(struct phy *phy)
 {
 	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
@@ -69,10 +59,10 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 	void __iomem *pmipi_rx = port->base;
 
 	/* Set analog phy mode to DPHY */
-	if (is_cdphy_combo(port))
+	if (port->is_cdphy)
 		MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA, RG_CSI0A_CPHY_EN, 0);
 
-	if (is_4d1c(port)) {
+	if (port->is_4d1c) {
 		MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_DPHY_L0_CKMODE_EN, 0);
 		MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
@@ -100,8 +90,8 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 			  RG_CSIxA_DPHY_L2_CKSEL, 0);
 	}
 
-	if (is_4d1c(port)) {
-		if (is_cdphy_combo(port))
+	if (port->is_4d1c) {
+		if (port->is_cdphy)
 			MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
 				  RG_CSI0A_CPHY_EN, 0);
 
@@ -127,7 +117,7 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 	MIPI_BITS(pmipi_rx, MIPI_RX_ANAA8_CSIxA,
 		  RG_CSIxA_CDPHY_L2_T1_BYTECK_INVERT, 1);
 
-	if (is_4d1c(port)) {
+	if (port->is_4d1c) {
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANAA8_CSIxA,
 			  RG_CSIxA_CDPHY_L0_T0_BYTECK_INVERT, 1);
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANAA8_CSIxA,
@@ -137,7 +127,7 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 	}
 
 	/* Start ANA EQ tuning */
-	if (is_cdphy_combo(port)) {
+	if (port->is_cdphy) {
 		MIPI_BITS(pmipi_rx, MIPI_RX_ANA18_CSIxA,
 			  RG_CSI0A_L0_T0AB_EQ_IS, 1);
 		MIPI_BITS(pmipi_rx, MIPI_RX_ANA18_CSIxA,
@@ -151,7 +141,7 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 		MIPI_BITS(pmipi_rx, MIPI_RX_ANA20_CSI0A,
 			  RG_CSI0A_L2_T1BC_EQ_BW, 1);
 
-		if (is_4d1c(port)) {
+		if (port->is_4d1c) {
 			MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA18_CSIxA,
 				  RG_CSI0A_L0_T0AB_EQ_IS, 1);
 			MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA18_CSIxA,
@@ -179,7 +169,7 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 		MIPI_BITS(pmipi_rx, MIPI_RX_ANA1C_CSIxA,
 			  RG_CSI1A_L2_EQ_BW, 1);
 
-		if (is_4d1c(port)) {
+		if (port->is_4d1c) {
 			MIPI_BITS(pmipi_rx + CSI1B_OFST, MIPI_RX_ANA18_CSIxA,
 				  RG_CSI1A_L0_EQ_IS, 1);
 			MIPI_BITS(pmipi_rx + CSI1B_OFST, MIPI_RX_ANA18_CSIxA,
@@ -199,24 +189,24 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 	writel(0x90, pmipi_rx_base + MIPI_RX_ANA40_CSIxA);
 	MIPI_BITS(pmipi_rx, MIPI_RX_ANA24_CSIxA,
 		  RG_CSIxA_RESERVE, 0x40);
-	if (is_4d1c(port))
+	if (port->is_4d1c)
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA24_CSIxA,
 			  RG_CSIxA_RESERVE, 0x40);
 	MIPI_BITS(pmipi_rx, MIPI_RX_WRAPPER80_CSIxA,
 		  CSR_CSI_RST_MODE, 0);
-	if (is_4d1c(port))
+	if (port->is_4d1c)
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_WRAPPER80_CSIxA,
 			  CSR_CSI_RST_MODE, 0);
 	/* ANA power on */
 	MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
 		  RG_CSIxA_BG_CORE_EN, 1);
-	if (is_4d1c(port))
+	if (port->is_4d1c)
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_BG_CORE_EN, 1);
 	usleep_range(20, 40);
 	MIPI_BITS(pmipi_rx, MIPI_RX_ANA00_CSIxA,
 		  RG_CSIxA_BG_LPF_EN, 1);
-	if (is_4d1c(port))
+	if (port->is_4d1c)
 		MIPI_BITS(pmipi_rx + CSI0B_OFST, MIPI_RX_ANA00_CSIxA,
 			  RG_CSIxA_BG_LPF_EN, 1);
 
@@ -294,8 +284,15 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 		return PTR_ERR(priv->rx);
 
 	for (i = 0; i < ARRAY_SIZE(priv->ports); ++i) {
-		priv->ports[i].id = i;
-		priv->ports[i].base = priv->rx + ports_offsets[i];
+		struct mtk_mipi_dphy_port *port = &priv->ports[i];
+
+		port->id = i;
+		port->base = priv->rx + ports_offsets[i];
+
+		port->is_cdphy = i == MTK_MIPI_PHY_PORT_0A ||
+				 i == MTK_MIPI_PHY_PORT_0B ||
+				 i == MTK_MIPI_PHY_PORT_0;
+		port->is_4d1c = i < MTK_MIPI_PHY_PORT_0A;
 	}
 
 	/* TODO : As I don't know how to get the sensor port from the DT,
