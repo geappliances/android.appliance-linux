@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
 #include <linux/delay.h>
+#include <linux/io.h>
 #include <linux/module.h>
 #include <linux/of_graph.h>
 #include <linux/of_irq.h>
@@ -23,14 +24,6 @@ enum mtk_mipi_dphy_port_id {
 	MTK_MIPI_PHY_PORT_MAX_NUM
 };
 
-#define MIPI_BITS(base, reg, field, val) do { \
-		u32 __iomem *__p = (base) + (reg); \
-		u32 __v = *__p; \
-		__v &= ~reg##_##field##_MASK; \
-		__v |= ((val) << reg##_##field##_SHIFT); \
-		*__p = __v; \
-	} while (0)
-
 struct mtk_mipi_dphy_port {
 	enum mtk_mipi_dphy_port_id id;
 	void __iomem *base;
@@ -42,6 +35,19 @@ struct mtk_mipi_dphy {
 	struct mtk_mipi_dphy_port ports[MTK_MIPI_PHY_PORT_MAX_NUM];
 	unsigned int port;
 };
+
+static void mtk_mipi_phy_port_update(void __iomem *base,
+				     u32 reg, u32 mask, u32 value)
+{
+	u32 val = readl(base + reg);
+	val &= ~mask;
+	val |= value;
+	writel(val, base + reg);
+}
+
+#define MIPI_BITS(base, reg, field, val) \
+	mtk_mipi_phy_port_update((base), reg, reg##_##field##_MASK, \
+				 (val) << reg##_##field##_SHIFT)
 
 static inline int is_4d1c(const struct mtk_mipi_dphy_port *port)
 {
