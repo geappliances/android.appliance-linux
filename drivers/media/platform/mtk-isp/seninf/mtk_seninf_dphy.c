@@ -9,15 +9,9 @@
 #include <linux/phy/phy.h>
 #include "mtk_seninf_rx_reg.h"
 
-#define CSI_PORT_0A_ADDR_OFST	0
-#define CSI_PORT_0B_ADDR_OFST	0x1000
-#define CSI_PORT_1_ADDR_OFST	0x2000
-#define CSI_PORT_2_ADDR_OFST	0x4000
 /* Mix DPHY/CPHY */
-#define CSI0A_OFST              0
 #define CSI0B_OFST              0x1000
 /* DPHY only */
-#define CSI1A_OFST              0
 #define CSI1B_OFST              0x1000
 
 enum {
@@ -37,10 +31,14 @@ enum {
 		*__p = __v; \
 	} while (0)
 
+struct mtk_mipi_dphy_port {
+	void __iomem *base;
+};
+
 struct mtk_mipi_dphy {
 	struct device *dev;
 	void __iomem *rx;
-	unsigned char __iomem *csi2_rx[MTK_MIPI_PHY_PORT_MAX_NUM];
+	struct mtk_mipi_dphy_port ports[MTK_MIPI_PHY_PORT_MAX_NUM];
 	unsigned int port;
 };
 
@@ -59,10 +57,9 @@ static inline int is_cdphy_combo(unsigned int port)
 static int mtk_mipi_phy_power_on(struct phy *phy)
 {
 	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
-
-	void __iomem *pmipi_rx_base = priv->csi2_rx[MTK_MIPI_PHY_PORT_0];
+	void __iomem *pmipi_rx_base = priv->rx;
 	unsigned int port = priv->port;
-	void __iomem *pmipi_rx = priv->csi2_rx[port];
+	void __iomem *pmipi_rx = priv->ports[port].base;
 
 	/* Set analog phy mode to DPHY */
 	if (is_cdphy_combo(port))
@@ -231,8 +228,7 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 static int mtk_mipi_phy_power_off(struct phy *phy)
 {
 	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
-
-	void __iomem *pmipi_rx = priv->csi2_rx[priv->port];
+	void __iomem *pmipi_rx = priv->ports[priv->port].base;
 
 	/* Disable mipi BG */
 	switch (priv->port) {
@@ -271,11 +267,20 @@ static const struct phy_ops mtk_dphy_ops = {
 
 static int mipi_dphy_probe(struct platform_device *pdev)
 {
+	static const unsigned int ports_offsets[] = {
+		[MTK_MIPI_PHY_PORT_0] = 0,
+		[MTK_MIPI_PHY_PORT_0A] = 0,
+		[MTK_MIPI_PHY_PORT_0B] = 0x1000,
+		[MTK_MIPI_PHY_PORT_1] = 0x2000,
+		[MTK_MIPI_PHY_PORT_2] = 0x4000,
+	};
+
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	struct mtk_mipi_dphy *priv;
 	struct phy_provider *phy_provider;
 	struct phy *phy;
+	unsigned int i;
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -289,11 +294,8 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->rx))
 		return PTR_ERR(priv->rx);
 
-	priv->csi2_rx[MTK_MIPI_PHY_PORT_0] = priv->rx;
-	priv->csi2_rx[MTK_MIPI_PHY_PORT_0A] = priv->rx + CSI_PORT_0A_ADDR_OFST;
-	priv->csi2_rx[MTK_MIPI_PHY_PORT_0B] = priv->rx + CSI_PORT_0B_ADDR_OFST;
-	priv->csi2_rx[MTK_MIPI_PHY_PORT_1] = priv->rx + CSI_PORT_1_ADDR_OFST;
-	priv->csi2_rx[MTK_MIPI_PHY_PORT_2] = priv->rx + CSI_PORT_2_ADDR_OFST;
+	for (i = 0; i < ARRAY_SIZE(priv->ports); ++i)
+		priv->ports[i].base = priv->rx + ports_offsets[i];
 
 	/* TODO : As I don't know how to get the sensor port from the DT,
 	hard-coded it to 3 here to use the PORT_0A which is a 2-lanes port */
