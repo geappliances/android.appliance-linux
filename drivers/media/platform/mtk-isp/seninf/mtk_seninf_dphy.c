@@ -25,6 +25,7 @@ enum mtk_mipi_dphy_port_id {
 struct mtk_mipi_dphy_port {
 	struct mtk_mipi_dphy *dev;
 	enum mtk_mipi_dphy_port_id id;
+	struct phy *phy;
 	void __iomem *base;
 	bool is_cdphy;
 	bool is_4d1c;
@@ -237,6 +238,20 @@ static const struct phy_ops mtk_dphy_ops = {
 	.owner		= THIS_MODULE,
 };
 
+static struct phy *mtk_mipi_dphy_xlate(struct device *dev,
+				       struct of_phandle_args *args)
+{
+	struct mtk_mipi_dphy *priv = dev_get_drvdata(dev);
+
+	if (args->args_count != 1)
+		return ERR_PTR(-EINVAL);
+
+	if (args->args[0] >= ARRAY_SIZE(priv->ports))
+		return ERR_PTR(-ENODEV);
+
+	return priv->ports[args->args[0]].phy;
+}
+
 static int mipi_dphy_probe(struct platform_device *pdev)
 {
 	static const unsigned int ports_offsets[] = {
@@ -248,10 +263,9 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 	};
 
 	struct device *dev = &pdev->dev;
-	struct resource *res;
-	struct mtk_mipi_dphy *priv;
 	struct phy_provider *phy_provider;
-	struct phy *phy;
+	struct mtk_mipi_dphy *priv;
+	struct resource *res;
 	unsigned int i;
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
@@ -268,6 +282,7 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 
 	for (i = 0; i < ARRAY_SIZE(priv->ports); ++i) {
 		struct mtk_mipi_dphy_port *port = &priv->ports[i];
+		struct phy *phy;
 
 		port->dev = priv;
 		port->id = i;
@@ -277,21 +292,18 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 				 i == MTK_MIPI_PHY_PORT_0B ||
 				 i == MTK_MIPI_PHY_PORT_0;
 		port->is_4d1c = i < MTK_MIPI_PHY_PORT_0A;
+
+		phy = devm_phy_create(dev, NULL, &mtk_dphy_ops);
+		if (IS_ERR(phy)) {
+			dev_err(dev, "failed to create phy\n");
+			return PTR_ERR(phy);
+		}
+
+		port->phy = phy;
+		phy_set_drvdata(phy, port);
 	}
 
-	phy = devm_phy_create(dev, NULL, &mtk_dphy_ops);
-	if (IS_ERR(phy)) {
-		dev_err(dev, "failed to create phy\n");
-		return PTR_ERR(phy);
-	}
-
-	/*
-	 * TODO : As I don't know how to get the sensor port from the DT,
-	 * hard-coded it to 3 here to use the PORT_0A which is a 2-lanes port
-	 */
-	phy_set_drvdata(phy, &priv->ports[MTK_MIPI_PHY_PORT_0A]);
-
-	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
+	phy_provider = devm_of_phy_provider_register(dev, mtk_mipi_dphy_xlate);
 
 	return 0;
 }
