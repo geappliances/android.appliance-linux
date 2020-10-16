@@ -71,6 +71,13 @@ enum {
 #define MTK_CAMSV_CIO_PAD_NODE(n)	((n) + 1)
 #define MTK_CAMSV_CIO_NUM_PADS		(MTK_CAMSV_P1_TOTAL_NODES + 1)
 
+struct mtk_camsv_format_info {
+	u32 code;
+	u32 fourcc;
+	bool packed;
+	unsigned int bpp;
+};
+
 struct mtk_camsv_dev_buffer {
 	struct vb2_v4l2_buffer v4l2_buf;
 	struct list_head list;
@@ -135,6 +142,7 @@ struct mtk_camsv_dev_node_desc {
  * @vdev_lock: Serializes vb2 queue and video device operations
  * @enabled: Indicate the video device is enabled or not
  * @format: The V4L2 format of video device
+ * @fmtinfo: Information about the current format
  */
 struct mtk_camsv_video_device {
 	unsigned int id;
@@ -149,6 +157,7 @@ struct mtk_camsv_video_device {
 
 	unsigned int enabled;
 	struct v4l2_pix_format_mplane format;
+	const struct mtk_camsv_format_info *fmtinfo;
 };
 
 /*
