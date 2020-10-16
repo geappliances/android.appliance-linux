@@ -48,11 +48,17 @@ properties:
   ports:
     type: object
     additionalProperties: false
+    description: |
+      The SENINF has three physical CSI-2 input ports, CSI0, CSI1 and CSI2,
+      that support up to four data lanes in D-PHY mode. Additionally, the CSI0
+      port can support C-PHY mode with up to three trios, and can be split in
+      two independent ports CSI0A and CSI0B (in D-PHY mode with two data lanes)
+      to connect two separate sensors.
 
     properties:
       port@0:
         type: object
-        description: connection point for sensor at port 0
+        description: CSI0 or CSI0A port
         additionalProperties: false
 
         properties:
@@ -73,7 +79,7 @@ properties:
 
       port@1:
         type: object
-        description: connection point for sensor at port 1
+        description: CSI1 port
         additionalProperties: false
 
         properties:
@@ -89,6 +95,48 @@ properties:
               data-lanes:
                 minItems: 1
                 maxItems: 4
+
+              remote-endpoint: true
+
+      port@2:
+        type: object
+        description: CSI2 port
+        additionalProperties: false
+
+        properties:
+          reg:
+            const: 2
+
+        patternProperties:
+          endpoint:
+            type: object
+            additionalProperties: false
+
+            properties:
+              data-lanes:
+                minItems: 1
+                maxItems: 4
+
+              remote-endpoint: true
+
+      port@3:
+        type: object
+        description: CSI0B port
+        additionalProperties: false
+
+        properties:
+          reg:
+            const: 3
+
+        patternProperties:
+          endpoint:
+            type: object
+            additionalProperties: false
+
+            properties:
+              data-lanes:
+                minItems: 1
+                maxItems: 2
 
               remote-endpoint: true
 
@@ -112,6 +160,8 @@ properties:
     required:
       - port@0
       - port@1
+      - port@2
+      - port@3
       - port@4
 
 required:
@@ -160,6 +210,14 @@ examples:
                     data-lanes = <1>;
                     remote-endpoint = <&fcam_out>;
                 };
+            };
+
+            port@2 {
+                reg = <2>;
+            };
+
+            port@3 {
+                reg = <3>;
             };
 
             port@4 {
