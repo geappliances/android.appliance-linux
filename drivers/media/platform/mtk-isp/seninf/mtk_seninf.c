@@ -32,7 +32,7 @@
 
 #define SENINF_TEST_MODEL          	0
 #define SENINF_NORMAL_MODEL        	1
-#define SENINF_ALL_ERR_IRQ_EN		0x7F
+#define SENINF_ALL_ERR_IRQ_EN		0x7f
 #define SENINF_IRQ_CLR_SEL		0x80000000
 
 #define SENINF_MIPI_SENSOR		0x8
@@ -303,12 +303,12 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 
 	if (!(fmtinfo->flags & MTK_SENINF_FORMAT_JPEG)) {
 		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
-		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1B);
-		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1F);
+		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1b);
+		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1f);
 	} else {
 		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 0);
 		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x18);
-		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1E);
+		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1e);
 	}
 
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
@@ -316,14 +316,14 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 
 	val = readl(pseninf + SENINF_MUX_CTRL);
 	writel(val | 0x00000003, pseninf + SENINF_MUX_CTRL);
-	writel(val & 0xFFFFFFFC, pseninf + SENINF_MUX_CTRL);
+	writel(val & 0xfffffffc, pseninf + SENINF_MUX_CTRL);
 
 	/* Set top mux */
 	val = (readl(pseninf_top + SENINF_TOP_MUX_CTRL) &
-		(~(0xF << (mux * 4))))	| ((seninf & 0xF) << (mux * 4));
+		(~(0xf << (mux * 4))))	| ((seninf & 0xF) << (mux * 4));
 	writel(val, pseninf_top + SENINF_TOP_MUX_CTRL);
 	/* HQ */
-	writel(0xC2000, pseninf + SENINF_MUX_SPARE);
+	writel(0xc2000, pseninf + SENINF_MUX_SPARE);
 }
 
 static void mtk_seninf_rx_config(struct mtk_seninf *priv,
@@ -507,7 +507,7 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_TESTMDL_IP_EN, 1);
 
 	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_EN, 1);
-	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_PAT, 0xC);
+	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_PAT, 0xc);
 	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_VSYNC, 4);
 	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_DUMMYPXL, 0x28);
 
@@ -536,8 +536,8 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	writel(0x1, pseninf + SENINF_TG1_TM_STP);
 
 	/* Set top mux */
-	val = (readl(pseninf + SENINF_TOP_MUX_CTRL) & (~(0xF << (mux * 4)))) |
-	      ((seninf & 0xF) << (mux * 4));
+	val = (readl(pseninf + SENINF_TOP_MUX_CTRL) & (~(0xf << (mux * 4)))) |
+	      ((seninf & 0xf) << (mux * 4));
 	writel(val, pseninf + SENINF_TOP_MUX_CTRL);
 
 	/* TODO : if mux != 0 => use pseninf + 0x1000 * mux */
@@ -640,7 +640,7 @@ static void mtk_seninf_power_off(struct mtk_seninf *priv)
 		void __iomem *pseninf = priv->base + 0x1000 * seninf;
 
 		/* Disable CSI2(2.5G) first */
-		writel(readl(pseninf + SENINF_CSI2_CTL) & 0xFFFFFFE0,
+		writel(readl(pseninf + SENINF_CSI2_CTL) & 0xffffffe0,
 		       pseninf + SENINF_CSI2_CTL);
 	}
 
