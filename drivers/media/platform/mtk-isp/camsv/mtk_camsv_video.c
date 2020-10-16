@@ -210,8 +210,7 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 	unsigned int max_buffer_count = node->desc->max_buf_count;
 	const struct v4l2_pix_format_mplane *fmt = &node->format;
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vq);
-	struct device *dev = cam->dev;
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
+	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 	unsigned int size;
 	unsigned int np_conf;
 	unsigned int mbus_fmt;
@@ -235,7 +234,7 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 	}
 
 	mbus_fmt = fourcc_to_mbus_format(fmt->pixelformat);
-	mtk_camsv_setup(dev, fmt->width, fmt->height,
+	mtk_camsv_setup(p1_dev, fmt->width, fmt->height,
 			fmt->plane_fmt[0].bytesperline, mbus_fmt);
 
 	return 0;
