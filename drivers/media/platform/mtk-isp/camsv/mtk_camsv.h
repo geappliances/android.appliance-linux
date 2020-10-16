@@ -219,8 +219,8 @@ struct mtk_camsv_p1_device {
 	struct mutex protect_mutex;
 };
 
-void mtk_camsv_setup(struct device *dev, u32 width, u32 height, u32 bpl,
-		     u32 mbus_fmt);
+void mtk_camsv_setup(struct mtk_camsv_p1_device *p1_dev, u32 width, u32 height,
+		     u32 bpl, u32 mbus_fmt);
 
 int mtk_camsv_dev_init(struct platform_device *pdev,
 		       struct mtk_camsv_dev *camsv_dev);

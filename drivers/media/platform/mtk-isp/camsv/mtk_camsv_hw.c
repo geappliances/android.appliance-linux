@@ -65,9 +65,9 @@ static void fmt_to_sparams(u32 mbus_fmt, struct mtk_camsv_sparams *sparams)
 	}
 }
 
-void mtk_camsv_setup(struct device *dev, u32 w, u32 h, u32 bpl, u32 mbus_fmt)
+void mtk_camsv_setup(struct mtk_camsv_p1_device *p1_dev, u32 w, u32 h, u32 bpl,
+		     u32 mbus_fmt)
 {
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
 	const struct mtk_camsv_conf *conf = p1_dev->conf;
 	int poll_num = 1000;
 	u32 int_en = INT_ST_MASK_CAMSV;
@@ -77,8 +77,8 @@ void mtk_camsv_setup(struct device *dev, u32 w, u32 h, u32 bpl, u32 mbus_fmt)
 
 	mutex_lock(&p1_dev->protect_mutex);
 
-	if (pm_runtime_get_sync(dev) < 0) {
-		dev_err(dev, "failed to get pm_runtime\n");
+	if (pm_runtime_get_sync(p1_dev->dev) < 0) {
+		dev_err(p1_dev->dev, "failed to get pm_runtime\n");
 		mutex_unlock(&p1_dev->protect_mutex);
 		return;
 	}
@@ -153,7 +153,7 @@ void mtk_camsv_setup(struct device *dev, u32 w, u32 h, u32 bpl, u32 mbus_fmt)
 	if (conf->enableFH)
 		writel(0x1U, p1_dev->regs + CAMSV_DMA_FH_EN);
 
-	pm_runtime_put_autosuspend(dev);
+	pm_runtime_put_autosuspend(p1_dev->dev);
 	mutex_unlock(&p1_dev->protect_mutex);
 }
 
