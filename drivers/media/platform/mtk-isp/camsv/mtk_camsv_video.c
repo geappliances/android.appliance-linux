@@ -151,66 +151,17 @@ static bool mtk_camsv_dev_find_fmt(const struct mtk_camsv_dev_node_desc *desc,
 	return false;
 }
 
-static unsigned int calc_bpp(unsigned int fourcc)
+static void calc_bpl_size_pix_mp(const struct mtk_camsv_format_info *fmtinfo,
+				 struct v4l2_pix_format_mplane *pix_mp)
 {
-	switch (fourcc) {
-	case V4L2_PIX_FMT_MTISP_SBGGR12:
-	case V4L2_PIX_FMT_MTISP_SGBRG12:
-	case V4L2_PIX_FMT_MTISP_SGRBG12:
-	case V4L2_PIX_FMT_MTISP_SRGGB12:
-		return 12;
-	case V4L2_PIX_FMT_MTISP_SBGGR10:
-	case V4L2_PIX_FMT_MTISP_SGBRG10:
-	case V4L2_PIX_FMT_MTISP_SGRBG10:
-	case V4L2_PIX_FMT_MTISP_SRGGB10:
-		return 10;
-	case V4L2_PIX_FMT_SBGGR8:
-	case V4L2_PIX_FMT_SGBRG8:
-	case V4L2_PIX_FMT_SGRBG8:
-	case V4L2_PIX_FMT_SRGGB8:
-		return 8;
-	default:
-		return 0;
-	}
-}
+	unsigned int bpl;
+	unsigned int i;
 
-static unsigned int calc_bpl(unsigned int width, unsigned int fourcc)
-{
-	unsigned int bpp = calc_bpp(fourcc);
-
-	switch (fourcc) {
-	case V4L2_PIX_FMT_MTISP_SBGGR12:
-	case V4L2_PIX_FMT_MTISP_SGBRG12:
-	case V4L2_PIX_FMT_MTISP_SGRBG12:
-	case V4L2_PIX_FMT_MTISP_SRGGB12:
-	case V4L2_PIX_FMT_MTISP_SBGGR10:
-	case V4L2_PIX_FMT_MTISP_SGBRG10:
-	case V4L2_PIX_FMT_MTISP_SGRBG10:
-	case V4L2_PIX_FMT_MTISP_SRGGB10:
-	case V4L2_PIX_FMT_SBGGR8:
-	case V4L2_PIX_FMT_SGBRG8:
-	case V4L2_PIX_FMT_SGRBG8:
-	case V4L2_PIX_FMT_SRGGB8:
-		return DIV_ROUND_UP(width * bpp, 8);
-	case V4L2_PIX_FMT_YUYV:
-	case V4L2_PIX_FMT_YVYU:
-	case V4L2_PIX_FMT_UYVY:
-	case V4L2_PIX_FMT_VYUY:
-		return width * 2;
-	default:
-		return 0;
-	}
-}
-
-static void calc_bpl_size_pix_mp(struct v4l2_pix_format_mplane *pix_mp)
-{
-	int i;
-	unsigned int bpl = calc_bpl(pix_mp->width, pix_mp->pixelformat);
+	bpl = ALIGN(DIV_ROUND_UP(pix_mp->width * fmtinfo->bpp, 8), 2);
 
 	for (i = 0; i < pix_mp->num_planes; ++i) {
-		pix_mp->plane_fmt[i].bytesperline = ALIGN(bpl, 2);
-		pix_mp->plane_fmt[i].sizeimage =
-			pix_mp->plane_fmt[i].bytesperline * pix_mp->height;
+		pix_mp->plane_fmt[i].bytesperline = bpl;
+		pix_mp->plane_fmt[i].sizeimage = bpl * pix_mp->height;
 	}
 }
 
@@ -226,8 +177,6 @@ mtk_camsv_dev_load_default_fmt(struct mtk_camsv_dev *cam,
 	fmt->width = node->desc->def_width;
 	fmt->height = node->desc->def_height;
 
-	calc_bpl_size_pix_mp(fmt);
-
 	fmt->colorspace = V4L2_COLORSPACE_SRGB;
 	fmt->field = V4L2_FIELD_NONE;
 	fmt->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
@@ -235,6 +184,8 @@ mtk_camsv_dev_load_default_fmt(struct mtk_camsv_dev *cam,
 	fmt->xfer_func = V4L2_XFER_FUNC_DEFAULT;
 
 	node->fmtinfo = mtk_camsv_format_info_by_fourcc(fmt->pixelformat);
+
+	calc_bpl_size_pix_mp(node->fmtinfo, fmt);
 }
 
 /* -----------------------------------------------------------------------------
@@ -565,6 +516,7 @@ static int mtk_camsv_vidioc_try_fmt(struct file *file, void *fh,
 	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(file);
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
+	const struct mtk_camsv_format_info *fmtinfo;
 
 	/* Validate pixelformat */
 	if (!mtk_camsv_dev_find_fmt(node->desc, pix_mp->pixelformat))
@@ -576,7 +528,8 @@ static int mtk_camsv_vidioc_try_fmt(struct file *file, void *fh,
 
 	pix_mp->num_planes = p1_dev->conf->enableFH ? 2 : 1;
 
-	calc_bpl_size_pix_mp(pix_mp);
+	fmtinfo = mtk_camsv_format_info_by_fourcc(pix_mp->pixelformat);
+	calc_bpl_size_pix_mp(fmtinfo, pix_mp);
 
 	/* Constant format fields */
 	pix_mp->colorspace = V4L2_COLORSPACE_SRGB;
