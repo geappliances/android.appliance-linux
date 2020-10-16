@@ -1143,13 +1143,11 @@ static int seninf_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_OF
 static const struct of_device_id mtk_seninf_of_match[] = {
 	{.compatible = "mediatek,mt8183-seninf"},
 	{},
 };
 MODULE_DEVICE_TABLE(of, mtk_seninf_of_match);
-#endif
 
 static struct platform_driver seninf_pdrv = {
 	.driver	= {

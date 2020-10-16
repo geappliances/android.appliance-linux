@@ -3,6 +3,7 @@ config MTK_SENINF
 	depends on VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
 	depends on MEDIA_CAMERA_SUPPORT
 	depends on ARCH_MEDIATEK || COMPILE_TEST
+	depends on OF
 	select V4L2_FWNODE
 	default n
 	---help---
