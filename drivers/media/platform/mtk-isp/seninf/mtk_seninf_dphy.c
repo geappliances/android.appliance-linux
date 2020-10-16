@@ -11,6 +11,8 @@
 
 #define CSIxB_OFFSET		0x1000
 
+struct mtk_mipi_dphy;
+
 enum mtk_mipi_dphy_port_id {
 	MTK_MIPI_PHY_PORT_0 = 0x0, /* 4D1C */
 	MTK_MIPI_PHY_PORT_1, /* 4D1C */
@@ -21,6 +23,7 @@ enum mtk_mipi_dphy_port_id {
 };
 
 struct mtk_mipi_dphy_port {
+	struct mtk_mipi_dphy *dev;
 	enum mtk_mipi_dphy_port_id id;
 	void __iomem *base;
 	bool is_cdphy;
@@ -31,7 +34,6 @@ struct mtk_mipi_dphy {
 	struct device *dev;
 	void __iomem *rx;
 	struct mtk_mipi_dphy_port ports[MTK_MIPI_PHY_PORT_MAX_NUM];
-	unsigned int port;
 };
 
 static void mtk_mipi_phy_port_update(void __iomem *base,
@@ -49,9 +51,8 @@ static void mtk_mipi_phy_port_update(void __iomem *base,
 
 static int mtk_mipi_phy_power_on(struct phy *phy)
 {
-	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
-	void __iomem *pmipi_rx_base = priv->rx;
-	struct mtk_mipi_dphy_port *port = &priv->ports[priv->port];
+	struct mtk_mipi_dphy_port *port = phy_get_drvdata(phy);
+	void __iomem *pmipi_rx_base = port->dev->rx;
 	void __iomem *pmipi_rx = port->base;
 
 	/* Set analog phy mode to DPHY */
@@ -211,8 +212,7 @@ static int mtk_mipi_phy_power_on(struct phy *phy)
 
 static int mtk_mipi_phy_power_off(struct phy *phy)
 {
-	struct mtk_mipi_dphy *priv = phy_get_drvdata(phy);
-	struct mtk_mipi_dphy_port *port = &priv->ports[priv->port];
+	struct mtk_mipi_dphy_port *port = phy_get_drvdata(phy);
 	void __iomem *pmipi_rx = port->base;
 
 	/* Disable MIPI BG. */
@@ -269,6 +269,7 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 	for (i = 0; i < ARRAY_SIZE(priv->ports); ++i) {
 		struct mtk_mipi_dphy_port *port = &priv->ports[i];
 
+		port->dev = priv;
 		port->id = i;
 		port->base = priv->rx + ports_offsets[i];
 
@@ -278,16 +279,17 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 		port->is_4d1c = i < MTK_MIPI_PHY_PORT_0A;
 	}
 
-	/* TODO : As I don't know how to get the sensor port from the DT,
-	hard-coded it to 3 here to use the PORT_0A which is a 2-lanes port */
-	priv->port = 3;
-
 	phy = devm_phy_create(dev, NULL, &mtk_dphy_ops);
 	if (IS_ERR(phy)) {
 		dev_err(dev, "failed to create phy\n");
 		return PTR_ERR(phy);
 	}
-	phy_set_drvdata(phy, priv);
+
+	/*
+	 * TODO : As I don't know how to get the sensor port from the DT,
+	 * hard-coded it to 3 here to use the PORT_0A which is a 2-lanes port
+	 */
+	phy_set_drvdata(phy, &priv->ports[MTK_MIPI_PHY_PORT_0A]);
 
 	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
 
