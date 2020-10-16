@@ -138,6 +138,22 @@ mtk_camsv_format_info_by_fourcc(u32 fourcc)
 	return NULL;
 }
 
+static const struct mtk_camsv_format_info *
+mtk_camsv_format_info_by_code(u32 code)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(mtk_camsv_format_info); ++i) {
+		const struct mtk_camsv_format_info *info =
+			&mtk_camsv_format_info[i];
+
+		if (info->code == code)
+			return info;
+	}
+
+	return NULL;
+}
+
 static bool mtk_camsv_dev_find_fmt(const struct mtk_camsv_dev_node_desc *desc,
 				   u32 format)
 {
@@ -488,15 +504,41 @@ static int mtk_camsv_vidioc_enum_fmt(struct file *file, void *fh,
 				     struct v4l2_fmtdesc *f)
 {
 	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(file);
+	const struct mtk_camsv_format_info *fmtinfo;
+	unsigned int i;
 
-	if (f->index >= node->desc->num_fmts)
+	/* If mbus_code is not set enumerate all supported formats. */
+	if (!f->mbus_code) {
+		if (f->index >= node->desc->num_fmts)
+			return -EINVAL;
+
+		/* f->description is filled in v4l_fill_fmtdesc function */
+		f->pixelformat = node->desc->fmts[f->index];
+		f->flags = 0;
+
+		return 0;
+	}
+
+	/*
+	 * Otherwise only enumerate supported pixel formats corresponding to
+	 * that bus code.
+	 */
+	if (f->index)
 		return -EINVAL;
 
-	/* f->description is filled in v4l_fill_fmtdesc function */
-	f->pixelformat = node->desc->fmts[f->index];
-	f->flags = 0;
+	fmtinfo = mtk_camsv_format_info_by_code(f->mbus_code);
+	if (!fmtinfo)
+		return -EINVAL;
 
-	return 0;
+	for (i = 0; i < node->desc->num_fmts; ++i) {
+		if (node->desc->fmts[i] == fmtinfo->fourcc) {
+			f->pixelformat = fmtinfo->fourcc;
+			f->flags = 0;
+			return 0;
+		}
+	}
+
+	return -EINVAL;
 }
 
 static int mtk_camsv_vidioc_g_fmt(struct file *file, void *fh,
@@ -669,7 +711,8 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
 	snprintf(vdev->name, sizeof(vdev->name), "%s %s",
 		 dev_driver_string(dev), node->desc->name);
 	/* set cap/type/ioctl_ops of the video device */
-	vdev->device_caps = node->desc->cap | V4L2_CAP_STREAMING;
+	vdev->device_caps = node->desc->cap | V4L2_CAP_STREAMING
+			  | V4L2_CAP_IO_MC;
 	vdev->ioctl_ops = node->desc->ioctl_ops;
 	vdev->fops = &mtk_camsv_v4l2_fops;
 	vdev->release = video_device_release_empty;
