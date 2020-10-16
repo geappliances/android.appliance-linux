@@ -178,23 +178,22 @@ static void calc_bpl_size_pix_mp(struct v4l2_pix_format_mplane *pix_mp)
 static void
 mtk_camsv_dev_load_default_fmt(struct mtk_camsv_dev *cam,
 			       const struct mtk_camsv_dev_node_desc *queue_desc,
-			       struct v4l2_format *dest)
+			       struct v4l2_pix_format_mplane *dest)
 {
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 
-	dest->type = queue_desc->buf_type;
-	dest->fmt.pix_mp.num_planes = p1_dev->conf->enableFH ? 2 : 1;
-	dest->fmt.pix_mp.pixelformat = queue_desc->fmts[0];
-	dest->fmt.pix_mp.width = queue_desc->def_width;
-	dest->fmt.pix_mp.height = queue_desc->def_height;
+	dest->num_planes = p1_dev->conf->enableFH ? 2 : 1;
+	dest->pixelformat = queue_desc->fmts[0];
+	dest->width = queue_desc->def_width;
+	dest->height = queue_desc->def_height;
 
-	calc_bpl_size_pix_mp(&dest->fmt.pix_mp);
+	calc_bpl_size_pix_mp(dest);
 
-	dest->fmt.pix_mp.colorspace = V4L2_COLORSPACE_SRGB;
-	dest->fmt.pix_mp.field = V4L2_FIELD_NONE;
-	dest->fmt.pix_mp.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
-	dest->fmt.pix_mp.quantization = V4L2_QUANTIZATION_DEFAULT;
-	dest->fmt.pix_mp.xfer_func = V4L2_XFER_FUNC_DEFAULT;
+	dest->colorspace = V4L2_COLORSPACE_SRGB;
+	dest->field = V4L2_FIELD_NONE;
+	dest->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
+	dest->quantization = V4L2_QUANTIZATION_DEFAULT;
+	dest->xfer_func = V4L2_XFER_FUNC_DEFAULT;
 }
 
 /* -----------------------------------------------------------------------------
@@ -209,7 +208,7 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 {
 	struct mtk_camsv_video_device *node = mtk_camsv_vbq_to_vdev(vq);
 	unsigned int max_buffer_count = node->desc->max_buf_count;
-	const struct v4l2_format *fmt = &node->vdev_fmt;
+	const struct v4l2_pix_format_mplane *fmt = &node->format;
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vq);
 	struct device *dev = cam->dev;
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
@@ -223,7 +222,7 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 	if (max_buffer_count)
 		*num_buffers = clamp_val(*num_buffers, 1, max_buffer_count);
 
-	size = fmt->fmt.pix_mp.plane_fmt[0].sizeimage;
+	size = fmt->plane_fmt[0].sizeimage;
 	/* Add for q.create_bufs with fmt.g_sizeimage(p) / 2 test */
 
 	np_conf = p1_dev->conf->enableFH ? 2 : 1;
@@ -236,10 +235,9 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 		return -EINVAL;
 	}
 
-	mbus_fmt = fourcc_to_mbus_format(fmt->fmt.pix_mp.pixelformat);
-	bpl = calc_bpl(fmt->fmt.pix_mp.width, fmt->fmt.pix_mp.pixelformat);
-	mtk_camsv_setup(dev, fmt->fmt.pix_mp.width, fmt->fmt.pix_mp.height, bpl,
-			mbus_fmt);
+	mbus_fmt = fourcc_to_mbus_format(fmt->pixelformat);
+	bpl = calc_bpl(fmt->width, fmt->pixelformat);
+	mtk_camsv_setup(dev, fmt->width, fmt->height, bpl, mbus_fmt);
 
 	return 0;
 }
@@ -260,12 +258,12 @@ static int mtk_camsv_vb2_buf_prepare(struct vb2_buffer *vb)
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vb->vb2_queue);
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 	struct mtk_camsv_dev_buffer *buf = to_mtk_camsv_dev_buffer(vb);
-	const struct v4l2_format *fmt = &node->vdev_fmt;
+	const struct v4l2_pix_format_mplane *fmt = &node->format;
 	u32 size;
 	int i;
 
 	for (i = 0; i < vb->num_planes; i++) {
-		size = fmt->fmt.pix_mp.plane_fmt[i].sizeimage;
+		size = fmt->plane_fmt[i].sizeimage;
 		if (vb2_plane_size(vb, i) < size) {
 			dev_err(cam->dev, "plane size is too small:%lu<%u\n",
 				vb2_plane_size(vb, i), size);
@@ -276,7 +274,7 @@ static int mtk_camsv_vb2_buf_prepare(struct vb2_buffer *vb)
 	buf->v4l2_buf.field = V4L2_FIELD_NONE;
 
 	for (i = 0; i < vb->num_planes; i++) {
-		size = fmt->fmt.pix_mp.plane_fmt[i].sizeimage;
+		size = fmt->plane_fmt[i].sizeimage;
 		vb2_set_plane_payload(vb, i, size);
 	}
 
@@ -370,7 +368,7 @@ out:
 static int mtk_camsv_verify_format(struct mtk_camsv_dev *cam,
 				   struct mtk_camsv_video_device *node)
 {
-	struct v4l2_pix_format_mplane *pixfmt = &node->vdev_fmt.fmt.pix_mp;
+	struct v4l2_pix_format_mplane *pixfmt = &node->format;
 	struct v4l2_subdev_format fmt = {
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
 		.pad = node->id,
@@ -407,7 +405,7 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 	}
 
 	/* Enable CMOS and VF */
-	mbus_fmt = fourcc_to_mbus_format(node->vdev_fmt.fmt.pix_mp.pixelformat);
+	mbus_fmt = fourcc_to_mbus_format(node->format.pixelformat);
 	pak_en = is_format_pak(mbus_fmt);
 	mtk_camsv_cmos_vf_enable(p1_dev, true, pak_en);
 
@@ -523,7 +521,7 @@ static int mtk_camsv_vidioc_g_fmt(struct file *file, void *fh,
 {
 	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(file);
 
-	f->fmt = node->vdev_fmt.fmt;
+	f->fmt.pix_mp = node->format;
 
 	return 0;
 }
@@ -575,7 +573,7 @@ static int mtk_camsv_vidioc_s_fmt(struct file *file, void *fh,
 		return ret;
 
 	/* Configure to video device */
-	node->vdev_fmt = *f;
+	node->format = f->fmt.pix_mp;;
 
 	return 0;
 }
@@ -648,7 +646,7 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
 		node->enabled = true;
 	else
 		node->enabled = false;
-	mtk_camsv_dev_load_default_fmt(cam, node->desc, &node->vdev_fmt);
+	mtk_camsv_dev_load_default_fmt(cam, node->desc, &node->format);
 
 	cam->subdev_pads[MTK_CAMSV_CIO_PAD_NODE(node->id)].flags =
 		output ? MEDIA_PAD_FL_SINK : MEDIA_PAD_FL_SOURCE;
