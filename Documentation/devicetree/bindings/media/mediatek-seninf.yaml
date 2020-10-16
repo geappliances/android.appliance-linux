@@ -127,7 +127,6 @@ additionalProperties: false
 
 examples:
   - |
-
     #include <dt-bindings/clock/mt8183-clk.h>
     #include <dt-bindings/interrupt-controller/irq.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
@@ -143,7 +142,7 @@ examples:
             interrupts = <GIC_SPI 251 IRQ_TYPE_LEVEL_LOW>;
             power-domains = <&scpsys MT8183_POWER_DOMAIN_CAM>;
             clocks = <&camsys CLK_CAM_SENINF>,
-                <&topckgen CLK_TOP_MUX_SENINF>;
+                     <&topckgen CLK_TOP_MUX_SENINF>;
             clock-names = "cam_seninf", "top_mux_seninf";
             phys = <&mipi_dphy 0>;
             phy-names = "seninf";
@@ -177,7 +176,7 @@ examples:
             };
         };
 
-        mipi_dphy: mipi_dphy@11c80000 {
+        mipi_dphy: phy@11c80000 {
             compatible = "mediatek,mt8183-mipi_dphy";
             reg = <0 0x11C80000 0 0x6000>;
             #phy-cells = <1>;
@@ -221,3 +220,4 @@ examples:
             };
         };
     };
+...
