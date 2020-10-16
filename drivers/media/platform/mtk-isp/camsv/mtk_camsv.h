@@ -128,25 +128,27 @@ struct mtk_camsv_dev_node_desc {
  * struct mtk_camsv_video_device - Mediatek video device structure
  *
  * @id: Id for index of mtk_camsv_dev:vdev_nodes array
- * @enabled: Indicate the video device is enabled or not
  * @desc: The node description of video device
- * @vdev_fmt: The V4L2 format of video device
  * @vdev_pad: The media pad graph object of video device
- * @vbq: A videobuf queue of video device
  * @vdev: The video device instance
+ * @vbq: A videobuf queue of video device
  * @vdev_lock: Serializes vb2 queue and video device operations
- *
+ * @enabled: Indicate the video device is enabled or not
+ * @vdev_fmt: The V4L2 format of video device
  */
 struct mtk_camsv_video_device {
 	unsigned int id;
-	unsigned int enabled;
 	const struct mtk_camsv_dev_node_desc *desc;
-	struct v4l2_format vdev_fmt;
+
 	struct media_pad vdev_pad;
-	struct vb2_queue vbq;
 	struct video_device vdev;
+	struct vb2_queue vbq;
+
 	/* Serializes vb2 queue and video device operations */
 	struct mutex vdev_lock;
+
+	unsigned int enabled;
+	struct v4l2_format vdev_fmt;
 };
 
 /*
