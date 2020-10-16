@@ -151,46 +151,6 @@ static bool mtk_camsv_dev_find_fmt(const struct mtk_camsv_dev_node_desc *desc,
 	return false;
 }
 
-static unsigned int fourcc_to_mbus_format(unsigned int fourcc)
-{
-	switch (fourcc) {
-	case V4L2_PIX_FMT_MTISP_SBGGR12:
-		return MEDIA_BUS_FMT_SBGGR12_1X12;
-	case V4L2_PIX_FMT_MTISP_SGBRG12:
-		return MEDIA_BUS_FMT_SGBRG12_1X12;
-	case V4L2_PIX_FMT_MTISP_SGRBG12:
-		return MEDIA_BUS_FMT_SGRBG12_1X12;
-	case V4L2_PIX_FMT_MTISP_SRGGB12:
-		return MEDIA_BUS_FMT_SRGGB12_1X12;
-	case V4L2_PIX_FMT_MTISP_SBGGR10:
-		return MEDIA_BUS_FMT_SBGGR10_1X10;
-	case V4L2_PIX_FMT_MTISP_SGBRG10:
-		return MEDIA_BUS_FMT_SGBRG10_1X10;
-	case V4L2_PIX_FMT_MTISP_SGRBG10:
-		return MEDIA_BUS_FMT_SGRBG10_1X10;
-	case V4L2_PIX_FMT_MTISP_SRGGB10:
-		return MEDIA_BUS_FMT_SRGGB10_1X10;
-	case V4L2_PIX_FMT_SBGGR8:
-		return MEDIA_BUS_FMT_SBGGR8_1X8;
-	case V4L2_PIX_FMT_SGBRG8:
-		return MEDIA_BUS_FMT_SGBRG8_1X8;
-	case V4L2_PIX_FMT_SGRBG8:
-		return MEDIA_BUS_FMT_SGRBG8_1X8;
-	case V4L2_PIX_FMT_SRGGB8:
-		return MEDIA_BUS_FMT_SRGGB8_1X8;
-	case V4L2_PIX_FMT_YUYV:
-		return MEDIA_BUS_FMT_YUYV8_1X16;
-	case V4L2_PIX_FMT_YVYU:
-		return MEDIA_BUS_FMT_YVYU8_1X16;
-	case V4L2_PIX_FMT_UYVY:
-		return MEDIA_BUS_FMT_UYVY8_1X16;
-	case V4L2_PIX_FMT_VYUY:
-		return MEDIA_BUS_FMT_VYUY8_1X16;
-	default:
-		return 0;
-	}
-}
-
 static unsigned int calc_bpp(unsigned int fourcc)
 {
 	switch (fourcc) {
@@ -294,7 +254,6 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 	unsigned int size;
 	unsigned int np_conf;
-	unsigned int mbus_fmt;
 	unsigned int i;
 
 	/* Check the limitation of buffer size */
@@ -314,9 +273,8 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 		return -EINVAL;
 	}
 
-	mbus_fmt = fourcc_to_mbus_format(fmt->pixelformat);
 	mtk_camsv_setup(p1_dev, fmt->width, fmt->height,
-			fmt->plane_fmt[0].bytesperline, mbus_fmt);
+			fmt->plane_fmt[0].bytesperline, node->fmtinfo->code);
 
 	return 0;
 }
@@ -447,7 +405,6 @@ out:
 static int mtk_camsv_verify_format(struct mtk_camsv_dev *cam,
 				   struct mtk_camsv_video_device *node)
 {
-	struct v4l2_pix_format_mplane *pixfmt = &node->format;
 	struct v4l2_subdev_format fmt = {
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
 		.pad = node->id,
@@ -458,9 +415,9 @@ static int mtk_camsv_verify_format(struct mtk_camsv_dev *cam,
 	if (ret < 0)
 		return ret == -ENOIOCTLCMD ? -EINVAL : ret;
 
-	if (fourcc_to_mbus_format(pixfmt->pixelformat) != fmt.format.code ||
-	    pixfmt->height != fmt.format.height ||
-	    pixfmt->width != fmt.format.width)
+	if (node->fmtinfo->code != fmt.format.code ||
+	    node->format.height != fmt.format.height ||
+	    node->format.width != fmt.format.width)
 		return -EINVAL;
 
 	return 0;
