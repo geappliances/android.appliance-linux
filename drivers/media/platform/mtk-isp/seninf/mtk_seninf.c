@@ -236,13 +236,6 @@ static inline int is_4d1c(unsigned int port)
 	return port < CFG_CSI_PORT_0A;
 }
 
-static inline int is_cdphy_combo(unsigned int port)
-{
-	return port == CFG_CSI_PORT_0A ||
-		port == CFG_CSI_PORT_0B ||
-		port == CFG_CSI_PORT_0;
-}
-
 static u32 mtk_seninf_csi_port_to_seninf(u32 port)
 {
 	static const u32 port_to_seninf[] = {
