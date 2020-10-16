@@ -118,9 +118,9 @@ void mtk_camsv_setup(struct device *dev, u32 w, u32 h, u32 bpl, u32 mbus_fmt)
 	if (conf->enableFH)
 		writel(0x0U, p1_dev->regs + CAMSV_DMA_FH_EN);
 
-	writel(readl(p1_dev->regs + CAMSV_DMA_RSV1) & 0x7FFFFFFF,
+	writel(readl(p1_dev->regs + CAMSV_DMA_RSV1) & 0x7fffffff,
 	       p1_dev->regs + CAMSV_DMA_RSV1);
-	writel(0xFFFFFFFFU, p1_dev->regs + CAMSV_DMA_RSV6);
+	writel(0xffffffffU, p1_dev->regs + CAMSV_DMA_RSV6);
 
 	/* DMA performance : CQ ultra LSCI and BPCI. Multiplane ID */
 	writel(conf->dma_special_fun, p1_dev->regs + CAMSV_SPECIAL_FUN_EN);
