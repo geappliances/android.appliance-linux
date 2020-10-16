@@ -10,9 +10,8 @@ maintainers:
   - Louis Kuo <louis.kuo@mediatek.com>
 
 description: |
-  Seninf MIPI-CSI2 host driver is a HW camera interface controller. It support
-  a widely adopted, simple, high-speed protocol primarily intended for
-  point-to-point image and video transmission between cameras and host devices.
+  The SENINF is the CSI-2 and parallel camera sensor interface found in
+  multiple MediaTek SoCs.
 
 properties:
   compatible:
