@@ -88,9 +88,13 @@ struct mtk_seninf_format_info {
 };
 
 struct mtk_seninf_input {
+	enum CFG_CSI_PORT port;
+	enum SENINF_ID seninf;
+
+	struct v4l2_fwnode_bus_mipi_csi2 bus;
+
 	struct v4l2_subdev *subdev;
 	struct v4l2_mbus_framefmt format;
-	struct v4l2_fwnode_bus_mipi_csi2 bus;
 };
 
 struct mtk_seninf {
@@ -255,6 +259,7 @@ static u32 mtk_seninf_csi_port_to_seninf(u32 port)
 static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 			       unsigned int seninf)
 {
+	struct mtk_seninf_input *input = &priv->inputs[priv->active_input];
 	const struct mtk_seninf_format_info *fmtinfo;
 	unsigned int mux = priv->mux_sel;
 	void __iomem *pseninf_top = priv->base;
@@ -266,7 +271,7 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	unsigned int vs_pol = 0;
 	unsigned int pixel_mode = TWO_PIXEL_MODE;
 
-	fmtinfo = mtk_seninf_format_info(priv->inputs[priv->active_input].format.code);
+	fmtinfo = mtk_seninf_format_info(input->format.code);
 
 	/* Enable mux */
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
@@ -322,9 +327,10 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 static void mtk_seninf_rx_config(struct mtk_seninf *priv,
 				 unsigned int seninf)
 {
+	struct mtk_seninf_input *input = &priv->inputs[priv->active_input];
 	void __iomem *pseninf = priv->base + 0x1000 * seninf;
 
-	if (is_4d1c(priv->active_input)) {
+	if (is_4d1c(input->port)) {
 		SENINF_BITS(pseninf, MIPI_RX_CON24_CSI0,
 			    CSI0_BIST_LN0_MUX, 1);
 		SENINF_BITS(pseninf, MIPI_RX_CON24_CSI0,
@@ -348,22 +354,22 @@ static void mtk_seninf_rx_config(struct mtk_seninf *priv,
 static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 				    unsigned int seninf)
 {
+	struct mtk_seninf_input *input = &priv->inputs[priv->active_input];
 	const struct mtk_seninf_format_info *fmtinfo;
 	void __iomem *seninf_base = priv->base;
 	void __iomem *pseninf = priv->base + 0x1000 * seninf;
 	unsigned int dpcm;
-	unsigned int data_lane_num =
-		priv->inputs[priv->active_input].bus.num_data_lanes;
+	unsigned int data_lane_num = input->bus.num_data_lanes;
 	unsigned int cal_sel;
 	unsigned int data_header_order = 1;
 	unsigned int val = 0;
 
-	fmtinfo = mtk_seninf_format_info(priv->inputs[priv->active_input].format.code);
+	fmtinfo = mtk_seninf_format_info(input->format.code);
 
 	dev_dbg(priv->dev, "IS_4D1C %d port %d\n",
-		is_4d1c(priv->active_input), priv->active_input);
+		is_4d1c(input->port), input->port);
 
-	switch (priv->active_input) {
+	switch (input->port) {
 	case CFG_CSI_PORT_1:
 		cal_sel = 1;
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
@@ -393,6 +399,7 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 		break;
 	case CFG_CSI_PORT_0A:
 	case CFG_CSI_PORT_0B:
+	default:
 		cal_sel = 0;
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
 			    DPHY_MODE, 1);
@@ -585,16 +592,9 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 
 static int mtk_seninf_power_on(struct mtk_seninf *priv)
 {
+	struct mtk_seninf_input *input = &priv->inputs[priv->active_input];
 	void __iomem *pseninf = priv->base;
-	struct device *dev = priv->dev;
-	unsigned int seninf;
 	int ret;
-
-	seninf = mtk_seninf_csi_port_to_seninf(priv->active_input);
-	if (seninf < 0) {
-		dev_err(dev, "seninf port mapping fail\n");
-		return -EINVAL;
-	}
 
 	ret = pm_runtime_get_sync(priv->dev);
 	if (ret < 0) {
@@ -610,15 +610,15 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 
 	phy_power_on(priv->phy[priv->active_input]);
 
-	mtk_seninf_rx_config(priv, seninf);
+	mtk_seninf_rx_config(priv, input->seninf);
 
 	/* HQ */
 	writel(0x0, pseninf + SENINF_TG1_PH_CNT);
 	writel(0x10001, pseninf + SENINF_TG1_SEN_CK);
 
-	mtk_seninf_set_csi_mipi(priv, seninf);
+	mtk_seninf_set_csi_mipi(priv, input->seninf);
 
-	mtk_seninf_set_mux(priv, seninf);
+	mtk_seninf_set_mux(priv, input->seninf);
 	/* HQ */
 	writel(0x76543010, pseninf + SENINF_TOP_CAM_MUX_CTRL);
 
@@ -628,9 +628,8 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 static void mtk_seninf_power_off(struct mtk_seninf *priv)
 {
 	if (priv->active_input != -1) {
-		unsigned int seninf =
-			mtk_seninf_csi_port_to_seninf(priv->active_input);
-		void __iomem *pseninf = priv->base + 0x1000 * seninf;
+		struct mtk_seninf_input *input = &priv->inputs[priv->active_input];
+		void __iomem *pseninf = priv->base + 0x1000 * input->seninf;
 
 		/* Disable CSI2(2.5G) first */
 		writel(readl(pseninf + SENINF_CSI2_CTL) & 0xffffffe0,
@@ -904,7 +903,7 @@ static const struct media_entity_operations seninf_media_ops = {
 
 struct mtk_seninf_async_subdev {
 	struct v4l2_async_subdev asd;
-	u32 port;
+	struct mtk_seninf_input *input;
 };
 
 static int mtk_seninf_notifier_bound(
@@ -916,15 +915,16 @@ static int mtk_seninf_notifier_bound(
 		container_of(notifier, struct mtk_seninf, notifier);
 	struct mtk_seninf_async_subdev *s_asd =
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
+	struct mtk_seninf_input *input = s_asd->input;
 	int ret;
 
-	dev_dbg(priv->dev, "%s bound to input %u\n", sd->entity.name,
-		s_asd->port);
+	dev_dbg(priv->dev, "%s bound to SENINF%u\n", sd->entity.name,
+		input->seninf + 1);
 
-	priv->inputs[s_asd->port].subdev = sd;
+	input->subdev = sd;
 
 	ret = media_create_pad_link(&sd->entity, 0, &priv->subdev.entity,
-				    s_asd->port, 0);
+				    input->port, 0);
 	if (ret) {
 		dev_err(priv->dev, "failed to create link for %s\n",
 			sd->entity.name);
@@ -946,16 +946,22 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	struct mtk_seninf_async_subdev *s_asd =
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
 	unsigned int port = vep->base.port;
+	unsigned int seninf = mtk_seninf_csi_port_to_seninf(port);
+	struct mtk_seninf_input *input = &priv->inputs[port];
 
 	if (vep->bus_type != V4L2_MBUS_CSI2_DPHY) {
 		dev_err(dev, "Only CSI2 bus type is currently supported\n");
 		return -EINVAL;
 	}
 
-	priv->inputs[port].bus = vep->bus.mipi_csi2;
-	s_asd->port = port;
+	input->seninf = seninf;
+	input->port = port;
+	input->bus = vep->bus.mipi_csi2;
 
-	dev_dbg(dev, "%s: input %u uses %u data lanes\n", __func__, port,
+	s_asd->input = input;
+
+	dev_dbg(dev, "%s: port %u connected SENINF%u (%u data lanes)\n",
+		__func__, input->port, input->seninf + 1,
 		vep->bus.mipi_csi2.num_data_lanes);
 
 	return 0;
