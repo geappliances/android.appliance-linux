@@ -252,11 +252,6 @@ static const struct mtk_seninf_format_info *mtk_seninf_format_info(u32 code)
  * Hardware Configuration
  */
 
-static inline int is_4d1c(unsigned int port)
-{
-	return port < CFG_CSI_PORT_0A;
-}
-
 static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 			       struct mtk_seninf_input *input)
 {
@@ -330,7 +325,7 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 static void mtk_seninf_rx_config(struct mtk_seninf *priv,
 				 struct mtk_seninf_input *input)
 {
-	if (is_4d1c(input->port)) {
+	if (input->phy_mode == SENINF_PHY_MODE_4D1C) {
 		SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
 			    CSI0_BIST_LN0_MUX, 1);
 		SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
@@ -364,7 +359,7 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	fmtinfo = mtk_seninf_format_info(input->format.code);
 
 	dev_dbg(priv->dev, "IS_4D1C %d port %d\n",
-		is_4d1c(input->port), input->port);
+		input->phy_mode == SENINF_PHY_MODE_4D1C, input->port);
 
 	switch (input->port) {
 	case CFG_CSI_PORT_1:
