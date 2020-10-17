@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: (GPL-2.0-Only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/media/mediatek-seninf-dphy.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Mediatek Sensor Interface MIPI C/D-PHY Device Tree Bindings
+
+maintainers:
+  - Louis Kuo <louis.kuo@mediatek.com>
+
+description: |
+  The SENINF C/D-PHY is a set of C-PHY and D-PHY connected to the SENINF CSI-2
+  receivers. The number of PHYs depend on the SoC model.
+
+properties:
+  compatible:
+    const: mediatek,mt8183-mipi-dphy
+
+  reg:
+    minItems: 1
+
+  '#phy-cells':
+    const: 1
+
+required:
+  - compatible
+  - reg
+  - '#phy-cells'
+
+additionalProperties: false
+
+examples:
+  - |
+    mipi_dphy: phy@11c80000 {
+        compatible = "mediatek,mt8183-mipi_dphy";
+        reg = <0x11c80000 0x6000>;
+        #phy-cells = <1>;
+    };
+...
