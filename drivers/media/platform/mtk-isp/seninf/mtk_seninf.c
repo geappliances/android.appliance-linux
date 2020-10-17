@@ -115,7 +115,7 @@ struct mtk_seninf {
 	struct v4l2_mbus_framefmt source_format;
 
 	struct mtk_seninf_input inputs[SENINF_NUM_INPUTS];
-	int active_input;
+	struct mtk_seninf_input *active_input;
 
 	unsigned int mux_sel;
 	bool is_testmode;
@@ -588,7 +588,7 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 
 static int mtk_seninf_power_on(struct mtk_seninf *priv)
 {
-	struct mtk_seninf_input *input = &priv->inputs[priv->active_input];
+	struct mtk_seninf_input *input = priv->active_input;
 	void __iomem *pseninf = priv->base;
 	int ret;
 
@@ -623,8 +623,8 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 
 static void mtk_seninf_power_off(struct mtk_seninf *priv)
 {
-	if (priv->active_input != -1) {
-		struct mtk_seninf_input *input = &priv->inputs[priv->active_input];
+	if (priv->active_input) {
+		struct mtk_seninf_input *input = priv->active_input;
 
 		/* Disable CSI2(2.5G) first */
 		writel(readl(input->base + SENINF_CSI2_CTL) & 0xffffffe0,
@@ -803,8 +803,8 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 	int ret;
 
 	if (!on) {
-		if (priv->active_input != -1 && !priv->is_testmode) {
-			source = priv->inputs[priv->active_input].subdev;
+		if (priv->active_input && !priv->is_testmode) {
+			source = priv->active_input->subdev;
 			ret = v4l2_subdev_call(source, video, s_stream, 0);
 			if (ret)
 				dev_err(priv->dev,
@@ -820,7 +820,7 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 	 * If no input is selected, or test mode is enabled, just enable the
 	 * test pattern generator.
 	 */
-	if (priv->active_input == -1 || priv->is_testmode)
+	if (!priv->active_input || priv->is_testmode)
 		return seninf_enable_test_pattern(priv);
 
 	/* Start the SENINF first and then the source. */
@@ -828,7 +828,7 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 	if (ret < 0)
 		return ret;
 
-	source = priv->inputs[priv->active_input].subdev;
+	source = priv->active_input->subdev;
 	ret = v4l2_subdev_call(source, video, s_stream, 1);
 	if (ret) {
 		dev_err(priv->dev, "failed to start source %s: %d\n",
@@ -878,12 +878,12 @@ static int seninf_link_setup(struct media_entity *entity,
 		return 0;
 
 	if (flags & MEDIA_LNK_FL_ENABLED) {
-		if (priv->active_input != -1)
+		if (priv->active_input)
 			return -EBUSY;
 
-		priv->active_input = local->index;
+		priv->active_input = &priv->inputs[local->index];
 	} else {
-		priv->active_input = -1;
+		priv->active_input = NULL;
 	}
 
 	return 0;
@@ -1097,8 +1097,6 @@ static int seninf_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to get seninf clock:%d\n", ret);
 		return ret;
 	}
-
-	priv->active_input = -1;
 
 	/*
 	 * TODO: Support multiple source connections. For now only the first
