@@ -358,9 +358,6 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 
 	fmtinfo = mtk_seninf_format_info(input->format.code);
 
-	dev_dbg(priv->dev, "IS_4D1C %d port %d\n",
-		input->phy_mode == SENINF_PHY_MODE_4D1C, input->port);
-
 	switch (input->port) {
 	case CFG_CSI_PORT_1:
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
@@ -937,6 +934,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
 	unsigned int port = vep->base.port;
 	struct mtk_seninf_input *input;
+	const char *phy_name;
 	unsigned int i;
 
 	if (port >= ARRAY_SIZE(priv->inputs)) {
@@ -978,10 +976,13 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 		if (input->bus.clock_lane > 2)
 			input->phy_mode = SENINF_PHY_MODE_4D1C;
 
-		if (input->phy_mode == SENINF_PHY_MODE_4D1C)
+		if (input->phy_mode == SENINF_PHY_MODE_4D1C) {
 			input->phy = priv->phy[SENINF_PHY_CSI0];
-		else
+			phy_name = "CSI0";
+		} else {
 			input->phy = priv->phy[SENINF_PHY_CSI0A];
+			phy_name = "CSI0A";
+		}
 
 		break;
 	}
@@ -989,23 +990,27 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	case SENINF_2:
 		input->phy = priv->phy[SENINF_PHY_CSI0B];
 		input->phy_mode = SENINF_PHY_MODE_2D1C;
+		phy_name = "CSI0B";
 		break;
 
 	case SENINF_3:
 		input->phy = priv->phy[SENINF_PHY_CSI1];
 		input->phy_mode = SENINF_PHY_MODE_4D1C;
+		phy_name = "CSI1";
 		break;
 
 	case SENINF_5:
 		input->phy = priv->phy[SENINF_PHY_CSI2];
 		input->phy_mode = SENINF_PHY_MODE_4D1C;
+		phy_name = "CSI2";
 		break;
 	}
 
 	s_asd->input = input;
 
-	dev_dbg(dev, "%s: port %u connected SENINF%u (%u data lanes)\n",
-		__func__, input->port, input->seninf + 1,
+	dev_dbg(dev, "%s: SENINF%u using %s (%uD1C mode, %u data lanes)\n",
+		__func__, input->seninf + 1, phy_name,
+		input->phy_mode == SENINF_PHY_MODE_4D1C ? 4 : 2,
 		vep->bus.mipi_csi2.num_data_lanes);
 
 	return 0;
