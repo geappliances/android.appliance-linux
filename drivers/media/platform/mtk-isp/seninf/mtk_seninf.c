@@ -628,9 +628,11 @@ static void mtk_seninf_power_off(struct mtk_seninf *priv)
 		/* Disable CSI2(2.5G) first */
 		writel(readl(input->base + SENINF_CSI2_CTL) & 0xffffffe0,
 		       input->base + SENINF_CSI2_CTL);
+
+		if (!priv->is_testmode)
+			phy_power_off(priv->phy[priv->active_input]);
 	}
 
-	phy_power_off(priv->phy[priv->active_input]);
 	pm_runtime_put(priv->dev);
 }
 
