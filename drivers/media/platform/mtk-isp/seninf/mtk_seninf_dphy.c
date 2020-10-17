@@ -3,6 +3,7 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
@@ -27,6 +28,7 @@ struct mtk_mipi_dphy_port {
 	enum mtk_mipi_dphy_port_id id;
 	struct phy *phy;
 	void __iomem *base;
+	bool active;
 	bool is_cdphy;
 	bool is_4d1c;
 };
@@ -35,6 +37,7 @@ struct mtk_mipi_dphy {
 	struct device *dev;
 	void __iomem *rx;
 	struct mtk_mipi_dphy_port ports[MTK_MIPI_PHY_PORT_MAX_NUM];
+	struct mutex lock;
 };
 
 static void mtk_mipi_phy_port_update(void __iomem *base,
@@ -53,8 +56,38 @@ static void mtk_mipi_phy_port_update(void __iomem *base,
 static int mtk_mipi_phy_power_on(struct phy *phy)
 {
 	struct mtk_mipi_dphy_port *port = phy_get_drvdata(phy);
+	struct mtk_mipi_dphy *priv = port->dev;
 	void __iomem *pmipi_rx_base = port->dev->rx;
 	void __iomem *pmipi_rx = port->base;
+	int ret = 0;
+
+	/* Ports CSI0 and CSI0A/B are mutually exclusive. */
+	mutex_lock(&priv->lock);
+
+	switch (port->id) {
+	case MTK_MIPI_PHY_PORT_0:
+		if (priv->ports[MTK_MIPI_PHY_PORT_0A].active ||
+		    priv->ports[MTK_MIPI_PHY_PORT_0B].active)
+			ret = -EBUSY;
+		break;
+
+	case MTK_MIPI_PHY_PORT_0A:
+	case MTK_MIPI_PHY_PORT_0B:
+		if (priv->ports[MTK_MIPI_PHY_PORT_0].active)
+			ret = -EBUSY;
+		break;
+
+	default:
+		break;
+	}
+
+	if (!ret)
+		port->active = true;
+
+	mutex_unlock(&priv->lock);
+
+	if (ret < 0)
+		return ret;
 
 	/* Set analog phy mode to DPHY */
 	if (port->is_cdphy)
@@ -229,6 +262,10 @@ static int mtk_mipi_phy_power_off(struct phy *phy)
 			  RG_CSIxA_BG_LPF_EN, 0);
 	}
 
+	mutex_lock(&port->dev->lock);
+	port->active = false;
+	mutex_unlock(&port->dev->lock);
+
 	return 0;
 }
 
@@ -252,7 +289,7 @@ static struct phy *mtk_mipi_dphy_xlate(struct device *dev,
 	return priv->ports[args->args[0]].phy;
 }
 
-static int mipi_dphy_probe(struct platform_device *pdev)
+static int mtk_mipi_dphy_probe(struct platform_device *pdev)
 {
 	static const unsigned int ports_offsets[] = {
 		[MTK_MIPI_PHY_PORT_0] = 0,
@@ -303,7 +340,18 @@ static int mipi_dphy_probe(struct platform_device *pdev)
 		phy_set_drvdata(phy, port);
 	}
 
+	mutex_init(&priv->lock);
+
 	phy_provider = devm_of_phy_provider_register(dev, mtk_mipi_dphy_xlate);
+
+	return 0;
+}
+
+static int mtk_mipi_dphy_remove(struct platform_device *pdev)
+{
+	struct mtk_mipi_dphy *priv = platform_get_drvdata(pdev);
+
+	mutex_destroy(&priv->lock);
 
 	return 0;
 }
@@ -315,7 +363,8 @@ static const struct of_device_id mtk_mipi_dphy_of_match[] = {
 MODULE_DEVICE_TABLE(of, mtk_mipi_dphy_of_match);
 
 static struct platform_driver mipi_dphy_pdrv = {
-	.probe	= mipi_dphy_probe,
+	.probe = mtk_mipi_dphy_probe,
+	.remove = mtk_mipi_dphy_remove,
 	.driver	= {
 		.name	= "mtk-mipi-dphy",
 		.of_match_table = of_match_ptr(mtk_mipi_dphy_of_match),
