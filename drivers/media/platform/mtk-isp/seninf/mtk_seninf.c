@@ -324,51 +324,55 @@ static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
 	/* CSI0(A) and CSI0B */
 	if (priv->inputs[CFG_CSI_PORT_0].phy_mode ||
 	    priv->inputs[CFG_CSI_PORT_0B].phy_mode) {
+		struct mtk_seninf_input *input_a = &priv->inputs[CFG_CSI_PORT_0];
+		struct mtk_seninf_input *input_b = &priv->inputs[CFG_CSI_PORT_0B];
+		unsigned int csi0b_clock;
 		unsigned int dphy_mode;
-		unsigned int ck_sel_1;
-		unsigned int ck_sel_2;
+
+		/*
+		 * If CSI0B is enabled, use its clock lane. Otherwise set it to
+		 * CSI0B lane 2 to ensure it won't conflict with any lane used
+		 * by CSI0(A).
+		 */
+		csi0b_clock = input_b->phy_mode ? input_b->bus.clock_lane : 2;
 
 		/*
 		 * If CSI0A operates in 4D1C then the whole port operates in
 		 * 4D1C, otherwise we have either a single or a dual 2D1C
 		 * configuration.
 		 */
-		if (priv->inputs[CFG_CSI_PORT_0].phy_mode == SENINF_PHY_MODE_4D1C) {
-			dphy_mode = 0;
-			ck_sel_1 = 2;
-			ck_sel_2 = 0;
-		} else {
-			dphy_mode = 1;
-			ck_sel_1 = 1;
-			ck_sel_2 = 1;
-		}
+		dphy_mode = input_a->phy_mode == SENINF_PHY_MODE_4D1C ? 0 : 1;
 
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
 			    DPHY_MODE, dphy_mode);
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    CK_SEL_1, ck_sel_1);
+			    CK_SEL_1, input_a->bus.clock_lane);
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    CK_SEL_2, ck_sel_2);
+			    CK_SEL_2, csi0b_clock);
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
 			    PHY_SENINF_LANE_MUX_CSI0_EN, 1);
 	}
 
 	/* CSI1 */
 	if (priv->inputs[CFG_CSI_PORT_1].phy_mode) {
+		struct mtk_seninf_input *input = &priv->inputs[CFG_CSI_PORT_1];
+
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
 			    DPHY_MODE, 0 /* 4D1C */);
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
-			    CK_SEL_1, 2);
+			    CK_SEL_1, input->bus.clock_lane);
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
 			    PHY_SENINF_LANE_MUX_CSI1_EN, 1);
 	}
 
 	/* CSI2 */
 	if (priv->inputs[CFG_CSI_PORT_2].phy_mode) {
+		struct mtk_seninf_input *input = &priv->inputs[CFG_CSI_PORT_2];
+
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
 			    DPHY_MODE, 0 /* 4D1C */);
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
-			    CK_SEL_1, 2);
+			    CK_SEL_1, input->bus.clock_lane);
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
 			    PHY_SENINF_LANE_MUX_CSI2_EN, 1);
 	}
