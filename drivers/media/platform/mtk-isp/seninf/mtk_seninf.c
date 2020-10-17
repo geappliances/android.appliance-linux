@@ -965,6 +965,10 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	const char *phy_name;
 	unsigned int i;
 
+	/* Skip disabled sensors. */
+	if (!fwnode_device_is_available(asd->match.fwnode))
+		return -ENOTCONN;
+
 	if (port >= ARRAY_SIZE(priv->inputs)) {
 		dev_err(dev, "Invalid port %u\n", port);
 		return -EINVAL;
