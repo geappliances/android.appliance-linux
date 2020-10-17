@@ -89,6 +89,7 @@ struct mtk_seninf_format_info {
 
 struct mtk_seninf_input {
 	struct v4l2_subdev *subdev;
+	struct v4l2_mbus_framefmt format;
 	struct v4l2_fwnode_bus_mipi_csi2 bus;
 };
 
@@ -105,7 +106,7 @@ struct mtk_seninf {
 
 	struct v4l2_ctrl_handler ctrl_handler;
 
-	struct v4l2_mbus_framefmt fmt[SENINF_NUM_PADS];
+	struct v4l2_mbus_framefmt source_format;
 
 	struct mtk_seninf_input inputs[SENINF_NUM_INPUTS];
 	int active_input;
@@ -265,7 +266,7 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	unsigned int vs_pol = 0;
 	unsigned int pixel_mode = TWO_PIXEL_MODE;
 
-	fmtinfo = mtk_seninf_format_info(priv->fmt[priv->active_input].code);
+	fmtinfo = mtk_seninf_format_info(priv->inputs[priv->active_input].format.code);
 
 	/* Enable mux */
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
@@ -357,7 +358,7 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	unsigned int data_header_order = 1;
 	unsigned int val = 0;
 
-	fmtinfo = mtk_seninf_format_info(priv->fmt[priv->active_input].code);
+	fmtinfo = mtk_seninf_format_info(priv->inputs[priv->active_input].format.code);
 
 	dev_dbg(priv->dev, "IS_4D1C %d port %d\n",
 		is_4d1c(priv->active_input), priv->active_input);
@@ -480,7 +481,7 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	unsigned int mux = 0;
 	int ret;
 
-	fmtinfo = mtk_seninf_format_info(priv->fmt[SENINF_NUM_PADS - 1].code);
+	fmtinfo = mtk_seninf_format_info(priv->source_format.code);
 
 	ret = pm_runtime_get_sync(priv->dev);
 	if (ret < 0) {
@@ -508,18 +509,18 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	else
 		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x1);
 
-	switch (priv->fmt[SENINF_NUM_PADS - 1].code) {
+	switch (priv->source_format.code) {
 	case MEDIA_BUS_FMT_UYVY8_1X16:
 	case MEDIA_BUS_FMT_VYUY8_1X16:
 	case MEDIA_BUS_FMT_YUYV8_1X16:
 	case MEDIA_BUS_FMT_YVYU8_1X16:
-		writel((priv->fmt[SENINF_NUM_PADS - 1].height + 8) << 16 |
-		       priv->fmt[SENINF_NUM_PADS - 1].width * 2,
+		writel((priv->source_format.height + 8) << 16 |
+		       priv->source_format.width * 2,
 		       pseninf + SENINF_TG1_TM_SIZE);
 		break;
 	default:
-		writel((priv->fmt[SENINF_NUM_PADS - 1].height + 8) << 16 |
-		       priv->fmt[SENINF_NUM_PADS - 1].width,
+		writel((priv->source_format.height + 8) << 16 |
+		       priv->source_format.width,
 		       pseninf + SENINF_TG1_TM_SIZE);
 		break;
 	}
@@ -724,7 +725,10 @@ seninf_get_pad_format(struct mtk_seninf *priv, struct v4l2_subdev_pad_config *cf
 	case V4L2_SUBDEV_FORMAT_TRY:
 		return v4l2_subdev_get_try_format(&priv->subdev, cfg, pad);
 	case V4L2_SUBDEV_FORMAT_ACTIVE:
-		return &priv->fmt[pad];
+		if (pad < ARRAY_SIZE(priv->inputs))
+			return &priv->inputs[pad].format;
+		else
+			return &priv->source_format;
 	default:
 		return NULL;
 	}
