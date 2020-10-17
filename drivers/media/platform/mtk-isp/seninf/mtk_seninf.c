@@ -257,9 +257,8 @@ static u32 mtk_seninf_csi_port_to_seninf(u32 port)
 }
 
 static void mtk_seninf_set_mux(struct mtk_seninf *priv,
-			       unsigned int seninf)
+			       struct mtk_seninf_input *input)
 {
-	struct mtk_seninf_input *input = &priv->inputs[priv->active_input];
 	const struct mtk_seninf_format_info *fmtinfo;
 	unsigned int mux = priv->mux_sel;
 	void __iomem *pseninf_top = priv->base;
@@ -318,17 +317,16 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 
 	/* Set top mux */
 	val = (readl(pseninf_top + SENINF_TOP_MUX_CTRL) &
-		(~(0xf << (mux * 4))))	| ((seninf & 0xF) << (mux * 4));
+		(~(0xf << (mux * 4))))	| ((input->seninf & 0xF) << (mux * 4));
 	writel(val, pseninf_top + SENINF_TOP_MUX_CTRL);
 	/* HQ */
 	writel(0xc2000, pseninf + SENINF_MUX_SPARE);
 }
 
 static void mtk_seninf_rx_config(struct mtk_seninf *priv,
-				 unsigned int seninf)
+				 struct mtk_seninf_input *input)
 {
-	struct mtk_seninf_input *input = &priv->inputs[priv->active_input];
-	void __iomem *pseninf = priv->base + 0x1000 * seninf;
+	void __iomem *pseninf = priv->base + 0x1000 * input->seninf;
 
 	if (is_4d1c(input->port)) {
 		SENINF_BITS(pseninf, MIPI_RX_CON24_CSI0,
@@ -352,12 +350,11 @@ static void mtk_seninf_rx_config(struct mtk_seninf *priv,
 }
 
 static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
-				    unsigned int seninf)
+				    struct mtk_seninf_input *input)
 {
-	struct mtk_seninf_input *input = &priv->inputs[priv->active_input];
 	const struct mtk_seninf_format_info *fmtinfo;
 	void __iomem *seninf_base = priv->base;
-	void __iomem *pseninf = priv->base + 0x1000 * seninf;
+	void __iomem *pseninf = priv->base + 0x1000 * input->seninf;
 	unsigned int dpcm;
 	unsigned int data_lane_num = input->bus.num_data_lanes;
 	unsigned int cal_sel;
@@ -610,15 +607,15 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 
 	phy_power_on(priv->phy[priv->active_input]);
 
-	mtk_seninf_rx_config(priv, input->seninf);
+	mtk_seninf_rx_config(priv, input);
 
 	/* HQ */
 	writel(0x0, pseninf + SENINF_TG1_PH_CNT);
 	writel(0x10001, pseninf + SENINF_TG1_SEN_CK);
 
-	mtk_seninf_set_csi_mipi(priv, input->seninf);
+	mtk_seninf_set_csi_mipi(priv, input);
 
-	mtk_seninf_set_mux(priv, input->seninf);
+	mtk_seninf_set_mux(priv, input);
 	/* HQ */
 	writel(0x76543010, pseninf + SENINF_TOP_CAM_MUX_CTRL);
 
