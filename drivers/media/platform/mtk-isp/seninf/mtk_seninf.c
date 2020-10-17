@@ -323,6 +323,9 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	writel(val, pseninf_top + SENINF_TOP_MUX_CTRL);
 	/* HQ */
 	writel(0xc2000, pseninf + SENINF_MUX_SPARE);
+
+	/* HQ */
+	writel(0x76543010, pseninf_top + SENINF_TOP_CAM_MUX_CTRL);
 }
 
 static void mtk_seninf_rx_config(struct mtk_seninf *priv,
@@ -596,7 +599,6 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 static int mtk_seninf_power_on(struct mtk_seninf *priv)
 {
 	struct mtk_seninf_input *input = priv->active_input;
-	void __iomem *pseninf = priv->base;
 	int ret;
 
 	ret = pm_runtime_get_sync(priv->dev);
@@ -609,12 +611,8 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 	phy_power_on(input->phy);
 
 	mtk_seninf_rx_config(priv, input);
-
 	mtk_seninf_set_csi_mipi(priv, input);
-
 	mtk_seninf_set_mux(priv, input);
-	/* HQ */
-	writel(0x76543010, pseninf + SENINF_TOP_CAM_MUX_CTRL);
 
 	return 0;
 }
