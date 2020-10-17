@@ -43,13 +43,10 @@ enum TEST_MODE {
 };
 
 enum CFG_CSI_PORT {
-	CFG_CSI_PORT_0 = 0x0,	/* 4D1C */
+	CFG_CSI_PORT_0 = 0,	/* 4D1C or 2D1C */
 	CFG_CSI_PORT_1,		/* 4D1C */
 	CFG_CSI_PORT_2,		/* 4D1C */
-	CFG_CSI_PORT_0A,	/* 2D1C */
 	CFG_CSI_PORT_0B,	/* 2D1C */
-	CFG_CSI_PORT_MAX_NUM,
-	CFG_CSI_PORT_NONE	/*for non-MIPI input */
 };
 
 enum PIXEL_MODE {
@@ -322,6 +319,61 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	writel(0x76543010, pseninf_top + SENINF_TOP_CAM_MUX_CTRL);
 }
 
+static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
+{
+	/* CSI0(A) and CSI0B */
+	if (priv->inputs[CFG_CSI_PORT_0].phy_mode ||
+	    priv->inputs[CFG_CSI_PORT_0B].phy_mode) {
+		unsigned int dphy_mode;
+		unsigned int ck_sel_1;
+		unsigned int ck_sel_2;
+
+		/*
+		 * If CSI0A operates in 4D1C then the whole port operates in
+		 * 4D1C, otherwise we have either a single or a dual 2D1C
+		 * configuration.
+		 */
+		if (priv->inputs[CFG_CSI_PORT_0].phy_mode == SENINF_PHY_MODE_4D1C) {
+			dphy_mode = 0;
+			ck_sel_1 = 2;
+			ck_sel_2 = 0;
+		} else {
+			dphy_mode = 1;
+			ck_sel_1 = 1;
+			ck_sel_2 = 1;
+		}
+
+		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+			    DPHY_MODE, dphy_mode);
+		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+			    CK_SEL_1, ck_sel_1);
+		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+			    CK_SEL_2, ck_sel_2);
+		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+			    PHY_SENINF_LANE_MUX_CSI0_EN, 1);
+	}
+
+	/* CSI1 */
+	if (priv->inputs[CFG_CSI_PORT_1].phy_mode) {
+		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
+			    DPHY_MODE, 0 /* 4D1C */);
+		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
+			    CK_SEL_1, 2);
+		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
+			    PHY_SENINF_LANE_MUX_CSI1_EN, 1);
+	}
+
+	/* CSI2 */
+	if (priv->inputs[CFG_CSI_PORT_2].phy_mode) {
+		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
+			    DPHY_MODE, 0 /* 4D1C */);
+		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
+			    CK_SEL_1, 2);
+		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
+			    PHY_SENINF_LANE_MUX_CSI2_EN, 1);
+	}
+}
+
 static void mtk_seninf_rx_config(struct mtk_seninf *priv,
 				 struct mtk_seninf_input *input)
 {
@@ -350,52 +402,12 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 				    struct mtk_seninf_input *input)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
-	void __iomem *seninf_base = priv->base;
 	unsigned int dpcm;
 	unsigned int data_lane_num = input->bus.num_data_lanes;
 	unsigned int data_header_order = 1;
 	unsigned int val = 0;
 
 	fmtinfo = mtk_seninf_format_info(input->format.code);
-
-	switch (input->port) {
-	case CFG_CSI_PORT_1:
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
-			    DPHY_MODE, 0);
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
-			    CK_SEL_1, 2);
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
-			    PHY_SENINF_LANE_MUX_CSI1_EN, 1);
-		break;
-	case CFG_CSI_PORT_2:
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
-			    DPHY_MODE, 0);
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
-			    CK_SEL_1, 2);
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
-			    PHY_SENINF_LANE_MUX_CSI2_EN, 1);
-		break;
-	case CFG_CSI_PORT_0:
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    DPHY_MODE, 0);
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    CK_SEL_1, 2);
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    PHY_SENINF_LANE_MUX_CSI0_EN, 1);
-		break;
-	case CFG_CSI_PORT_0A:
-	case CFG_CSI_PORT_0B:
-	default:
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    DPHY_MODE, 1);
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    CK_SEL_1, 1);
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    CK_SEL_2, 1);
-		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    PHY_SENINF_LANE_MUX_CSI0_EN, 1);
-		break;
-	}
 
 	/* Configure timestamp */
 	writel(SENINF_TIMESTAMP_STEP, input->base + SENINF_TG1_TM_STP);
@@ -593,6 +605,8 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 		pm_runtime_put_noidle(priv->dev);
 		return ret;
 	}
+
+	mtk_seninf_setup_phy(priv);
 
 	phy_power_on(input->phy);
 
@@ -925,7 +939,6 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 		[CFG_CSI_PORT_0] = SENINF_1,
 		[CFG_CSI_PORT_1] = SENINF_3,
 		[CFG_CSI_PORT_2] = SENINF_5,
-		[CFG_CSI_PORT_0A] = SENINF_1,
 		[CFG_CSI_PORT_0B] = SENINF_2,
 	};
 
