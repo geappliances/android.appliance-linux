@@ -65,6 +65,20 @@ enum SENINF_ID {
 	SENINF_5 = 4,
 };
 
+enum mtk_seninf_phy {
+	SENINF_PHY_CSI0 = 0,
+	SENINF_PHY_CSI1 = 1,
+	SENINF_PHY_CSI2 = 2,
+	SENINF_PHY_CSI0A = 3,
+	SENINF_PHY_CSI0B = 4,
+};
+
+enum mtk_seninf_phy_mode {
+	SENINF_PHY_MODE_NONE,
+	SENINF_PHY_MODE_4D1C,
+	SENINF_PHY_MODE_2D1C,
+};
+
 #define SENINF_BITS(base, reg, field, val) do { \
 		u32 __iomem *__p = (base) + (reg); \
 		u32 __v = *__p; \
@@ -89,7 +103,9 @@ struct mtk_seninf_input {
 	enum CFG_CSI_PORT port;
 	enum SENINF_ID seninf;
 	void __iomem *base;
+
 	struct phy *phy;
+	enum mtk_seninf_phy_mode phy_mode;
 
 	struct v4l2_fwnode_bus_mipi_csi2 bus;
 
@@ -239,21 +255,6 @@ static const struct mtk_seninf_format_info *mtk_seninf_format_info(u32 code)
 static inline int is_4d1c(unsigned int port)
 {
 	return port < CFG_CSI_PORT_0A;
-}
-
-static u32 mtk_seninf_csi_port_to_seninf(u32 port)
-{
-	static const u32 port_to_seninf[] = {
-		[CFG_CSI_PORT_0] = SENINF_1,
-		[CFG_CSI_PORT_1] = SENINF_3,
-		[CFG_CSI_PORT_2] = SENINF_5,
-		[CFG_CSI_PORT_0A] = SENINF_1,
-		[CFG_CSI_PORT_0B] = SENINF_2,
-	};
-	if (WARN_ON(port >= ARRAY_SIZE(port_to_seninf)))
-		return -EINVAL;
-
-	return port_to_seninf[port];
 }
 
 static void mtk_seninf_set_mux(struct mtk_seninf *priv,
@@ -928,23 +929,83 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 				   struct v4l2_fwnode_endpoint *vep,
 				   struct v4l2_async_subdev *asd)
 {
+	static const u32 port_to_seninf[] = {
+		[CFG_CSI_PORT_0] = SENINF_1,
+		[CFG_CSI_PORT_1] = SENINF_3,
+		[CFG_CSI_PORT_2] = SENINF_5,
+		[CFG_CSI_PORT_0A] = SENINF_1,
+		[CFG_CSI_PORT_0B] = SENINF_2,
+	};
+
 	struct mtk_seninf *priv = dev_get_drvdata(dev);
 	struct mtk_seninf_async_subdev *s_asd =
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
 	unsigned int port = vep->base.port;
-	unsigned int seninf = mtk_seninf_csi_port_to_seninf(port);
-	struct mtk_seninf_input *input = &priv->inputs[port];
+	struct mtk_seninf_input *input;
+	unsigned int i;
+
+	if (port >= ARRAY_SIZE(priv->inputs)) {
+		dev_err(dev, "Invalid port %u\n", port);
+		return -EINVAL;
+	}
 
 	if (vep->bus_type != V4L2_MBUS_CSI2_DPHY) {
 		dev_err(dev, "Only CSI2 bus type is currently supported\n");
 		return -EINVAL;
 	}
 
-	input->seninf = seninf;
+	input = &priv->inputs[port];
+
 	input->port = port;
-	input->base = priv->base + 0x1000 * seninf;
-	input->phy = priv->phy[port];
+	input->seninf = port_to_seninf[port];
+	input->base = priv->base + 0x1000 * input->seninf;
 	input->bus = vep->bus.mipi_csi2;
+
+	/*
+	 * Select the PHY. SENINF2, SENINF3 and SENINF5 are hardwired to the
+	 * CSI1, CSI2 and CSI0B PHYs respectively. SENINF1 uses CSI0 or CSI0A
+	 * depending on the clock and data lanes routing.
+	 */
+	switch (input->seninf) {
+	case SENINF_1: {
+	default:
+		/*
+		 * If all clock and data lanes are connected to the CSI0A half,
+		 * use CSI0A. Otherwise use the full CSI0.
+		 */
+		input->phy_mode = SENINF_PHY_MODE_2D1C;
+
+		for (i = 0; i < input->bus.num_data_lanes; ++i) {
+			if (input->bus.data_lanes[i] > 2)
+				input->phy_mode = SENINF_PHY_MODE_4D1C;
+		}
+
+		if (input->bus.clock_lane > 2)
+			input->phy_mode = SENINF_PHY_MODE_4D1C;
+
+		if (input->phy_mode == SENINF_PHY_MODE_4D1C)
+			input->phy = priv->phy[SENINF_PHY_CSI0];
+		else
+			input->phy = priv->phy[SENINF_PHY_CSI0A];
+
+		break;
+	}
+
+	case SENINF_2:
+		input->phy = priv->phy[SENINF_PHY_CSI0B];
+		input->phy_mode = SENINF_PHY_MODE_2D1C;
+		break;
+
+	case SENINF_3:
+		input->phy = priv->phy[SENINF_PHY_CSI1];
+		input->phy_mode = SENINF_PHY_MODE_4D1C;
+		break;
+
+	case SENINF_5:
+		input->phy = priv->phy[SENINF_PHY_CSI2];
+		input->phy_mode = SENINF_PHY_MODE_4D1C;
+		break;
+	}
 
 	s_asd->input = input;
 
@@ -1039,7 +1100,11 @@ static int seninf_probe(struct platform_device *pdev)
 		"cam_seninf", "top_mux_seninf"
 	};
 	static const char * const phy_names[] = {
-		"csi0", "csi1", "csi2", "csi0a", "csi0b",
+		[SENINF_PHY_CSI0] = "csi0",
+		[SENINF_PHY_CSI1] = "csi1",
+		[SENINF_PHY_CSI2] = "csi2",
+		[SENINF_PHY_CSI0A] = "csi0a",
+		[SENINF_PHY_CSI0B] = "csi0b",
 	};
 
 	struct resource *res;
