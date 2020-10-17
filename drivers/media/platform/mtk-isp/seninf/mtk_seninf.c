@@ -94,7 +94,7 @@ struct mtk_seninf_input {
 
 struct mtk_seninf {
 	struct device *dev;
-	struct phy *dphy;
+	struct phy *phy[5];
 	unsigned int num_clks;
 	struct clk_bulk_data *clks;
 	void __iomem *base;
@@ -607,7 +607,7 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_CSI2_IP_EN, 1);
 	writel(SENINF_TIMESTAMP_STEP, pseninf + SENINF_TG1_TM_STP);
 
-	phy_power_on(priv->dphy);
+	phy_power_on(priv->phy[priv->active_input]);
 
 	mtk_seninf_rx_config(priv, seninf);
 
@@ -636,7 +636,7 @@ static void mtk_seninf_power_off(struct mtk_seninf *priv)
 		       pseninf + SENINF_CSI2_CTL);
 	}
 
-	phy_power_off(priv->dphy);
+	phy_power_off(priv->phy[priv->active_input]);
 	pm_runtime_put(priv->dev);
 }
 
@@ -1036,10 +1036,14 @@ err_free_handler:
 
 static int seninf_probe(struct platform_device *pdev)
 {
-	/* List of clocks required by seninf */
+	/* List of clocks and PHYs required by seninf. */
 	static const char * const clk_names[] = {
 		"cam_seninf", "top_mux_seninf"
 	};
+	static const char * const phy_names[] = {
+		"csi0", "csi1", "csi2", "csi0a", "csi0b",
+	};
+
 	struct resource *res;
 	struct mtk_seninf *priv;
 	struct device *dev = &pdev->dev;
@@ -1058,11 +1062,18 @@ static int seninf_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->base))
 		return PTR_ERR(priv->base);
 
-	priv->dphy = devm_phy_get(dev, "mipi_dphy_rx");
-	if (IS_ERR(priv->dphy)) {
-		dev_err(dev, "failed to get phy:%ld\n", PTR_ERR(priv->dphy));
-		return PTR_ERR(priv->dphy);
+	for (i = 0; i < ARRAY_SIZE(priv->phy); ++i) {
+		struct phy *phy;
+
+		phy = devm_phy_get(dev, phy_names[i]);
+		if (IS_ERR(phy)) {
+			dev_err(dev, "failed to get phy:%ld\n", PTR_ERR(phy));
+			return PTR_ERR(phy);
+		}
+
+		priv->phy[i] = phy;
 	}
+
 	priv->num_clks = ARRAY_SIZE(clk_names);
 	priv->clks = devm_kcalloc(dev, priv->num_clks,
 				  sizeof(*priv->clks), GFP_KERNEL);
