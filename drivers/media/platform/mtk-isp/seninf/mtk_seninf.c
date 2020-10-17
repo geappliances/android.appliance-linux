@@ -408,6 +408,13 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 		break;
 	}
 
+	/* Configure timestamp */
+	writel(SENINF_TIMESTAMP_STEP, input->base + SENINF_TG1_TM_STP);
+
+	/* HQ */
+	writel(0x0, input->base + SENINF_TG1_PH_CNT);
+	writel(0x10001, input->base + SENINF_TG1_SEN_CK);
+
 	/* First Enable Sensor interface and select pad (0x1a04_0200) */
 	SENINF_BITS(input->base, SENINF_CTRL, SENINF_EN, 1);
 	SENINF_BITS(input->base, SENINF_CTRL, PAD2CAM_DATA_SEL, SENINF_PAD_10BIT);
@@ -599,18 +606,9 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 		return ret;
 	}
 
-	/* Configure timestamp */
-	SENINF_BITS(pseninf, SENINF_CTRL, SENINF_EN, 1);
-	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_CSI2_IP_EN, 1);
-	writel(SENINF_TIMESTAMP_STEP, pseninf + SENINF_TG1_TM_STP);
-
 	phy_power_on(input->phy);
 
 	mtk_seninf_rx_config(priv, input);
-
-	/* HQ */
-	writel(0x0, pseninf + SENINF_TG1_PH_CNT);
-	writel(0x10001, pseninf + SENINF_TG1_SEN_CK);
 
 	mtk_seninf_set_csi_mipi(priv, input);
 
