@@ -381,25 +381,35 @@ static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
 static void mtk_seninf_rx_config(struct mtk_seninf *priv,
 				 struct mtk_seninf_input *input)
 {
-	if (input->phy_mode == SENINF_PHY_MODE_4D1C) {
-		SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-			    CSI0_BIST_LN0_MUX, 1);
-		SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-			    CSI0_BIST_LN1_MUX, 2);
-		SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-			    CSI0_BIST_LN2_MUX, 0);
-		SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-			    CSI0_BIST_LN3_MUX, 3);
-	} else {
-		SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-			    CSI0_BIST_LN0_MUX, 0);
-		SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-			    CSI0_BIST_LN1_MUX, 1);
-		SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-			    CSI0_BIST_LN2_MUX, 2);
-		SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-			    CSI0_BIST_LN3_MUX, 3);
+	unsigned int lanes[4] = { };
+	unsigned int i;
+
+	/*
+	 * Configure data lane muxing. In 2D1C mode, lanes 0 to 2 correspond to
+	 * CSIx[AB]_L{0,1,2}, and in 4D1C lanes 0 to 5 correspond to
+	 * CSIxA_L{0,1,2}, CSIxB_L{0,1,2}.
+	 *
+	 * The clock lane must be skipped when calculating the index of the
+	 * physical data lane. For instance, in 4D1C mode, the sensor clock
+	 * lane is typically connected to lane 2 (CSIxA_L2), and the sensor
+	 * data lanes 0-3 to lanes 1 (CSIxA_L1), 3 (CSIxB_L0), 0 (CSIxA_L0) and
+	 * 4 (CSIxB_L1). The when skipping the clock lane, the data lane
+	 * indices become 1, 2, 0 and 3.
+	 */
+	for (i = 0; i < input->bus.num_data_lanes; ++i) {
+		lanes[i] = input->bus.data_lanes[i];
+		if (lanes[i] > input->bus.clock_lane)
+			lanes[i]--;
 	}
+
+	SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
+		    CSI0_BIST_LN0_MUX, lanes[0]);
+	SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
+		    CSI0_BIST_LN1_MUX, lanes[1]);
+	SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
+		    CSI0_BIST_LN2_MUX, lanes[2]);
+	SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
+		    CSI0_BIST_LN3_MUX, lanes[3]);
 }
 
 static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
