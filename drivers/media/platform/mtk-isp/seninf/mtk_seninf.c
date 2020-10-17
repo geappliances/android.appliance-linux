@@ -42,11 +42,12 @@ enum TEST_MODE {
 	TEST_PATTERN_ENABLED
 };
 
-enum CFG_CSI_PORT {
-	CFG_CSI_PORT_0 = 0,	/* 4D1C or 2D1C */
-	CFG_CSI_PORT_1,		/* 4D1C */
-	CFG_CSI_PORT_2,		/* 4D1C */
-	CFG_CSI_PORT_0B,	/* 2D1C */
+/* Port number in the device tree. */
+enum mtk_seninf_port {
+	CSI_PORT_0 = 0,	/* 4D1C or 2D1C */
+	CSI_PORT_1,	/* 4D1C */
+	CSI_PORT_2,	/* 4D1C */
+	CSI_PORT_0B,	/* 2D1C */
 };
 
 enum PIXEL_MODE {
@@ -97,7 +98,7 @@ struct mtk_seninf_format_info {
 };
 
 struct mtk_seninf_input {
-	enum CFG_CSI_PORT port;
+	enum mtk_seninf_port port;
 	enum SENINF_ID seninf;
 	void __iomem *base;
 
@@ -322,10 +323,10 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
 {
 	/* CSI0(A) and CSI0B */
-	if (priv->inputs[CFG_CSI_PORT_0].phy_mode ||
-	    priv->inputs[CFG_CSI_PORT_0B].phy_mode) {
-		struct mtk_seninf_input *input_a = &priv->inputs[CFG_CSI_PORT_0];
-		struct mtk_seninf_input *input_b = &priv->inputs[CFG_CSI_PORT_0B];
+	if (priv->inputs[CSI_PORT_0].phy_mode ||
+	    priv->inputs[CSI_PORT_0B].phy_mode) {
+		struct mtk_seninf_input *input_a = &priv->inputs[CSI_PORT_0];
+		struct mtk_seninf_input *input_b = &priv->inputs[CSI_PORT_0B];
 		unsigned int csi0b_clock;
 		unsigned int dphy_mode;
 
@@ -354,8 +355,8 @@ static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
 	}
 
 	/* CSI1 */
-	if (priv->inputs[CFG_CSI_PORT_1].phy_mode) {
-		struct mtk_seninf_input *input = &priv->inputs[CFG_CSI_PORT_1];
+	if (priv->inputs[CSI_PORT_1].phy_mode) {
+		struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_1];
 
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
 			    DPHY_MODE, 0 /* 4D1C */);
@@ -366,8 +367,8 @@ static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
 	}
 
 	/* CSI2 */
-	if (priv->inputs[CFG_CSI_PORT_2].phy_mode) {
-		struct mtk_seninf_input *input = &priv->inputs[CFG_CSI_PORT_2];
+	if (priv->inputs[CSI_PORT_2].phy_mode) {
+		struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_2];
 
 		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
 			    DPHY_MODE, 0 /* 4D1C */);
@@ -950,10 +951,10 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 				   struct v4l2_async_subdev *asd)
 {
 	static const u32 port_to_seninf[] = {
-		[CFG_CSI_PORT_0] = SENINF_1,
-		[CFG_CSI_PORT_1] = SENINF_3,
-		[CFG_CSI_PORT_2] = SENINF_5,
-		[CFG_CSI_PORT_0B] = SENINF_2,
+		[CSI_PORT_0] = SENINF_1,
+		[CSI_PORT_1] = SENINF_3,
+		[CSI_PORT_2] = SENINF_5,
+		[CSI_PORT_0B] = SENINF_2,
 	};
 
 	struct mtk_seninf *priv = dev_get_drvdata(dev);
