@@ -59,12 +59,10 @@ enum PIXEL_MODE {
 };
 
 enum SENINF_ID {
-	SENINF_1 = 0x0,
-	SENINF_2 = 0x1,
-	SENINF_3 = 0x2,
-	SENINF_4 = 0x3,
-	SENINF_5 = 0x4,
-	SENINF_NUM,
+	SENINF_1 = 0,
+	SENINF_2 = 1,
+	SENINF_3 = 2,
+	SENINF_5 = 4,
 };
 
 #define SENINF_BITS(base, reg, field, val) do { \
