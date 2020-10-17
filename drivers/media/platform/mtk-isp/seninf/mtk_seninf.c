@@ -89,7 +89,7 @@ struct mtk_seninf_format_info {
 
 struct mtk_seninf_input {
 	struct v4l2_subdev *subdev;
-	unsigned short num_data_lanes;
+	struct v4l2_fwnode_bus_mipi_csi2 bus;
 };
 
 struct mtk_seninf {
@@ -352,7 +352,7 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	void __iomem *pseninf = priv->base + 0x1000 * seninf;
 	unsigned int dpcm;
 	unsigned int data_lane_num =
-		priv->inputs[priv->active_input].num_data_lanes;
+		priv->inputs[priv->active_input].bus.num_data_lanes;
 	unsigned int cal_sel;
 	unsigned int data_header_order = 1;
 	unsigned int val = 0;
@@ -948,7 +948,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 		return -EINVAL;
 	}
 
-	priv->inputs[port].num_data_lanes = vep->bus.mipi_csi2.num_data_lanes;
+	priv->inputs[port].bus = vep->bus.mipi_csi2;
 	s_asd->port = port;
 
 	dev_dbg(dev, "%s: input %u uses %u data lanes\n", __func__, port,
