@@ -38,11 +38,19 @@ properties:
 
   phys:
     items:
-      - description: Seninf mipi dphy
+      - description: CSI0 C/D-PHY (3 trios, 4 data lanes + 1 clock lane)
+      - description: CSI1 D-PHY (4 data lanes + 1 clock lane)
+      - description: CSI2 D-PHY (4 data lanes + 1 clock lane)
+      - description: CSI0A D-PHY (2 data lanes + 1 clock lane)
+      - description: CSI0B D-PHY (2 data lanes + 1 clock lane)
 
   phy-names:
     items:
-      - const: seninf
+      - const: csi0
+      - const: csi1
+      - const: csi2
+      - const: csi0a
+      - const: csi0b
 
   # See ./video-interfaces.txt for details
   ports:
@@ -189,8 +197,10 @@ examples:
         clocks = <&camsys CLK_CAM_SENINF>,
                  <&topckgen CLK_TOP_MUX_SENINF>;
         clock-names = "cam_seninf", "top_mux_seninf";
-        phys = <&mipi_dphy 0>;
-        phy-names = "seninf";
+
+        phys = <&mipi_dphy 0>, <&mipi_dphy 1>, <&mipi_dphy 2>,
+               <&mipi_dphy 3>, <&mipi_dphy 4>;
+        phy-names = "csi0", "csi1", "csi2", "csi0a", "csi0b";
 
         ports {
             #address-cells = <1>;
