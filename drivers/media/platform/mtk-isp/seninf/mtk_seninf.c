@@ -357,7 +357,6 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	void __iomem *seninf_base = priv->base;
 	unsigned int dpcm;
 	unsigned int data_lane_num = input->bus.num_data_lanes;
-	unsigned int cal_sel;
 	unsigned int data_header_order = 1;
 	unsigned int val = 0;
 
@@ -368,7 +367,6 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 
 	switch (input->port) {
 	case CFG_CSI_PORT_1:
-		cal_sel = 1;
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
 			    DPHY_MODE, 0);
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
@@ -377,7 +375,6 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 			    PHY_SENINF_LANE_MUX_CSI1_EN, 1);
 		break;
 	case CFG_CSI_PORT_2:
-		cal_sel = 2;
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
 			    DPHY_MODE, 0);
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
@@ -386,7 +383,6 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 			    PHY_SENINF_LANE_MUX_CSI2_EN, 1);
 		break;
 	case CFG_CSI_PORT_0:
-		cal_sel = 0;
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
 			    DPHY_MODE, 0);
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
@@ -397,7 +393,6 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	case CFG_CSI_PORT_0A:
 	case CFG_CSI_PORT_0B:
 	default:
-		cal_sel = 0;
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
 			    DPHY_MODE, 1);
 		SENINF_BITS(seninf_base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
