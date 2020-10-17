@@ -91,6 +91,7 @@ struct mtk_seninf_input {
 	enum CFG_CSI_PORT port;
 	enum SENINF_ID seninf;
 	void __iomem *base;
+	struct phy *phy;
 
 	struct v4l2_fwnode_bus_mipi_csi2 bus;
 
@@ -603,7 +604,7 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_CSI2_IP_EN, 1);
 	writel(SENINF_TIMESTAMP_STEP, pseninf + SENINF_TG1_TM_STP);
 
-	phy_power_on(priv->phy[priv->active_input]);
+	phy_power_on(input->phy);
 
 	mtk_seninf_rx_config(priv, input);
 
@@ -630,7 +631,7 @@ static void mtk_seninf_power_off(struct mtk_seninf *priv)
 		       input->base + SENINF_CSI2_CTL);
 
 		if (!priv->is_testmode)
-			phy_power_off(priv->phy[priv->active_input]);
+			phy_power_off(input->phy);
 	}
 
 	pm_runtime_put(priv->dev);
@@ -953,6 +954,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	input->seninf = seninf;
 	input->port = port;
 	input->base = priv->base + 0x1000 * seninf;
+	input->phy = priv->phy[port];
 	input->bus = vep->bus.mipi_csi2;
 
 	s_asd->input = input;
