@@ -5,6 +5,7 @@ config MTK_SENINF
 	depends on ARCH_MEDIATEK || COMPILE_TEST
 	depends on OF
 	select V4L2_FWNODE
+	select PHY_MTK_CDPHY
 	default n
 	---help---
 	  This driver provides a MIPI CSI-2 receiver interface to connect
