@@ -189,14 +189,20 @@ static int mtk_camsv_set_fmt(struct v4l2_subdev *sd,
 		fmt->format.code = mtk_camsv_mbus_formats[0];
 
 	format = mtk_camsv_get_pad_format(cam, cfg, fmt->pad, fmt->which);
-	*format = fmt->format;
+	format->width = fmt->format.width;
+	format->height = fmt->format.height;
+	format->code = fmt->format.code;
+
+	fmt->format = *format;
 
 	/* Propagate the format to the source pads. */
 	for (i = 0; i < MTK_CAMSV_P1_TOTAL_NODES; ++i) {
 		unsigned int pad = MTK_CAMSV_CIO_PAD_NODE(i);
 
 		format = mtk_camsv_get_pad_format(cam, cfg, pad, fmt->which);
-		*format = fmt->format;
+		format->width = fmt->format.width;
+		format->height = fmt->format.height;
+		format->code = fmt->format.code;
 	}
 
 	return 0;
