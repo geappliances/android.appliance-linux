@@ -802,7 +802,12 @@ static int seninf_set_fmt(struct v4l2_subdev *sd,
 	}
 
 	format = seninf_get_pad_format(priv, cfg, fmt->pad, fmt->which);
-	*format = fmt->format;
+
+	format->width = fmt->format.width;
+	format->height = fmt->format.height;
+	format->code = fmt->format.code;
+
+	fmt->format = *format;
 
 	return 0;
 }
