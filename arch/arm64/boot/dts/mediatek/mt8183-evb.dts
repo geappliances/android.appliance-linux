@@ -598,6 +598,12 @@
 			bias-disable;
 		};
 	};
+
+	pwm_pins_1: pwm1 {
+		pins_pwm {
+			pinmux = <PINMUX_GPIO90__FUNC_PWM_A>;
+		};
+	};
 };
 
 &spi0 {
@@ -822,4 +828,10 @@
 	pinctrl-0 = <&vpu_jtag_disabled>;
 	pinctrl-1 = <&vpu_jtag_enabled>;
 	status = "okay";
+};
+
+&pwm1 {
+	status = "okay";
+	pinctrl-0 = <&pwm_pins_1>;
+	pinctrl-names = "default";
 };
