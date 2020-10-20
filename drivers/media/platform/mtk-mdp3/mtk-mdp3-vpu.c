@@ -179,14 +179,14 @@ int mdp_vpu_dev_init(struct mdp_vpu_dev *vpu, struct platform_device *pdev,
 	pool = ALIGN((phys_addr_t)vpu->work + vpu->work_size, 8);
 	if (pool + pool_size - (phys_addr_t)vpu->work > mem_size) {
 		dev_err(&mdp->pdev->dev,
-			"VPU memory insufficient: %lx + %lx > %llx",
+			"VPU memory insufficient: %lx + %lx > %lx",
 			vpu->work_size, pool_size, mem_size);
 		err = -ENOMEM;
 		goto err_mem_size;
 	}
 
 	dev_info(&mdp->pdev->dev,
-		 "VPU work:%llx pa:%llx sz:%lx pool:%llx sz:%lx (mem sz:%llx)",
+		 "VPU work:%px pa:%llx sz:%lx pool:%llx sz:%lx (mem sz:%lx)",
 		vpu->work, vpu->work_addr, vpu->work_size,
 		pool, pool_size, mem_size);
 	vpu->pool = (struct mdp_config_pool *)pool;

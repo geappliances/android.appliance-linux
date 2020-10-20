@@ -223,7 +223,7 @@ static int __maybe_unused mdp_pm_suspend(struct device *dev)
 				"%s:flushed cmdq task incomplete\n",
 				__func__);
 		else//need to remove
-			pr_err("%s:ret=%d\n", __func__);
+			pr_err("%s:ret=%d\n", __func__, ret);
 	}
 
 	return 0;
