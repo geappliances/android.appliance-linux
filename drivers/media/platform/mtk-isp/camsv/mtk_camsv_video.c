@@ -110,9 +110,11 @@ static bool is_format_pak(unsigned int mbus_fmt)
 	case MEDIA_BUS_FMT_SGBRG8_1X8:
 	case MEDIA_BUS_FMT_SGRBG8_1X8:
 	case MEDIA_BUS_FMT_SRGGB8_1X8:
+	case MEDIA_BUS_FMT_UYVY8_1X16:
+	case MEDIA_BUS_FMT_VYUY8_1X16:
+	case MEDIA_BUS_FMT_YUYV8_1X16:
+	case MEDIA_BUS_FMT_YVYU8_1X16:
 		return true;
-	case MEDIA_BUS_FMT_YUYV8_2X8:
-		return false;
 	default:
 		return true;
 	}
