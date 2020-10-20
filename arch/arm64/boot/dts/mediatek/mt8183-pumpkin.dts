@@ -474,6 +474,10 @@
 	mfg-supply = <&mt6358_vgpu_reg>;
 };
 
+&scp {
+	status = "okay";
+};
+
 &uart0 {
 	status = "okay";
 };
