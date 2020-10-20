@@ -123,6 +123,11 @@ static enum mtk_ddp_comp_id mt8167_mtk_ddp_main[] = {
 	DDP_COMPONENT_DSI0,
 };
 
+static enum mtk_ddp_comp_id mt8167_mtk_ddp_ext[] = {
+	DDP_COMPONENT_RDMA1,
+	DDP_COMPONENT_DPI1,
+};
+
 static const enum mtk_ddp_comp_id mt8173_mtk_ddp_main[] = {
 	DDP_COMPONENT_OVL0,
 	DDP_COMPONENT_COLOR0,
@@ -188,6 +193,8 @@ static const struct mtk_mmsys_driver_data mt2712_mmsys_driver_data = {
 static const struct mtk_mmsys_driver_data mt8167_mmsys_driver_data = {
 	.main_path = mt8167_mtk_ddp_main,
 	.main_len = ARRAY_SIZE(mt8167_mtk_ddp_main),
+	.ext_path = mt8167_mtk_ddp_ext,
+	.ext_len = ARRAY_SIZE(mt8167_mtk_ddp_ext),
 };
 
 static const struct mtk_mmsys_driver_data mt8173_mmsys_driver_data = {
@@ -462,11 +469,9 @@ static const struct of_device_id mtk_ddp_comp_dt_ids[] = {
 	  .data = (void *)MTK_DISP_RDMA },
 	{ .compatible = "mediatek,mt8173-disp-wdma",
 	  .data = (void *)MTK_DISP_WDMA },
-<<<<<<< HEAD
-	{ .compatible = "mediatek,mt8183-disp-ccorr",
-=======
 	{ .compatible = "mediatek,mt8167-disp-ccorr",
->>>>>>> 0463d1eefba4 (📤 drm/mediatek: Add support for main DDP path on MT8167)
+	  .data = (void *)MTK_DISP_CCORR },
+	{ .compatible = "mediatek,mt8183-disp-ccorr",
 	  .data = (void *)MTK_DISP_CCORR },
 	{ .compatible = "mediatek,mt2701-disp-color",
 	  .data = (void *)MTK_DISP_COLOR },
@@ -482,11 +487,9 @@ static const struct of_device_id mtk_ddp_comp_dt_ids[] = {
 	  .data = (void *)MTK_DISP_GAMMA, },
 	{ .compatible = "mediatek,mt8173-disp-gamma",
 	  .data = (void *)MTK_DISP_GAMMA, },
-<<<<<<< HEAD
 	{ .compatible = "mediatek,mt8183-disp-dither",
-=======
+	  .data = (void *)MTK_DISP_DITHER },
 	{ .compatible = "mediatek,mt8167-disp-dither",
->>>>>>> 0463d1eefba4 (📤 drm/mediatek: Add support for main DDP path on MT8167)
 	  .data = (void *)MTK_DISP_DITHER },
 	{ .compatible = "mediatek,mt8173-disp-ufoe",
 	  .data = (void *)MTK_DISP_UFOE },
@@ -499,6 +502,8 @@ static const struct of_device_id mtk_ddp_comp_dt_ids[] = {
 	{ .compatible = "mediatek,mt8183-dsi",
 	  .data = (void *)MTK_DSI },
 	{ .compatible = "mediatek,mt2701-dpi",
+	  .data = (void *)MTK_DPI },
+	{ .compatible = "mediatek,mt8167-dpi",
 	  .data = (void *)MTK_DPI },
 	{ .compatible = "mediatek,mt8173-dpi",
 	  .data = (void *)MTK_DPI },
