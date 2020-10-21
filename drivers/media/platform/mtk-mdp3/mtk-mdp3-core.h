@@ -7,6 +7,7 @@
 #ifndef __MTK_MDP3_CORE_H__
 #define __MTK_MDP3_CORE_H__
 
+#include <media/media-device.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-mem2mem.h>
 #include "mtk-mdp3-comp.h"
@@ -42,6 +43,7 @@ struct mdp_dev {
 	struct cmdq_client	*cmdq_clt;
 	wait_queue_head_t	callback_wq;
 
+	struct media_device	mdev;
 	struct v4l2_device	v4l2_dev;
 	struct video_device	*m2m_vdev;
 	struct v4l2_m2m_dev	*m2m_dev;
