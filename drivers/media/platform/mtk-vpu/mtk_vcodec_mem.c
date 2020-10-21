@@ -65,7 +65,7 @@ void *mtk_vcu_get_buffer(struct mtk_vcu_queue *vcu_queue,
 	buffers = vcu_queue->num_buffers;
 	if (mem_buff_data->len > DEC_ALLOCATE_MAX_BUFFER_SIZE ||
 		mem_buff_data->len == 0U || buffers >= DEC_MAX_BUFFER) {
-		pr_err("Get buffer fail: buffer len = %ld num_buffers = %d !!\n",
+		pr_err("Get buffer fail: buffer len = %llu num_buffers = %d !!\n",
 			mem_buff_data->len, buffers);
 		return ERR_PTR(-EINVAL);
 	}
@@ -115,7 +115,7 @@ int mtk_vcu_free_buffer(struct mtk_vcu_queue *vcu_queue,
 			if (mem_buff_data->va == (unsigned long)cook &&
 				mem_buff_data->iova == *(dma_addr_t *)dma_addr &&
 				mem_buff_data->len == vcu_buffer->size) {
-				pr_debug("Free buff = %d pa = %lx va = %llx, queue_num = %d\n",
+				pr_debug("Free buff = %d pa = %llx va = %llx, queue_num = %d\n",
 					buffer, mem_buff_data->iova, mem_buff_data->va,
 					num_buffers);
 				vcu_queue->mem_ops->put(vcu_buffer->mem_priv);
@@ -134,7 +134,7 @@ int mtk_vcu_free_buffer(struct mtk_vcu_queue *vcu_queue,
 	mutex_unlock(&vcu_queue->mmap_lock);
 
 	if (ret != 0)
-		pr_err("Can not free memory va %llx iova %lx len %lu!\n",
+		pr_err("Can not free memory va %llx iova %llx len %llu!\n",
 			mem_buff_data->va, mem_buff_data->iova, mem_buff_data->len);
 
 	return ret;
