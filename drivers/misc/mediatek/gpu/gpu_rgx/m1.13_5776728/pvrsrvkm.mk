@@ -124,11 +124,12 @@ pvrsrvkm-y += \
  uniq_key_splay_tree.o \
  rgx_hwperf_table.o \
  dma_support.o \
- pci_support.o \
  vmm_type_stub.o \
  interrupt_support.o \
  sysconfig.o \
  mtk_mfgsys.o
+pvrsrvkm-$(CONFIG_PCI) += \
+ pci_support.o
 pvrsrvkm-$(CONFIG_DRM_POWERVR_ROGUE_DEBUG) += \
  client_ri_direct_bridge.o \
  server_ri_bridge.o \
