@@ -8,6 +8,7 @@
 #include <linux/io.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/version.h>
 
 #include <media/media-entity.h>
 #include <media/v4l2-ctrls.h>
@@ -496,6 +497,10 @@ static int mtk_camsv_vidioc_querycap(struct file *file, void *fh,
 	strscpy(cap->card, dev_driver_string(cam->dev), sizeof(cap->card));
 	snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:%s",
 		 dev_name(cam->dev));
+
+	/* Minimum v4l2 api kernel version required by libcamera is 5.0.0 */
+	if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0))
+		cap->version = KERNEL_VERSION(5, 0, 0);
 
 	return 0;
 }
