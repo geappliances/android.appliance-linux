@@ -11,30 +11,6 @@
 #include <dt-bindings/gpio/gpio.h>
 #include "mt8183-pinfunc.h"
 
-&firmware {
-	android {
-		compatible = "android,firmware";
-		hardware = "mt8183";
-		fstab {
-			compatible = "android,fstab";
-			vendor {
-				compatible = "android,vendor";
-				dev = "/dev/block/platform/soc/11230000.mmc/by-name/vendor";
-				type = "ext4";
-				mnt_flags = "ro";
-				fsmgr_flags = "wait";
-			};
-			system {
-				compatible = "android,system";
-				dev = "/dev/block/platform/soc/11230000.mmc/by-name/system";
-				type = "ext4";
-				mnt_flags = "ro";
-				fsmgr_flags = "wait";
-			};
-		};
-	};
-};
-
 &reserved_memory {
 	ramoops@0x4FF00000 {
 		compatible = "ramoops";
