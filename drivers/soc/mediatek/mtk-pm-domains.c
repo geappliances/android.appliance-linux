@@ -118,11 +118,11 @@ static int _scpsys_bus_protect_enable(const struct scpsys_bus_prot_data *bpd, st
 {
 	int i, ret;
 
-	for (i = 0; i < SPM_MAX_BUS_PROT_DATA; i++) {
+	for (i = SPM_MAX_BUS_PROT_DATA - 1; i > 0; i--) {
 		u32 val, mask = bpd[i].bus_prot_mask;
 
 		if (!mask)
-			break;
+			continue;
 
 		if (bpd[i].bus_prot_reg_update)
 			regmap_update_bits(regmap, INFRA_TOPAXI_PROTECTEN, mask, mask);
@@ -155,11 +155,11 @@ static int _scpsys_bus_protect_disable(const struct scpsys_bus_prot_data *bpd,
 {
 	int i, ret;
 
-	for (i = 0; i < SPM_MAX_BUS_PROT_DATA; i++) {
+	for (i = SPM_MAX_BUS_PROT_DATA - 1; i > 0; i--) {
 		u32 val, mask = bpd[i].bus_prot_mask;
 
 		if (!mask)
-			return 0;
+			continue;
 
 		if (bpd[i].bus_prot_reg_update)
 			regmap_update_bits(regmap, bpd[i].bus_prot_set, mask, 0);
