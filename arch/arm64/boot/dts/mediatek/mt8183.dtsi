@@ -1546,6 +1546,7 @@
 		mdp_img2o@15020000 {
 			compatible = "mediatek,mt8183-mdp-exto";
 			mediatek,mdp-id = <1>;
+			mediatek,gce-client-reg = <&gce SUBSYS_1502XXXX 0 0x1000>;
 		};
 
 		mdp_rsz0: mdp_rsz0@14003000 {
@@ -1577,6 +1578,7 @@
 		mdp_path0_sout@14005000 {
 			compatible = "mediatek,mt8183-mdp-path";
 			mediatek,mdp-id = <0>;
+			mediatek,gce-client-reg = <&gce SUBSYS_1400XXXX 0x5000 0x1000>;
 		};
 
 		mdp_wdma: mdp_wdma@14006000 {
@@ -1592,6 +1594,7 @@
 		mdp_path1_sout@14006000 {
 			compatible = "mediatek,mt8183-mdp-path";
 			mediatek,mdp-id = <1>;
+			mediatek,gce-client-reg = <&gce SUBSYS_1400XXXX 0x6000 0x1000>;
 		};
 
 		display_components: dispsys@14000000 {
