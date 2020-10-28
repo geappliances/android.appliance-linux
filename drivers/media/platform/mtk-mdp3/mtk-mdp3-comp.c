@@ -1102,7 +1102,7 @@ static int mdp_get_subsys_id(struct device *dev, struct device_node *node,
 	}
 
 	comp->subsys_id = cmdq_reg->subsys;
-	dev_err(&comp_pdev->dev, "subsys id=%d\n", cmdq_reg->subsys);
+	dev_dbg(&comp_pdev->dev, "subsys id=%d\n", cmdq_reg->subsys);
 
 	kfree(cmdq_reg);
 
@@ -1241,7 +1241,7 @@ int mdp_component_init(struct mdp_dev *mdp)
 			return -ENODEV;
 		}
 		mdp->event[i] = (event_id < 0) ? -i : event_id;
-		dev_info(dev, "Get event %s id:%d\n",
+		dev_dbg(dev, "Get event %s id:%d\n",
 			 gce_event_names[i], mdp->event[i]);
 	}
 
@@ -1290,7 +1290,7 @@ int mdp_component_init(struct mdp_dev *mdp)
 		if (ret)
 			goto err_init_comps;
 
-		dev_info(dev, "%s type:%d alias:%d id:%d base:%#x regs:%p\n",
+		dev_dbg(dev, "%s type:%d alias:%d id:%d base:%#x regs:%p\n",
 			 of_id->compatible, type, comp->alias_id, id,
 			(u32)comp->reg_base, comp->regs);
 	}

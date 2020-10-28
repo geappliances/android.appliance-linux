@@ -135,7 +135,7 @@ static int mdp_probe(struct platform_device *pdev)
 
 	mdp->rproc_handle = rproc_get_by_phandle(rproc_phandle);
 
-	dev_info(&pdev->dev, "MDP rproc_handle: %llx",
+	dev_dbg(&pdev->dev, "MDP rproc_handle: %llx",
 		 (unsigned long long)mdp->rproc_handle);
 
 	if (!mdp->rproc_handle) {
