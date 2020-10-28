@@ -112,7 +112,8 @@
 	ports {
 		port@3 {
 			mipi_ar0330: endpoint {
-				data-lanes = <1 2>;
+				clock-lanes = <1>;
+				data-lanes = <0 2>;
 				remote-endpoint = <&ar0330_endpoint>;
 			};
 		};
