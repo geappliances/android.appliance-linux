@@ -51,23 +51,8 @@ static struct ufs_dev_fix ufs_mtk_dev_fixups[] = {
 	END_FIX
 };
 
-static const struct ufs_mtk_host_cfg ufs_mtk_mt8183_cfg = {
-	.caps = UFS_MTK_CAP_VA09_PWR_CTRL,
-};
-
-static const struct ufs_mtk_host_cfg ufs_mtk_mt8192_cfg = {
-	.caps = UFS_MTK_CAP_BOOST_CRYPT_ENGINE,
-};
-
 static const struct of_device_id ufs_mtk_of_match[] = {
-	{
-		.compatible = "mediatek,mt8183-ufshci",
-		.data = &ufs_mtk_mt8183_cfg
-	},
-	{
-		.compatible = "mediatek,mt8192-ufshci",
-		.data = &ufs_mtk_mt8192_cfg
-	},
+	{ .compatible = "mediatek,mt8183-ufshci" },
 	{},
 };
 
@@ -76,13 +61,6 @@ static bool ufs_mtk_is_boost_crypt_enabled(struct ufs_hba *hba)
 	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
 
 	return !!(host->caps & UFS_MTK_CAP_BOOST_CRYPT_ENGINE);
-}
-
-static bool ufs_mtk_is_va09_supported(struct ufs_hba *hba)
-{
-	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
-
-	return !!(host->caps & UFS_MTK_CAP_VA09_PWR_CTRL);
 }
 
 static bool ufs_mtk_is_broken_vcc(struct ufs_hba *hba)
@@ -96,7 +74,7 @@ static bool ufs_mtk_is_va09_supported(struct ufs_hba *hba)
 {
 	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
 
-	return (host->caps & UFS_MTK_CAP_VA09_PWR_CTRL);
+	return !!(host->caps & UFS_MTK_CAP_VA09_PWR_CTRL);
 }
 
 static void ufs_mtk_cfg_unipro_cg(struct ufs_hba *hba, bool enable)
@@ -545,32 +523,6 @@ static void ufs_mtk_init_host_caps(struct ufs_hba *hba)
 
 	if (of_property_read_bool(np, "mediatek,ufs-broken-vcc"))
 		host->caps |= UFS_MTK_CAP_BROKEN_VCC;
-
-	dev_info(hba->dev, "caps: 0x%x", host->caps);
-}
-
-static void ufs_mtk_init_va09_pwr_ctrl(struct ufs_hba *hba)
-{
-	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
-
-	host->reg_va09 = regulator_get(hba->dev, "va09");
-	if (!host->reg_va09) {
-		dev_info(hba->dev, "failed to get va09");
-		host->caps &= ~UFS_MTK_CAP_VA09_PWR_CTRL;
-	}
-}
-
-static void ufs_mtk_init_host_caps(struct ufs_hba *hba)
-{
-	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
-
-	host->caps = host->cfg->caps;
-
-	if (ufs_mtk_is_boost_crypt_enabled(hba))
-		ufs_mtk_init_boost_crypt(hba);
-
-	if (ufs_mtk_is_va09_supported(hba))
-		ufs_mtk_init_va09_pwr_ctrl(hba);
 
 	dev_info(hba->dev, "caps: 0x%x", host->caps);
 }
