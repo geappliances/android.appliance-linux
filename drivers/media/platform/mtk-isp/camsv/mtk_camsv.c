@@ -427,6 +427,7 @@ static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 	/* Initialize subdev */
 	v4l2_subdev_init(&cam->subdev, &mtk_camsv_subdev_ops);
 
+	cam->subdev.dev = dev;
 	cam->subdev.entity.function = MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER;
 	cam->subdev.entity.ops = &mtk_camsv_media_entity_ops;
 	cam->subdev.flags = V4L2_SUBDEV_FL_HAS_DEVNODE;
