@@ -126,6 +126,7 @@ struct ufs_mtk_host {
 	struct reset_control *crypto_reset;
 	struct ufs_hba *hba;
 	struct ufs_mtk_crypt_cfg *crypt;
+	struct ufs_mtk_hw_ver hw_ver;
 	enum ufs_mtk_host_caps caps;
 	bool mphy_powered_on;
 	bool unipro_lpm;
