@@ -23,6 +23,7 @@
 #define SENINF_HS_TRAIL_PARAMETER	0x8
 
 #define SENINF_NUM_INPUTS		4
+#define SENINF_PAD_SOURCE		4
 #define SENINF_NUM_PADS			5
 
 #define SENINF_DEFAULT_WIDTH		1920
@@ -808,6 +809,21 @@ static int seninf_set_fmt(struct v4l2_subdev *sd,
 	format->code = fmt->format.code;
 
 	fmt->format = *format;
+
+	/*
+	 * Propagate the format to the source pad. The internal routing
+	 * configuration is controlled through the active sink link.
+	 *
+	 * TODO: We should disallow setting formats on the source pad
+	 * completely, as the SENINF can't perform any processing. This would
+	 * however break usage of the test pattern generator, as there would be
+	 * no way to configure formats at all when no active input is selected.
+	 */
+	if (priv->active_input && fmt->pad == priv->active_input->port) {
+		format = seninf_get_pad_format(priv, cfg, SENINF_PAD_SOURCE,
+					       fmt->which);
+		*format = fmt->format;
+	}
 
 	return 0;
 }
