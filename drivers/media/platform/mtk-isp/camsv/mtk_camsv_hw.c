@@ -177,10 +177,13 @@ static irqreturn_t isp_irq_camsv(int irq, void *data)
 
 	/* De-queue frame */
 	if (irq_status & CAMSV_IRQ_SW_PASS1_DON) {
+		cam->sequence++;
+
 		buf = list_first_entry_or_null(&cam->buf_list,
 					       struct mtk_camsv_dev_buffer,
 					       list);
 		if (buf) {
+			buf->v4l2_buf.sequence = cam->sequence;
 			buf->v4l2_buf.vb2_buf.timestamp = ktime_get_ns();
 			vb2_buffer_done(&buf->v4l2_buf.vb2_buf,
 					VB2_BUF_STATE_DONE);
