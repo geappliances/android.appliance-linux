@@ -3,6 +3,8 @@
  * Copyright (c) 2020 BayLibre
  */
 
+#include <linux/ktime.h>
+
 #include "mtk_camsv.h"
 
 #define MTK_CAMSV_AUTOSUSPEND_DELAY_MS 100
@@ -179,6 +181,7 @@ static irqreturn_t isp_irq_camsv(int irq, void *data)
 					       struct mtk_camsv_dev_buffer,
 					       list);
 		if (buf) {
+			buf->v4l2_buf.vb2_buf.timestamp = ktime_get_ns();
 			vb2_buffer_done(&buf->v4l2_buf.vb2_buf,
 					VB2_BUF_STATE_DONE);
 			list_del(&buf->list);

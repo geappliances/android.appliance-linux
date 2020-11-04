@@ -699,7 +699,13 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
 	vbq->ops = &mtk_camsv_vb2_ops;
 	vbq->mem_ops = &vb2_dma_contig_memops;
 	vbq->buf_struct_size = sizeof(struct mtk_camsv_dev_buffer);
-	vbq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
+	/*
+	 * TODO: The hardware supports SOF interrupts, switch to a SOF
+	 * timestamp source would give better accuracy, but first requires
+	 * extending the V4L2 API to support it.
+	 */
+	vbq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC
+			     | V4L2_BUF_FLAG_TSTAMP_SRC_EOF;
 
 	/* No minimum buffers limitation */
 	vbq->min_buffers_needed = 0;
