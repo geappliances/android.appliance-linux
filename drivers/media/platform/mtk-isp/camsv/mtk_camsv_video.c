@@ -427,6 +427,8 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 	/* Media links are fixed after media_pipeline_start */
 	cam->stream_count++;
 
+	cam->sequence = (unsigned int)-1;
+
 	/* Stream on sub-devices node */
 	ret = v4l2_subdev_call(&cam->subdev, video, s_stream, 1);
 	if (ret)
