@@ -364,7 +364,7 @@ static const struct ap1302_sensor_info ap1302_sensor_info[] = {
 static const struct ap1302_sensor_info ap1302_sensor_info_none = {
 	.compatible = "",
 	.name = "none",
-	.resolution = { 0, 0 },
+	.resolution = { 1920, 1080 },
 };
 
 /* -----------------------------------------------------------------------------
