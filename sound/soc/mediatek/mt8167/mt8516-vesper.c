@@ -104,6 +104,11 @@ SND_SOC_DAILINK_DEFS(tdm_capture,
 	DAILINK_COMP_ARRAY(COMP_EMPTY()),
 	DAILINK_COMP_ARRAY(COMP_EMPTY()));
 
+SND_SOC_DAILINK_DEFS(i2s_8ch_playback,
+	DAILINK_COMP_ARRAY(COMP_CPU("HDMI")),
+	DAILINK_COMP_ARRAY(COMP_DUMMY()),
+	DAILINK_COMP_ARRAY(COMP_EMPTY()));
+
 /* BE */
 SND_SOC_DAILINK_DEFS(tdm_in_io,
 	DAILINK_COMP_ARRAY(COMP_CPU("TDM_IN_IO")),
@@ -113,6 +118,11 @@ SND_SOC_DAILINK_DEFS(tdm_in_io,
 SND_SOC_DAILINK_DEFS(i2s,
 	DAILINK_COMP_ARRAY(COMP_CPU("I2S")),
 	DAILINK_COMP_ARRAY(COMP_EMPTY()),
+	DAILINK_COMP_ARRAY(COMP_EMPTY()));
+
+SND_SOC_DAILINK_DEFS(hdmi,
+	DAILINK_COMP_ARRAY(COMP_CPU("HDMIO")),
+	DAILINK_COMP_ARRAY(COMP_DUMMY()),
 	DAILINK_COMP_ARRAY(COMP_EMPTY()));
 
 /* Digital audio interface glue - connects codec <---> CPU */
@@ -157,6 +167,17 @@ static struct snd_soc_dai_link mt8516_vesper_dais[] = {
 		.dpcm_playback = 1,
 		SND_SOC_DAILINK_REG(playback1),
 	},
+	{
+		.name = "I2S 8CH Playback",
+		.stream_name = "I2S8CH Playback",
+		.trigger = {
+			SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST
+		},
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		SND_SOC_DAILINK_REG(i2s_8ch_playback),
+	},
 
 	/* Backend End DAI links */
 	{
@@ -175,6 +196,14 @@ static struct snd_soc_dai_link mt8516_vesper_dais[] = {
 		.dpcm_playback = 1,
 		.dpcm_capture = 1,
 		SND_SOC_DAILINK_REG(i2s),
+	},
+	{
+		.name = "HDMI BE",
+		.no_pcm = 1,
+		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
+			   SND_SOC_DAIFMT_CBS_CFS,
+		.dpcm_playback = 1,
+		SND_SOC_DAILINK_REG(hdmi),
 	},
 };
 
