@@ -1420,7 +1420,7 @@ static int mtk_mipicsi_subdev_init(struct mtk_mipicsi_dev *mipicsi)
 	int ret;
 	struct device *dev = &mipicsi->pdev->dev;
 
-	memset(&mipicsi->notifier, 0, sizeof(struct v4l2_async_notifier));
+	v4l2_async_notifier_init(&mipicsi->notifier);
 
 	ret = v4l2_async_notifier_parse_fwnode_endpoints(dev,
 		&mipicsi->notifier, sizeof(struct v4l2_async_subdev), NULL);
