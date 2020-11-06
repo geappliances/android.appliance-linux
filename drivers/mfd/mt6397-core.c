@@ -12,10 +12,12 @@
 #include <linux/regmap.h>
 #include <linux/mfd/core.h>
 #include <linux/mfd/mt6323/core.h>
+#include <linux/mfd/mt6357/core.h>
 #include <linux/mfd/mt6358/core.h>
 #include <linux/mfd/mt6392/core.h>
 #include <linux/mfd/mt6397/core.h>
 #include <linux/mfd/mt6323/registers.h>
+#include <linux/mfd/mt6357/registers.h>
 #include <linux/mfd/mt6358/registers.h>
 #include <linux/mfd/mt6392/registers.h>
 #include <linux/mfd/mt6397/registers.h>
@@ -80,6 +82,13 @@ static const struct resource mt6392_keys_resources[] = {
 	DEFINE_RES_IRQ_NAMED(MT6392_IRQ_FCHRKEY, "homekey"),
 };
 
+static const struct resource mt6357_keys_resources[] = {
+	DEFINE_RES_IRQ_NAMED(MT6357_IRQ_PWRKEY, "powerkey"),
+	DEFINE_RES_IRQ_NAMED(MT6357_IRQ_HOMEKEY, "homekey"),
+	DEFINE_RES_IRQ_NAMED(MT6357_IRQ_PWRKEY_R, "powerkey_r"),
+	DEFINE_RES_IRQ_NAMED(MT6357_IRQ_HOMEKEY_R, "homekey_r"),
+};
+
 static const struct resource mt6397_keys_resources[] = {
 	DEFINE_RES_IRQ_NAMED(MT6397_IRQ_PWRKEY, "powerkey"),
 	DEFINE_RES_IRQ_NAMED(MT6397_IRQ_HOMEKEY, "homekey"),
@@ -111,6 +120,17 @@ static const struct mfd_cell mt6323_devs[] = {
 		.num_resources = ARRAY_SIZE(mt6323_pwrc_resources),
 		.resources = mt6323_pwrc_resources,
 		.of_compatible = "mediatek,mt6323-pwrc"
+	},
+};
+
+static const struct mfd_cell mt6357_devs[] = {
+	{
+		.name = "mt6357-regulator",
+	}, {
+		.name = "mtk-pmic-keys",
+		.num_resources = ARRAY_SIZE(mt6357_keys_resources),
+		.resources = mt6357_keys_resources,
+		.of_compatible = "mediatek,mt6357-keys"
 	},
 };
 
@@ -216,6 +236,11 @@ static const struct chip_data mt6323_core = {
 	.cid_shift = 0,
 };
 
+static const struct chip_data mt6357_core = {
+	.cid_addr = MT6357_SWCID,
+	.cid_shift = 8,
+};
+
 static const struct chip_data mt6358_core = {
 	.cid_addr = MT6358_SWCID,
 	.cid_shift = 8,
@@ -270,7 +295,7 @@ static int mt6397_probe(struct platform_device *pdev)
 	if (pmic->irq <= 0)
 		return pmic->irq;
 
-	if (pmic->chip_id == MT6358_CHIP_ID)
+	if (pmic->chip_id == MT6358_CHIP_ID || pmic->chip_id == MT6357_CHIP_ID)
 		ret = mt6358_irq_init(pmic);
 	else
 		ret = mt6397_irq_init(pmic);
@@ -282,6 +307,12 @@ static int mt6397_probe(struct platform_device *pdev)
 	case MT6323_CHIP_ID:
 		ret = devm_mfd_add_devices(&pdev->dev, -1, mt6323_devs,
 					   ARRAY_SIZE(mt6323_devs), NULL,
+					   0, pmic->irq_domain);
+		break;
+
+	case MT6357_CHIP_ID:
+		ret = devm_mfd_add_devices(&pdev->dev, -1, mt6357_devs,
+					   ARRAY_SIZE(mt6357_devs), NULL,
 					   0, pmic->irq_domain);
 		break;
 
@@ -321,6 +352,9 @@ static const struct of_device_id mt6397_of_match[] = {
 	{
 		.compatible = "mediatek,mt6323",
 		.data = &mt6323_core,
+	}, {
+		.compatible = "mediatek,mt6357",
+		.data = &mt6357_core,
 	}, {
 		.compatible = "mediatek,mt6358",
 		.data = &mt6358_core,
