@@ -247,6 +247,7 @@ static void it66121_hw_reset(struct it66121_ctx *ctx)
 	gpiod_set_value(ctx->gpio_reset, 1);
 	msleep(20);
 	gpiod_set_value(ctx->gpio_reset, 0);
+	msleep(20);
 }
 
 static int ite66121_power_on(struct it66121_ctx *ctx)
@@ -893,6 +894,12 @@ static int it66121_probe(struct i2c_client *client,
 	if (!ctx->conf)
 		return -ENODEV;
 
+	ctx->gpio_reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_LOW);
+	if (IS_ERR(ctx->gpio_reset)) {
+		dev_err(dev, "failed to parse reset gpio\n");
+		return PTR_ERR(ctx->gpio_reset);
+	}
+
 	ctx->supplies[0].supply = "vcn33";
 	ctx->supplies[1].supply = "vcn18";
 	ctx->supplies[2].supply = "vrf12";
@@ -925,6 +932,7 @@ static int it66121_probe(struct i2c_client *client,
 	    ids[1] != IT66121_VENDOR_ID1 ||
 	    ids[2] != IT66121_DEVICE_ID0 ||
 	    ((ids[3] & IT66121_DEVICE_MASK) != IT66121_DEVICE_ID1)) {
+		dev_err(dev, "Could not read valid device/vendor id\n");
 		ite66121_power_off(ctx);
 		return -ENODEV;
 	}
