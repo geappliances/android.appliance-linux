@@ -1882,7 +1882,7 @@ static struct regmap *mt8167_codec_get_regmap_from_dt(const char *phandle_name,
 			__func__, MT8167_CODEC_NAME);
 		return NULL;
 	}
-	dev_err(dev, "%s found %s node\n", __func__, MT8167_CODEC_NAME);
+	dev_dbg(dev, "%s found %s node\n", __func__, MT8167_CODEC_NAME);
 
 	node = of_parse_phandle(self_node, phandle_name, 0);
 	if (!node) {
@@ -1890,7 +1890,7 @@ static struct regmap *mt8167_codec_get_regmap_from_dt(const char *phandle_name,
 			__func__, phandle_name);
 		return NULL;
 	}
-	dev_err(dev, "%s found %s\n", __func__, phandle_name);
+	dev_dbg(dev, "%s found %s\n", __func__, phandle_name);
 
 	platdev = of_find_device_by_node(node);
 	if (!platdev) {
@@ -1898,18 +1898,18 @@ static struct regmap *mt8167_codec_get_regmap_from_dt(const char *phandle_name,
 			__func__, phandle_name);
 		return NULL;
 	}
-	dev_err(dev, "%s found platform device of %s\n",
+	dev_dbg(dev, "%s found platform device of %s\n",
 		__func__, phandle_name);
 
 	regmap = dev_get_regmap(&platdev->dev, NULL);
 	if (regmap) {
-		dev_err(dev, "%s found regmap of %s\n", __func__, phandle_name);
+		dev_dbg(dev, "%s found regmap of %s\n", __func__, phandle_name);
 		return regmap;
 	}
 
 	regmap = syscon_regmap_lookup_by_phandle(dev->of_node, phandle_name);
 	if (!IS_ERR(regmap)) {
-		dev_err(dev, "%s found regmap of syscon node %s\n",
+		dev_dbg(dev, "%s found regmap of syscon node %s\n",
 			__func__, phandle_name);
 		return regmap;
 	}
