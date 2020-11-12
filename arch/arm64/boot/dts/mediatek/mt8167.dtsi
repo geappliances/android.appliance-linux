@@ -531,7 +531,7 @@
 				    "seninf",
 				    "ncsi2";
 			mediatek,mipicsiid = <0>;
-			status="okay";
+			status = "disabled";
 		};
 	};
 };
