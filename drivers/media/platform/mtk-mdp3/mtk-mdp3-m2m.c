@@ -817,7 +817,17 @@ int mdp_m2m_device_register(struct mdp_dev *mdp)
 		goto err_video_register;
 	}
 
+	/*
+	 * HACK: If a device is specified, it gets used as the media controller
+	 * device parent, which causes the driver core to call
+	 * pm_runtime_get_sync() and pm_runtime_put() on the MDP3 device in
+	 * __device_attach(). PM runtime isn't working properly at the moment,
+	 * and this breaks MDP3 operation.
+	 *
 	mdp->mdev.dev = dev;
+	 */
+	strscpy(mdp->mdev.driver_name, MDP_MODULE_NAME,
+		sizeof(mdp->mdev.driver_name));
 	strscpy(mdp->mdev.model, MDP_MODULE_NAME, sizeof(mdp->mdev.model));
 	snprintf(mdp->mdev.bus_info, sizeof(mdp->mdev.bus_info), "platform:%s",
 		 dev_name(dev));
