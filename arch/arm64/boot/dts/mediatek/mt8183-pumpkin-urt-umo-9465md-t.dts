@@ -54,7 +54,7 @@
 
 &backlight_lcd0 {
 	compatible = "pwm-backlight";
-	pwms = <&pwm0 0 500000>;
+	pwms = <&pwm0 0 20000>;
 	power-supply = <&bl_pp5000>;
 	brightness-levels = <0 1023>;
 	num-interpolated-steps = <1023>;
