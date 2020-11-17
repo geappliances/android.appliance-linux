@@ -77,5 +77,7 @@ int mtk_mfg_async_init(void);
 int mtk_mfg_2d_init(void);
 #endif
 
+bool mt_gpucore_ready(void);
+
 #endif
 
