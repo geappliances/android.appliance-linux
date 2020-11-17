@@ -3519,7 +3519,7 @@ static int power_control_init(struct platform_device *pdev)
 
 		if (IS_ERR(kbdev->opp_table)) {
 			kbdev->opp_table = NULL;
-			dev_err(kbdev->dev, "Failed to init devfreq opp table: %d\n",
+			dev_err(kbdev->dev, "Failed to init devfreq opp table: %ld\n",
 				PTR_ERR(kbdev->opp_table));
 		}
 	}
