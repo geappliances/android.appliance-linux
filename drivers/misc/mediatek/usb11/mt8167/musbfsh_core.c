@@ -1736,11 +1736,11 @@ int mt_usb11_clock_prepare(void)
 	retval = clk_prepare(icusb_clk);
 	if (retval)
 		goto exit;
-#endif
 
 	return 0;
 exit:
 	WARNING("[USB11] clock prepare fail\n");
+#endif
 	return retval;
 }
 
