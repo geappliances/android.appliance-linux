@@ -85,6 +85,22 @@
 #define DSI_SEL_IN_RDMA				0x1
 #define DSI_SEL_IN_MASK				0x1
 
+#define MT8183_DISP_OVL0_MOUT_EN		0xf00
+#define MT8183_DISP_OVL0_2L_MOUT_EN		0xf04
+#define MT8183_DISP_OVL1_2L_MOUT_EN		0xf08
+#define MT8183_DISP_DITHER0_MOUT_EN		0xf0c
+#define MT8183_DISP_PATH0_SEL_IN		0xf24
+#define MT8183_DISP_DSI0_SEL_IN			0xf2c
+#define MT8183_DISP_DPI0_SEL_IN			0xf30
+#define MT8183_DISP_RDMA0_SOUT_SEL_IN		0xf50
+#define MT8183_DISP_RDMA1_SOUT_SEL_IN		0xf54
+#define MT8183_DSI0_SEL_IN_RDMA1			0x3
+#define MT8183_DPI0_SEL_IN_RDMA0			0x1
+#define MT8183_DPI0_SEL_IN_RDMA1			0x2
+#define MT8183_RDMA0_SOUT_COLOR0			0x1
+#define MT8183_RDMA1_SOUT_DSI0				0x1
+#define OVL1_2L_MOUT_EN_RDMA1				BIT(4)
+
 struct mtk_mmsys_routes {
 	u32 from_comp;
 	u32 to_comp;
@@ -115,8 +131,26 @@ static const struct mtk_mmsys_driver_data mt6797_mmsys_driver_data = {
 	.clk_driver = "clk-mt6797-mm",
 };
 
+static const struct mtk_mmsys_routes mt8183_mmsys_routing_table[] = {
+	{
+		DDP_COMPONENT_OVL_2L1, DDP_COMPONENT_RDMA1,
+		MT8183_DISP_OVL1_2L_MOUT_EN,
+		OVL1_2L_MOUT_EN_RDMA1, OVL1_2L_MOUT_EN_RDMA1
+	}, {
+		DDP_COMPONENT_RDMA1, DDP_COMPONENT_DPI0,
+		MT8183_DISP_DPI0_SEL_IN,
+		MT8183_DPI0_SEL_IN_RDMA1, MT8183_DPI0_SEL_IN_RDMA1
+	}, {
+		DDP_COMPONENT_RDMA1, DDP_COMPONENT_DPI0,
+		MT8183_DISP_RDMA1_SOUT_SEL_IN,
+		RDMA1_SOUT_DPI0, RDMA1_SOUT_DPI0
+	},
+};
+
 static const struct mtk_mmsys_driver_data mt8183_mmsys_driver_data = {
 	.clk_driver = "clk-mt8183-mm",
+	.routes = mt8183_mmsys_routing_table,
+	.num_routes = ARRAY_SIZE(mt8183_mmsys_routing_table),
 };
 
 struct mtk_mmsys {
