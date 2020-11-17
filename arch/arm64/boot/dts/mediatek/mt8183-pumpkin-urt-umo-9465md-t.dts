@@ -81,6 +81,7 @@
 		reg = <0x26>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&ctp_pins_default>;
+		wakeup-source;
 		interrupt-parent = <&pio>;
 		interrupts = <189 IRQ_TYPE_EDGE_FALLING>;
 		reset-gpios = <&pio 177 GPIO_ACTIVE_LOW>;
