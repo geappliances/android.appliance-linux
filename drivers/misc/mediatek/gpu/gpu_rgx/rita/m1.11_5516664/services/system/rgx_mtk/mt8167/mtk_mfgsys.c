@@ -60,7 +60,9 @@ static IMG_UINT32 gpu_debug_enable;
 static IMG_BOOL g_bDeviceInit;
 
 static IMG_BOOL g_bUnsync;
+#if 0
 static IMG_UINT32 g_ui32_unsync_freq_id;
+#endif
 static IMG_BOOL bCoreinitSucceeded;
 
 static struct platform_device *sPVRLDMDev;
@@ -252,6 +254,7 @@ static int mfg_notify_handler(struct notifier_block *this, unsigned long code,
 	return 0;
 }
 
+#if 0
 static void MTKEnableMfgClock(void)
 {
 	struct mtk_mfg_base *mfg_base = GET_MTK_MFG_BASE(sPVRLDMDev);
@@ -279,6 +282,7 @@ static void MTKDisableMfgClock(void)
 
 	mutex_unlock(&mfg_base->set_power_state);
 }
+#endif
 
 #ifdef MTK_CAL_POWER_INDEX
 static IMG_UINT32 MTKGetRGXDevIdx(void)
