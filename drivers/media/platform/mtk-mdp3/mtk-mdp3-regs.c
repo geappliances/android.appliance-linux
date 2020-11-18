@@ -168,6 +168,15 @@ static const struct mdp_format mdp_formats[] = {
 		.halign		= 5,
 		.flags		= MDP_FMT_FLAG_OUTPUT,
 	}, {
+		.pixelformat	= V4L2_PIX_FMT_MT21,
+		.mdp_color	= MDP_COLOR_420_BLK,
+		.depth		= { 8, 4 },
+		.row_depth	= { 8, 8 },
+		.num_planes	= 2,
+		.walign		= 4,
+		.halign		= 5,
+		.flags		= MDP_FMT_FLAG_OUTPUT,
+	}, {
 		.pixelformat	= V4L2_PIX_FMT_NV12M,
 		.mdp_color	= MDP_COLOR_NV12,
 		.depth		= { 8, 4 },
