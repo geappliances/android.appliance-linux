@@ -575,6 +575,10 @@ static void mtk_hdmi_hw_aud_set_input_type(struct mtk_hdmi *hdmi,
 	if (input_type == HDMI_AUD_INPUT_I2S &&
 	    (val & CFG1_SPDIF) == CFG1_SPDIF) {
 		val &= ~CFG1_SPDIF;
+		regmap_update_bits(hdmi->sys_regmap, hdmi->sys_offset + MMSYS_CG_CON1,
+					HDMI_ADSP_BCK_CG, HDMI_ADSP_BCK_CG_CLR);
+		mtk_hdmi_mask(hdmi, HDCP_STATUS_RESET,RG_SPD_IIS_SEL | RG_N_DIV2,
+				  RG_SPD_IIS_SEL | RG_N_DIV2);
 	} else if (input_type == HDMI_AUD_INPUT_SPDIF &&
 		(val & CFG1_SPDIF) == 0) {
 		val |= CFG1_SPDIF;

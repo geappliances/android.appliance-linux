@@ -194,6 +194,14 @@
 #define NORMAL_PATH			(1 << 7)
 #define GEN_RGB				(0 << 7)
 
+#define HDCP_STATUS_RESET		0x398
+#define RG_N_DIV2			(0x1 << 2)
+#define RG_SPD_IIS_SEL			(0x1 << 3)
+
+#define MMSYS_CG_CON1			0x10
+#define HDMI_ADSP_BCK_CG		(0x1 << 20)
+#define HDMI_ADSP_BCK_CG_CLR		(0x0 << 20)
+
 #define HDMI_SYS_CFG1C		0x000
 #define MT8167_HDMI_SYS_CFG1C		0x800
 #define HDMI_ON				BIT(0)
