@@ -33,6 +33,7 @@ arch/arm64/boot/dts/mediatek/mt8183-pumpkin.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin-android.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin-urt-umo-9465md-t.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin-ar0330.dtb
+arch/arm64/boot/dts/mediatek/mt8183-pumpkin-ap1302-ar0330.dtb
 "
 
 SKIP_CP_KERNEL_HDR=1
