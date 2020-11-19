@@ -81,4 +81,17 @@
 			bias-pull-down;
 		};
 	};
+
+	uart2_pins: uart2 {
+		pins {
+			pinmux = <MT8167_PIN_34_URXD2__FUNC_URXD2>,
+				 <MT8167_PIN_35_UTXD2__FUNC_UTXD2>;
+		};
+	};
+};
+
+&uart2 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart2_pins>;
 };
