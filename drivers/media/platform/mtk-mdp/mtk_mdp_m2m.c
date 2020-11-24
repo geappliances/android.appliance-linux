@@ -452,6 +452,12 @@ static int mtk_mdp_try_crop(struct mtk_mdp_ctx *ctx, u32 type,
 		return -EINVAL;
 	}
 
+	if (r->width & 1 || r->height & 1) {
+		dev_err(&ctx->mdp_dev->pdev->dev,
+			"doesn't support odd frame sizes\n");
+		return -EINVAL;
+	}
+
 	mtk_mdp_dbg(2, "[%d] type:%d, set wxh:%dx%d", ctx->id, type,
 		    r->width, r->height);
 
