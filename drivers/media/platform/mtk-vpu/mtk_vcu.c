@@ -39,6 +39,92 @@
 #include <uapi/linux/mtk_vcu_controls.h>
 #include "mtk_vpu.h"
 
+
+extern void __inner_flush_dcache_all(void);
+extern void __inner_flush_dcache_L1(void);
+extern void __inner_flush_dcache_L2(void);
+extern void __disable_dcache(void);
+
+void inner_dcache_flush_all(void)
+{
+	__inner_flush_dcache_all();
+}
+EXPORT_SYMBOL(inner_dcache_flush_all);
+
+void inner_dcache_flush_L1(void)
+{
+	__inner_flush_dcache_L1();
+}
+
+void inner_dcache_flush_L2(void)
+{
+	__inner_flush_dcache_L2();
+}
+
+void inner_dcache_disable(void)
+{
+	__disable_dcache();
+}
+
+/*
+ * smp_inner_dcache_flush_all: Flush (clean + invalidate) the entire L1 data cache.
+ *
+ * This can be used ONLY by the M4U driver!!
+ * Other drivers should NOT use this function at all!!
+ * Others should use DMA-mapping APIs!!
+ *
+ * This is the smp version of inner_dcache_flush_all().
+ * It will use IPI to do flush on all CPUs.
+ * Must not call this function with disabled interrupts or from a
+ * hardware interrupt handler or from a bottom half handler.
+ */
+void smp_inner_dcache_flush_all(void)
+{
+#ifdef CONFIG_MTK_FIQ_CACHE
+//	mt_fiq_cache_flush_all();
+#else
+	int i, total_core, cid, last_cid;
+	struct cpumask mask;
+
+	if (in_interrupt()) {
+		pr_err("Cannot invoke smp_inner_dcache_flush_all() in interrupt/softirq context\n");
+		return;
+	}
+
+	get_online_cpus();
+	preempt_disable();
+
+	/* Find first online cpu in each cluster */
+	last_cid = -1;
+	cpumask_clear(&mask);
+	total_core = num_possible_cpus();
+	for (i = 0; i < total_core; i++) {
+		if (!cpu_online(i))
+			continue;
+
+//		cid = arch_get_cluster_id(i);
+		cid = 0;
+		if (last_cid != cid) {
+			cpumask_set_cpu(i, &mask);
+			last_cid = cid;
+		}
+	}
+
+	on_each_cpu((smp_call_func_t)inner_dcache_flush_L1, NULL, true);
+	smp_call_function_many(&mask, (smp_call_func_t)inner_dcache_flush_L2,
+				NULL, true);
+	/*
+	 * smp_call_function_many only run on "other Cpus".
+	 * Flush L2 here if this is one of the first cores
+	 */
+	if (cpumask_test_cpu(smp_processor_id(), &mask))
+		inner_dcache_flush_L2();
+
+	preempt_enable();
+	put_online_cpus();
+#endif
+}
+
 /**
  * VCU (Video Communication/Controller Unit) is a daemon in user space
  * controlling video hardware related to video codec, scaling and color
@@ -923,6 +1009,13 @@ static long mtk_vcu_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 		}
 		ret = 0;
 		break;
+	case VCUD_CACHE_FLUSH_ALL:
+		smp_inner_dcache_flush_all();
+		ret = 0;
+		break;
+	case VCUD_MVA_MAP_CACHE:
+		ret = 0;
+		break;
 	default:
 		dev_err(dev, "[VCU] Unknown cmd\n");
 		break;
@@ -1020,6 +1113,10 @@ static long mtk_vcu_unlocked_compat_ioctl(struct file *file, unsigned int cmd, u
 	case COMPAT_VCUD_CACHE_FLUSH_ALL:
 		ret = file->f_op->unlocked_ioctl(file,
 			(uint32_t)VCUD_CACHE_FLUSH_ALL, 0);
+		break;
+	case COMPAT_VCUD_MVA_MAP_CACHE:
+	case COMPAT_VCUD_SET_MMAP_TYPE:
+		ret = 0;
 		break;
 	default:
 		pr_err("[VCU] Invalid cmd_number 0x%x.\n", cmd);
