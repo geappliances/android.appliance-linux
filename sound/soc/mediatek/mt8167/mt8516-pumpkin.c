@@ -363,51 +363,13 @@ static struct snd_soc_ops i2s_8ch_playback_ops = {
 static int pcm186x_hw_params(struct snd_pcm_substream *substream,
 				struct snd_pcm_hw_params *params)
 {
-
 	pr_notice("%s\n", __func__);
-#if 0
-	struct snd_soc_pcm_runtime *rtd;
-	struct snd_soc_dai *codec_dai;
-
-
-	printk("aic:%s\n", __func__);
-	if (substream == NULL) {
-		pr_err("invalid stream parameter\n");
-		return -EINVAL;
-	}
-
-	rtd = substream->private_data;
-	if (rtd == NULL) {
-		pr_err("invalid runtime parameter\n");
-		return -EINVAL;
-	}
-
-	codec_dai = rtd->codec_dai;
-	if (codec_dai == NULL) {
-		pr_err("invalid dai parameter\n");
-		return -EINVAL;
-	}
-
-#define  TLV320_MCLK_SOURCE 0
-#define  TLV320_BCLK_SOURCE 1
-
-	snd_soc_dai_set_pll(codec_dai, 0,TLV320_MCLK_SOURCE,
-			256 * params_rate(params), params_rate(params));
-
-#endif
 	return 0;
 }
 
 static struct snd_soc_ops pcm186x_machine_ops = {
 	.hw_params = pcm186x_hw_params,
 };
-
-#if 0
-static struct snd_soc_dai_link_component tdm_in_codecs[] = {
-	{.name = "pcm186x.2-004a", .dai_name = "pcm1865-aif" },
-	{.name = "pcm186x.2-004b", .dai_name = "pcm1865-aif" },
-};
-#endif
 
 /* FE */
 SND_SOC_DAILINK_DEFS(playback1,
@@ -463,12 +425,12 @@ SND_SOC_DAILINK_DEFS(second_ext_codec,
 
 SND_SOC_DAILINK_DEFS(mtk_codec,
 	DAILINK_COMP_ARRAY(COMP_CPU("INT ADDA")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("mt8167-codec", "mt8167-codec-dai")),
+	DAILINK_COMP_ARRAY(COMP_DUMMY()),
 	DAILINK_COMP_ARRAY(COMP_EMPTY()));
 
 SND_SOC_DAILINK_DEFS(dmic,
 	DAILINK_COMP_ARRAY(COMP_CPU("INT ADDA")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("mt8167-codec", "mt8167-codec-dai")),
+	DAILINK_COMP_ARRAY(COMP_DUMMY()),
 	DAILINK_COMP_ARRAY(COMP_EMPTY()));
 
 SND_SOC_DAILINK_DEFS(hw_gain1,
@@ -777,15 +739,86 @@ exit:
 	return ret;
 }
 
+static int set_card_codec_info(struct snd_soc_card *card)
+{
+	struct snd_soc_dai_link_component *dai_link_codecs, *dlc;
+	struct device_node *dl_node, *c_node;
+	struct device *dev = card->dev;
+	struct of_phandle_args args;
+	const char *dai_link_name;
+	int num_codecs;
+	int ret, i;
+
+	/* Loop over all the dai link sub nodes*/
+	for_each_child_of_node(dev->of_node, dl_node) {
+		if (of_property_read_string(dl_node, "dai-link-name",
+					    &dai_link_name))
+			return -EINVAL;
+
+		num_codecs = of_get_child_count(dl_node);
+		/* Allocate the snd_soc_dai_link_component array that will be
+		 * used to dynamically add the list of codecs to the static
+		 * snd_soc_dai_link array.
+		 */
+		dlc = dai_link_codecs = devm_kcalloc(dev, num_codecs,
+					       sizeof(*dai_link_codecs),
+					       GFP_KERNEL);
+		if (!dai_link_codecs)
+			return -ENOMEM;
+
+		/* Loop over all the codec sub nodes for this dai link */
+		for_each_child_of_node(dl_node, c_node) {
+			/* Retrieve the node and the dai_name that are used
+			 * by the soundcard.
+			 */
+			ret = of_parse_phandle_with_args(c_node, "sound-dai",
+							 "#sound-dai-cells", 0, 
+							 &args);
+			if (ret) {
+				if (ret != -EPROBE_DEFER)
+					dev_err(dev,
+						"can't parse dai %d\n", ret);
+				return ret;
+			}
+			dlc->of_node = args.np;
+			ret =  snd_soc_get_dai_name(&args, &dlc->dai_name);
+			if (ret) {
+				of_node_put(c_node);
+				return ret;
+			}
+
+			dlc++;
+		}
+
+		/* Update the snd_soc_dai_link static array with the codecs
+		 * we have just found.
+		 */
+		for (i = 0; i < card->num_links; i++) {
+			if (!strcmp(dai_link_name, card->dai_link[i].name)) {
+				card->dai_link[i].num_codecs = num_codecs;
+				card->dai_link[i].codecs = dai_link_codecs;
+				break;
+			}
+		}
+	}
+
+	return 0;
+}
+
 static int mt8516_pumpkin_dev_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = &mt8516_pumpkin_card;
 	struct device_node *platform_node;
-	struct device_node *codec_node;
-//	struct device_node *tdmin_adc_node;
-
 	int ret, i;
 	struct mt8516_pumpkin_priv *card_data;
+
+	card->dev = &pdev->dev;
+	ret = set_card_codec_info(card);
+	if (ret) {
+		dev_err(&pdev->dev, "%s set_card_codec_info failed %d\n",
+		__func__, ret);
+		return ret;
+	}
 
 	platform_node = of_parse_phandle(pdev->dev.of_node,
 					 "mediatek,platform", 0);
@@ -793,35 +826,12 @@ static int mt8516_pumpkin_dev_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Property 'platform' missing or invalid\n");
 		return -EINVAL;
 	}
-	codec_node = of_parse_phandle(pdev->dev.of_node,
-					 "mediatek,audio-codec", 0);
-	if (!codec_node) {
-		dev_err(&pdev->dev, "Property 'audio-codec' missing or invalid\n");
-		return -EINVAL;
-	}
 
-/*	tdmin_adc_node = of_parse_phandle(pdev->dev.of_node,
-							"mediatek,tdmin-adc", 0);
-		if (!tdmin_adc_node) {
-			dev_err(&pdev->dev, "Property 'tdmin-adc' missing or invalid\n");
-			}
-*/
 	for (i = 0; i < card->num_links; i++) {
 		if (mt8516_pumpkin_dais[i].platforms->name)
 			continue;
 		mt8516_pumpkin_dais[i].platforms->of_node = platform_node;
 	}
-	for (i = 0; i < card->num_links; i++) {
-/*		if (tdmin_adc_node && (strcmp(mt8516_pumpkin_dais[i].cpu_dai_name, "TDM_IN") == 0)) {
-			mt8516_pumpkin_dais[i].codec_of_node = tdmin_adc_node;
-			mt8516_pumpkin_dais[i].codec_name = NULL;
-			continue;
-		}
-		if (mt8516_pumpkin_dais[i].codec_name)
-			continue;
-		mt8516_pumpkin_dais[i].codec_of_node = codec_node;
-*/	}
-	card->dev = &pdev->dev;
 
 	card_data = devm_kzalloc(&pdev->dev,
 		sizeof(struct mt8516_pumpkin_priv), GFP_KERNEL);

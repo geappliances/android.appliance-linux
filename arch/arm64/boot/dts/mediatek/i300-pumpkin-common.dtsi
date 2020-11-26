@@ -60,13 +60,30 @@
 		mediatek,pwrap-regmap = <&pwrap>;
 		mediatek,speaker-mode = <0>; /* 0(CLASSD) 1(CLASSAB) */
 		mediatek,dmic-wire-mode = <1>; /* 0(ONE_WIRE) 1(TWO_WIRE) */
+		#sound-dai-cells = <0>;
 	};
 
 	sound: sound {
 		compatible = "mediatek,mt8516-soc-pumpkin";
 		mediatek,platform = <&afe>;
-		mediatek,audio-codec = <&mt8167_audio_codec>;
 		status = "okay";
+		dai-link-0 {
+			sound-dai = <&afe>;
+			dai-link-name = "MTK Codec";
+
+			codec-0 {
+				sound-dai = <&mt8167_audio_codec>;
+			};
+		};
+
+		dai-link-1 {
+			sound-dai = <&afe>;
+			dai-link-name = "DMIC BE";
+
+			codec-0 {
+				sound-dai = <&mt8167_audio_codec>;
+			};
+		};
 	};
 };
 
