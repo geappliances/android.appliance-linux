@@ -702,6 +702,14 @@ static unsigned int mt8183_calculate_factor(int clock)
 		return 2;
 }
 
+static unsigned int mt8365_calculate_factor(int clock)
+{
+	if (clock <= 25000)
+		return 8;
+	else
+		return 4;
+}
+
 static const struct mtk_dpi_conf mt8167_conf = {
 	.cal_factor = mt8167_calculate_factor,
 	.reg_h_fre_con = 0xe0,
@@ -725,6 +733,11 @@ static const struct mtk_dpi_conf mt8183_conf = {
 	.cal_factor = mt8183_calculate_factor,
 	.reg_h_fre_con = 0xe0,
 	.chip = MTK_DPI_MT8183,
+};
+
+static const struct mtk_dpi_conf mt8365_conf = {
+	.cal_factor = mt8365_calculate_factor,
+	.reg_h_fre_con = 0xe0,
 };
 
 static int mtk_dpi_probe(struct platform_device *pdev)
@@ -864,6 +877,9 @@ static const struct of_device_id mtk_dpi_of_ids[] = {
 	},
 	{ .compatible = "mediatek,mt8183-dpi",
 	  .data = &mt8183_conf,
+	},
+	{ .compatible = "mediatek,mt8365-dpi",
+	  .data = &mt8365_conf,
 	},
 	{ },
 };
