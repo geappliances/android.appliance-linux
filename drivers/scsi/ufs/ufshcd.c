@@ -2693,6 +2693,7 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 {
 	struct ufshcd_lrb *lrbp;
 	struct ufs_hba *hba;
+	unsigned long flags;
 	int tag;
 	int err = 0;
 
@@ -2709,6 +2710,50 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 	if (!down_read_trylock(&hba->clk_scaling_lock))
 		return SCSI_MLQUEUE_HOST_BUSY;
 
+	hba->req_abort_count = 0;
+
+	err = ufshcd_hold(hba, true);
+	if (err) {
+		err = SCSI_MLQUEUE_HOST_BUSY;
+		goto out;
+	}
+	WARN_ON(ufshcd_is_clkgating_allowed(hba) &&
+		(hba->clk_gating.state != CLKS_ON));
+
+	lrbp = &hba->lrb[tag];
+	if (unlikely(lrbp->in_use)) {
+		if (hba->pm_op_in_progress)
+			set_host_byte(cmd, DID_BAD_TARGET);
+		else
+			err = SCSI_MLQUEUE_HOST_BUSY;
+		ufshcd_release(hba);
+		goto out;
+	}
+
+	WARN_ON(lrbp->cmd);
+	lrbp->cmd = cmd;
+	lrbp->sense_bufflen = UFS_SENSE_SIZE;
+	lrbp->sense_buffer = cmd->sense_buffer;
+	lrbp->task_tag = tag;
+	lrbp->lun = ufshcd_scsi_to_upiu_lun(cmd->device->lun);
+	lrbp->intr_cmd = !ufshcd_is_intr_aggr_allowed(hba) ? true : false;
+
+	ufshcd_prepare_lrbp_crypto(cmd->request, lrbp);
+
+	lrbp->req_abort_skip = false;
+
+	ufshcd_comp_scsi_upiu(hba, lrbp);
+
+	err = ufshcd_map_sg(hba, lrbp);
+	if (err) {
+		lrbp->cmd = NULL;
+		ufshcd_release(hba);
+		goto out;
+	}
+	/* Make sure descriptors are ready before ringing the doorbell */
+	wmb();
+
+	spin_lock_irqsave(hba->host->host_lock, flags);
 	switch (hba->ufshcd_state) {
 	case UFSHCD_STATE_OPERATIONAL:
 	case UFSHCD_STATE_EH_SCHEDULED_NON_FATAL:
@@ -2727,74 +2772,32 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 		if (hba->pm_op_in_progress) {
 			hba->force_reset = true;
 			set_host_byte(cmd, DID_BAD_TARGET);
-			cmd->scsi_done(cmd);
-			goto out;
+			goto out_compl_cmd;
 		}
 		fallthrough;
 	case UFSHCD_STATE_RESET:
 		err = SCSI_MLQUEUE_HOST_BUSY;
-		goto out;
+		goto out_compl_cmd;
 	case UFSHCD_STATE_ERROR:
 		set_host_byte(cmd, DID_ERROR);
-		cmd->scsi_done(cmd);
-		goto out;
+		goto out_compl_cmd;
 	default:
 		dev_WARN_ONCE(hba->dev, 1, "%s: invalid state %d\n",
 				__func__, hba->ufshcd_state);
 		set_host_byte(cmd, DID_BAD_TARGET);
-		cmd->scsi_done(cmd);
-		goto out;
+		goto out_compl_cmd;
 	}
-
-	hba->req_abort_count = 0;
-
-	err = ufshcd_hold(hba, true);
-	if (err) {
-		err = SCSI_MLQUEUE_HOST_BUSY;
-		goto out;
-	}
-	WARN_ON(ufshcd_is_clkgating_allowed(hba) &&
-		(hba->clk_gating.state != CLKS_ON));
-
-	lrbp = &hba->lrb[tag];
-	WARN_ON(lrbp->cmd);
-	lrbp->cmd = cmd;
-	lrbp->sense_bufflen = UFS_SENSE_SIZE;
-	lrbp->sense_buffer = cmd->sense_buffer;
-	lrbp->task_tag = tag;
-	lrbp->lun = ufshcd_scsi_to_upiu_lun(cmd->device->lun);
-	lrbp->intr_cmd = !ufshcd_is_intr_aggr_allowed(hba) ? true : false;
-
-	ufshcd_prepare_lrbp_crypto(cmd->request, lrbp);
-
-	trace_android_vh_ufs_prepare_command(hba, cmd->request, lrbp, &err);
-	if (err) {
-		lrbp->cmd = NULL;
-		ufshcd_release(hba);
-		goto out;
-	}
-
-	lrbp->req_abort_skip = false;
-
-	err = ufshpb_prep(hba, lrbp);
-	if (err == -EAGAIN) {
-		lrbp->cmd = NULL;
-		ufshcd_release(hba);
-		goto out;
-	}
-
-	ufshcd_comp_scsi_upiu(hba, lrbp);
-
-	err = ufshcd_map_sg(hba, lrbp);
-	if (err) {
-		lrbp->cmd = NULL;
-		ufshcd_release(hba);
-		goto out;
-	}
-	/* Make sure descriptors are ready before ringing the doorbell */
-	wmb();
-
 	ufshcd_send_command(hba, tag);
+	spin_unlock_irqrestore(hba->host->host_lock, flags);
+	goto out;
+
+out_compl_cmd:
+	scsi_dma_unmap(lrbp->cmd);
+	lrbp->cmd = NULL;
+	spin_unlock_irqrestore(hba->host->host_lock, flags);
+	ufshcd_release(hba);
+	if (!err)
+		cmd->scsi_done(cmd);
 out:
 	up_read(&hba->clk_scaling_lock);
 	return err;
@@ -2965,6 +2968,11 @@ static int ufshcd_exec_dev_cmd(struct ufs_hba *hba,
 
 	init_completion(&wait);
 	lrbp = &hba->lrb[tag];
+	if (unlikely(lrbp->in_use)) {
+		err = -EBUSY;
+		goto out;
+	}
+
 	WARN_ON(lrbp->cmd);
 	err = ufshcd_compose_dev_cmd(hba, lrbp, cmd_type, tag);
 	if (unlikely(err))
@@ -2978,10 +2986,10 @@ static int ufshcd_exec_dev_cmd(struct ufs_hba *hba,
 
 	ufshcd_send_command(hba, tag);
 	err = ufshcd_wait_for_dev_cmd(hba, lrbp, timeout);
-	ufshcd_add_query_upiu_trace(hba, tag,
-			err ? "query_complete_err" : "query_complete");
 
 out:
+	ufshcd_add_query_upiu_trace(hba, tag,
+			err ? "query_complete_err" : "query_complete");
 	blk_put_request(req);
 out_unlock:
 	up_read(&hba->clk_scaling_lock);
@@ -5241,11 +5249,13 @@ static void __ufshcd_transfer_req_compl(struct ufs_hba *hba,
 	struct ufshcd_lrb *lrbp;
 	struct scsi_cmnd *cmd;
 	int index;
+	bool update_scaling = false;
 
 	for_each_set_bit(index, &completed_reqs, hba->nutrs) {
 		if (!test_and_clear_bit(index, &hba->outstanding_reqs))
 			continue;
 		lrbp = &hba->lrb[index];
+		lrbp->in_use = false;
 		lrbp->compl_time_stamp = ktime_get();
 		cmd = lrbp->cmd;
 		if (cmd) {
@@ -5257,6 +5267,8 @@ static void __ufshcd_transfer_req_compl(struct ufs_hba *hba,
 			ufshcd_release_scsi_cmd(hba, lrbp);
 			/* Do not touch lrbp after scsi done */
 			cmd->scsi_done(cmd);
+			__ufshcd_release(hba);
+			update_scaling = true;
 		} else if (lrbp->command_type == UTP_CMD_TYPE_DEV_MANAGE ||
 			lrbp->command_type == UTP_CMD_TYPE_UFS_STORAGE) {
 			if (hba->dev_cmd.complete) {
@@ -5264,9 +5276,11 @@ static void __ufshcd_transfer_req_compl(struct ufs_hba *hba,
 				ufshcd_add_command_trace(hba, index,
 						"dev_complete");
 				complete(hba->dev_cmd.complete);
-				ufshcd_clk_scaling_update_busy(hba);
+				update_scaling = true;
 			}
 		}
+		if (ufshcd_is_clkscaling_supported(hba) && update_scaling)
+			hba->clk_scaling.active_reqs--;
 	}
 }
 
@@ -6701,6 +6715,11 @@ static int ufshcd_issue_devman_upiu_cmd(struct ufs_hba *hba,
 
 	init_completion(&wait);
 	lrbp = &hba->lrb[tag];
+	if (unlikely(lrbp->in_use)) {
+		err = -EBUSY;
+		goto out;
+	}
+
 	WARN_ON(lrbp->cmd);
 	lrbp->cmd = NULL;
 	lrbp->sense_bufflen = 0;
@@ -6766,6 +6785,7 @@ static int ufshcd_issue_devman_upiu_cmd(struct ufs_hba *hba,
 		}
 	}
 
+out:
 	blk_put_request(req);
 out_unlock:
 	up_read(&hba->clk_scaling_lock);
@@ -7011,18 +7031,6 @@ static int ufshcd_abort(struct scsi_cmnd *cmd)
 		BUG();
 	}
 
-	/*
-	 * Task abort to the device W-LUN is illegal. When this command
-	 * will fail, due to spec violation, scsi err handling next step
-	 * will be to send LU reset which, again, is a spec violation.
-	 * To avoid these unnecessary/illegal step we skip to the last error
-	 * handling stage: reset and restore.
-	 */
-	if (lrbp->lun == UFS_UPIU_UFS_DEVICE_WLUN) {
-		ufshcd_update_evt_hist(hba, UFS_EVT_ABORT, lrbp->lun);
-		return ufshcd_eh_host_reset_handler(cmd);
-	}
-
 	ufshcd_hold(hba, false);
 	reg = ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_DOOR_BELL);
 	/* If command is already aborted/completed, return FAILED. */
@@ -7059,8 +7067,6 @@ static int ufshcd_abort(struct scsi_cmnd *cmd)
 		dev_err(hba->dev,
 		"%s: cmd was completed, but without a notifying intr, tag = %d",
 		__func__, tag);
-		__ufshcd_transfer_req_compl(hba, 1UL << tag);
-		goto release;
 	}
 
 	/*
