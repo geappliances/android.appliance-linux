@@ -5998,8 +5998,7 @@ static void ufshcd_err_handling_unprepare(struct ufs_hba *hba)
 
 static inline bool ufshcd_err_handling_should_stop(struct ufs_hba *hba)
 {
-	return (!hba->is_powered || hba->shutting_down ||
-		hba->ufshcd_state == UFSHCD_STATE_ERROR ||
+	return (!hba->is_powered || hba->ufshcd_state == UFSHCD_STATE_ERROR ||
 		(!(hba->saved_err || hba->saved_uic_err || hba->force_reset ||
 		   ufshcd_is_link_broken(hba))));
 }
@@ -6086,8 +6085,12 @@ static void ufshcd_err_handler(struct work_struct *work)
 	/* Complete requests that have door-bell cleared by h/w */
 	ufshcd_complete_requests(hba);
 	spin_lock_irqsave(hba->host->host_lock, flags);
-	if (hba->ufshcd_state != UFSHCD_STATE_ERROR)
-		hba->ufshcd_state = UFSHCD_STATE_RESET;
+	ufshcd_scsi_block_requests(hba);
+	hba->ufshcd_state = UFSHCD_STATE_RESET;
+
+	/* Complete requests that have door-bell cleared by h/w */
+	ufshcd_complete_requests(hba);
+
 	/*
 	 * A full reset and restore might have happened after preparation
 	 * is finished, double check whether we should stop.
@@ -9080,8 +9083,7 @@ int ufshcd_system_suspend(struct ufs_hba *hba)
 	ktime_t start = ktime_get();
 
 	down(&hba->host_sem);
-
-	if (!hba->is_powered)
+	if (!hba || !hba->is_powered)
 		return 0;
 
 	cancel_delayed_work_sync(&hba->rpm_dev_flush_recheck_work);
@@ -9132,6 +9134,11 @@ int ufshcd_system_resume(struct ufs_hba *hba)
 {
 	int ret = 0;
 	ktime_t start = ktime_get();
+
+	if (!hba) {
+		up(&hba->host_sem);
+		return -EINVAL;
+	}
 
 	if (!hba->is_powered || pm_runtime_suspended(hba->dev))
 		/*
@@ -9234,9 +9241,6 @@ int ufshcd_shutdown(struct ufs_hba *hba)
 	int ret = 0;
 
 	down(&hba->host_sem);
-	hba->shutting_down = true;
-	up(&hba->host_sem);
-
 	if (!hba->is_powered)
 		goto out;
 
@@ -9250,6 +9254,7 @@ out:
 	if (ret)
 		dev_err(hba->dev, "%s failed, err %d\n", __func__, ret);
 	hba->is_powered = false;
+	up(&hba->host_sem);
 	/* allow force shutdown even in case of errors */
 	return 0;
 }
