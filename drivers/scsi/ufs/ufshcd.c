@@ -6994,6 +6994,18 @@ static int ufshcd_abort(struct scsi_cmnd *cmd)
 		BUG();
 	}
 
+	/*
+	 * Task abort to the device W-LUN is illegal. When this command
+	 * will fail, due to spec violation, scsi err handling next step
+	 * will be to send LU reset which, again, is a spec violation.
+	 * To avoid these unnecessary/illegal step we skip to the last error
+	 * handling stage: reset and restore.
+	 */
+	if (lrbp->lun == UFS_UPIU_UFS_DEVICE_WLUN) {
+		ufshcd_update_reg_hist(&hba->ufs_stats.task_abort, lrbp->lun);
+		return ufshcd_eh_host_reset_handler(cmd);
+	}
+
 	ufshcd_hold(hba, false);
 	reg = ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_DOOR_BELL);
 	/* If command is already aborted/completed, return FAILED. */
@@ -7016,8 +7028,8 @@ static int ufshcd_abort(struct scsi_cmnd *cmd)
 	 */
 	scsi_print_command(cmd);
 	if (!hba->req_abort_count) {
-		ufshcd_update_evt_hist(hba, UFS_EVT_ABORT, tag);
-		ufshcd_print_evt_hist(hba);
+		ufshcd_update_reg_hist(&hba->ufs_stats.task_abort, tag);
+		ufshcd_print_host_regs(hba);
 		ufshcd_print_host_state(hba);
 		ufshcd_print_pwr_info(hba);
 		ufshcd_print_trs(hba, 1 << tag, true);
