@@ -1054,6 +1054,14 @@ static void ufs_mtk_event_notify(struct ufs_hba *hba,
 	trace_ufs_mtk_event(evt, val);
 }
 
+static void ufs_mtk_event_notify(struct ufs_hba *hba,
+				 enum ufs_event_type evt, void *data)
+{
+	unsigned int val = *(u32 *)data;
+
+	trace_ufs_mtk_event(evt, val);
+}
+
 /*
  * struct ufs_hba_mtk_vops - UFS MTK specific variant operations
  *
