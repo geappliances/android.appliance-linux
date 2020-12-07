@@ -77,6 +77,13 @@ static bool ufs_mtk_is_va09_supported(struct ufs_hba *hba)
 	return !!(host->caps & UFS_MTK_CAP_VA09_PWR_CTRL);
 }
 
+static bool ufs_mtk_is_broken_vcc(struct ufs_hba *hba)
+{
+	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
+
+	return !!(host->caps & UFS_MTK_CAP_BROKEN_VCC);
+}
+
 static void ufs_mtk_cfg_unipro_cg(struct ufs_hba *hba, bool enable)
 {
 	u32 tmp;
@@ -1044,14 +1051,6 @@ static void ufs_mtk_fixup_dev_quirks(struct ufs_hba *hba)
 		hba->dev_quirks &= ~(UFS_DEVICE_QUIRK_DELAY_BEFORE_LPM |
 			UFS_DEVICE_QUIRK_DELAY_AFTER_LPM);
 	}
-}
-
-static void ufs_mtk_event_notify(struct ufs_hba *hba,
-				 enum ufs_event_type evt, void *data)
-{
-	unsigned int val = *(u32 *)data;
-
-	trace_ufs_mtk_event(evt, val);
 }
 
 static void ufs_mtk_event_notify(struct ufs_hba *hba,
