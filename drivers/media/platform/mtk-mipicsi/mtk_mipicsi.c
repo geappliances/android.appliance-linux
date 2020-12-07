@@ -38,6 +38,7 @@
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <media/v4l2-common.h>
+#include <media/v4l2-mem2mem.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-dev.h>
 #include <media/v4l2-device.h>
@@ -1595,7 +1596,7 @@ static int mtk_mipicsi_probe(struct platform_device *pdev)
 	q->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	q->io_modes = VB2_MMAP | VB2_USERPTR | VB2_DMABUF;
 	q->drv_priv = mipicsi;
-	q->buf_struct_size = sizeof(struct vb2_buffer);
+	q->buf_struct_size = sizeof(struct v4l2_m2m_buffer);
 	q->ops = &mtk_vb2_ops;
 	q->mem_ops = &vb2_dma_contig_memops;
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
