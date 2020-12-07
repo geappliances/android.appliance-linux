@@ -925,7 +925,9 @@ static int mtk_mipicsi_querycap(struct file *file, void *priv,
 	strlcpy(cap->card, MTK_PLATFORM_STR, sizeof(cap->card));
 	strlcpy(cap->driver, mipicsi->drv_name, sizeof(cap->driver));
 	strlcpy(cap->bus_info, MTK_PLATFORM_STR, sizeof(cap->bus_info));
-	cap->device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
+	cap->device_caps = V4L2_CAP_VIDEO_CAPTURE |
+			   V4L2_CAP_STREAMING |
+			   V4L2_CAP_READWRITE;
 	cap->capabilities = cap->device_caps | V4L2_CAP_DEVICE_CAPS;
 
 	return 0;
