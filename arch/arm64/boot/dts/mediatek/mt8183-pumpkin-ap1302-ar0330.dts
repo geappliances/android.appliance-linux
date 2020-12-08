@@ -120,7 +120,8 @@
 
 			sensor@0 {
 				reg = <0>;
-
+				
+				vdd-supply = <&reg_1p8v_ext>;
 				vddpll-supply = <&mt6358_vldo28_reg>;
 				vaa-supply = <&mt6358_vcama1_reg>;
 				vddio-supply = <&mt6358_vcamio_reg>;
