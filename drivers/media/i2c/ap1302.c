@@ -328,9 +328,21 @@
 
 struct ap1302_device;
 
+enum {
+	AP1302_PAD_SINK_0,
+	AP1302_PAD_SINK_1,
+	AP1302_PAD_SOURCE,
+	AP1302_PAD_MAX,
+};
+
 struct ap1302_format_info {
 	unsigned int code;
 	u16 out_fmt;
+};
+
+struct ap1302_format {
+	struct v4l2_mbus_framefmt format;
+	const struct ap1302_format_info *info;
 };
 
 struct ap1302_size {
@@ -348,6 +360,7 @@ struct ap1302_sensor_info {
 	const char *name;
 	unsigned int i2c_addr;
 	struct ap1302_size resolution;
+	u32 format;
 	const struct ap1302_sensor_supply *supplies;
 };
 
@@ -379,11 +392,9 @@ struct ap1302_device {
 	struct mutex lock;	/* Protects formats */
 
 	struct v4l2_subdev sd;
-	struct media_pad pad;
-	struct {
-		struct v4l2_mbus_framefmt format;
-		const struct ap1302_format_info *info;
-	} formats[1];
+	struct media_pad pads[AP1302_PAD_MAX];
+	struct ap1302_format formats[AP1302_PAD_MAX];
+	unsigned int width_factor;
 
 	struct v4l2_ctrl_handler ctrls;
 
@@ -431,6 +442,7 @@ static const struct ap1302_sensor_info ap1302_sensor_info[] = {
 		.name = "ar0144",
 		.i2c_addr = 0x10,
 		.resolution = { 1280, 800 },
+		.format = MEDIA_BUS_FMT_SGRBG12_1X12,
 		.supplies = (const struct ap1302_sensor_supply[]) {
 			{ "vaa", 0 },
 			{ "vddio", 0 },
@@ -442,6 +454,7 @@ static const struct ap1302_sensor_info ap1302_sensor_info[] = {
 		.name = "ar0330",
 		.i2c_addr = 0x10,
 		.resolution = { 2304, 1536 },
+		.format = MEDIA_BUS_FMT_SGRBG12_1X12,
 		.supplies = (const struct ap1302_sensor_supply[]) {
 			{ "vddpll", 0 },
 			{ "vaa", 0 },
@@ -454,6 +467,7 @@ static const struct ap1302_sensor_info ap1302_sensor_info[] = {
 		.name = "ar1335",
 		.i2c_addr = 0x36,
 		.resolution = { 4208, 3120 },
+		.format = MEDIA_BUS_FMT_SGRBG10_1X10,
 		.supplies = (const struct ap1302_sensor_supply[]) {
 			{ "vaa", 0 },
 			{ "vddio", 0 },
@@ -1047,6 +1061,7 @@ done:
 
 static int ap1302_configure(struct ap1302_device *ap1302)
 {
+	const struct ap1302_format *format = &ap1302->formats[AP1302_PAD_SOURCE];
 	unsigned int data_lanes = ap1302->bus_cfg.bus.mipi_csi2.num_data_lanes;
 	int ret = 0;
 
@@ -1055,11 +1070,11 @@ static int ap1302_configure(struct ap1302_device *ap1302)
 		     AP1302_PREVIEW_HINF_CTRL_MIPI_LANES(data_lanes), &ret);
 
 	ap1302_write(ap1302, AP1302_PREVIEW_WIDTH,
-		     ap1302->formats[0].format.width, &ret);
+		     format->format.width / ap1302->width_factor, &ret);
 	ap1302_write(ap1302, AP1302_PREVIEW_HEIGHT,
-		     ap1302->formats[0].format.height, &ret);
+		     format->format.height, &ret);
 	ap1302_write(ap1302, AP1302_PREVIEW_OUT_FMT,
-		     ap1302->formats[0].info->out_fmt, &ret);
+		     format->info->out_fmt, &ret);
 	if (ret < 0)
 		return ret;
 
@@ -1325,18 +1340,27 @@ static int ap1302_init_cfg(struct v4l2_subdev *sd,
 {
 	u32 which = cfg ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
 	struct ap1302_device *ap1302 = to_ap1302(sd);
-	const struct ap1302_size *sensor_resolution =
-		&ap1302->sensor_info->resolution;
-	struct v4l2_mbus_framefmt *format;
+	const struct ap1302_sensor_info *info = ap1302->sensor_info;
+	unsigned int pad;
 
-	format = ap1302_get_pad_format(ap1302, cfg, 0, which);
+	for (pad = 0; pad < ARRAY_SIZE(ap1302->formats); ++pad) {
+		struct v4l2_mbus_framefmt *format =
+			ap1302_get_pad_format(ap1302, cfg, pad, which);
 
-	format->width = sensor_resolution->width;
-	format->height = sensor_resolution->height;
+		format->width = info->resolution.width;
+		format->height = info->resolution.height;
 
-	format->field = V4L2_FIELD_NONE;
-	format->code = ap1302->formats[0].info->code;
-	format->colorspace = V4L2_COLORSPACE_SRGB;
+		/*
+		 * The source pad combines images side by side in multi-sensor
+		 * setup.
+		 */
+		if (pad == AP1302_PAD_SOURCE)
+			format->width *= ap1302->width_factor;
+
+		format->field = V4L2_FIELD_NONE;
+		format->code = ap1302->formats[pad].info->code;
+		format->colorspace = V4L2_COLORSPACE_SRGB;
+	}
 
 	return 0;
 }
@@ -1345,10 +1369,25 @@ static int ap1302_enum_mbus_code(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_pad_config *cfg,
 				 struct v4l2_subdev_mbus_code_enum *code)
 {
-	if (code->index >= ARRAY_SIZE(supported_video_formats))
-		return -EINVAL;
+	struct ap1302_device *ap1302 = to_ap1302(sd);
 
-	code->code = supported_video_formats[code->index].code;
+	if (code->pad != AP1302_PAD_SOURCE) {
+		/*
+		 * On the sink pads, only the format produced by the sensor is
+		 * supported.
+		 */
+		if (code->index)
+			return -EINVAL;
+
+		code->code = ap1302->sensor_info->format;
+	} else {
+		/* On the source pad, multiple formats are supported. */
+		if (code->index >= ARRAY_SIZE(supported_video_formats))
+			return -EINVAL;
+
+		code->code = supported_video_formats[code->index].code;
+	}
+
 	return 0;
 }
 
@@ -1356,24 +1395,42 @@ static int ap1302_enum_frame_size(struct v4l2_subdev *sd,
 				  struct v4l2_subdev_pad_config *cfg,
 				  struct v4l2_subdev_frame_size_enum *fse)
 {
+	struct ap1302_device *ap1302 = to_ap1302(sd);
 	unsigned int i;
 
 	if (fse->index)
 		return -EINVAL;
 
-	/* Validate the media bus code. */
-	for (i = 0; i < ARRAY_SIZE(supported_video_formats); i++) {
-		if (supported_video_formats[i].code == fse->code)
-			break;
+	if (fse->pad != AP1302_PAD_SOURCE) {
+		/*
+		 * On the sink pads, only the size produced by the sensor is
+		 * supported.
+		 */
+		if (fse->code != ap1302->sensor_info->format)
+			return -EINVAL;
+
+		fse->min_width = ap1302->sensor_info->resolution.width;
+		fse->min_height = ap1302->sensor_info->resolution.height;
+		fse->max_width = ap1302->sensor_info->resolution.width;
+		fse->max_height = ap1302->sensor_info->resolution.height;
+	} else {
+		/*
+		 * On the source pad, the AP1302 can freely scale within the
+		 * scaler's limits.
+		 */
+		for (i = 0; i < ARRAY_SIZE(supported_video_formats); i++) {
+			if (supported_video_formats[i].code == fse->code)
+				break;
+		}
+
+		if (i >= ARRAY_SIZE(supported_video_formats))
+			return -EINVAL;
+
+		fse->min_width = AP1302_MIN_WIDTH * ap1302->width_factor;
+		fse->min_height = AP1302_MIN_HEIGHT;
+		fse->max_width = AP1302_MAX_WIDTH;
+		fse->max_height = AP1302_MAX_HEIGHT;
 	}
-
-	if (i >= ARRAY_SIZE(supported_video_formats))
-		return -EINVAL;
-
-	fse->min_width = AP1302_MIN_WIDTH;
-	fse->min_height = AP1302_MIN_HEIGHT;
-	fse->max_width = AP1302_MAX_WIDTH;
-	fse->max_height = AP1302_MAX_HEIGHT;
 
 	return 0;
 }
@@ -1403,6 +1460,10 @@ static int ap1302_set_fmt(struct v4l2_subdev *sd,
 	struct v4l2_mbus_framefmt *format;
 	unsigned int i;
 
+	/* Formats on the sink pads can't be changed. */
+	if (fmt->pad != AP1302_PAD_SOURCE)
+		return ap1302_get_fmt(sd, cfg, fmt);
+
 	format = ap1302_get_pad_format(ap1302, cfg, fmt->pad, fmt->which);
 
 	/* Validate the media bus code, default to the first supported value. */
@@ -1417,11 +1478,13 @@ static int ap1302_set_fmt(struct v4l2_subdev *sd,
 		info = &supported_video_formats[0];
 
 	/*
-	 * Clamp the size. The width must be a multiple of 4 and the height a
-	 * multiple of 2.
+	 * Clamp the size. The width must be a multiple of 4 (or 8 in the
+	 * dual-sensor case) and the height a multiple of 2.
 	 */
-	fmt->format.width = clamp(ALIGN_DOWN(fmt->format.width, 4),
-				  AP1302_MIN_WIDTH, AP1302_MAX_WIDTH);
+	fmt->format.width = clamp(ALIGN_DOWN(fmt->format.width,
+					     4 * ap1302->width_factor),
+				  AP1302_MIN_WIDTH * ap1302->width_factor,
+				  AP1302_MAX_WIDTH);
 	fmt->format.height = clamp(ALIGN_DOWN(fmt->format.height, 2),
 				   AP1302_MIN_HEIGHT, AP1302_MAX_HEIGHT);
 
@@ -1455,7 +1518,7 @@ static int ap1302_get_selection(struct v4l2_subdev *sd,
 	case V4L2_SEL_TGT_CROP:
 		sel->r.left = 0;
 		sel->r.top = 0;
-		sel->r.width = resolution->width;
+		sel->r.width = resolution->width * ap1302->width_factor;
 		sel->r.height = resolution->height;
 		break;
 
@@ -2156,6 +2219,7 @@ static void ap1302_hw_cleanup(struct ap1302_device *ap1302)
 static int ap1302_config_v4l2(struct ap1302_device *ap1302)
 {
 	struct v4l2_subdev *sd;
+	unsigned int i;
 	int ret;
 
 	sd = &ap1302->sd;
@@ -2171,15 +2235,19 @@ static int ap1302_config_v4l2(struct ap1302_device *ap1302)
 	sd->entity.function = MEDIA_ENT_F_PROC_VIDEO_ISP;
 	sd->entity.ops = &ap1302_media_ops;
 
-	ap1302->pad.flags = MEDIA_PAD_FL_SOURCE;
+	for (i = 0; i < ARRAY_SIZE(ap1302->pads); ++i)
+		ap1302->pads[i].flags = i == AP1302_PAD_SOURCE
+				      ? MEDIA_PAD_FL_SOURCE : MEDIA_PAD_FL_SINK;
 
-	ret = media_entity_pads_init(&sd->entity, 1, &ap1302->pad);
+	ret = media_entity_pads_init(&sd->entity, ARRAY_SIZE(ap1302->pads),
+				     ap1302->pads);
 	if (ret < 0) {
 		dev_err(ap1302->dev, "media_entity_init failed %d\n", ret);
 		return ret;
 	}
 
-	ap1302->formats[0].info = &supported_video_formats[0];
+	for (i = 0; i < ARRAY_SIZE(ap1302->formats); ++i)
+		ap1302->formats[i].info = &supported_video_formats[0];
 
 	ret = ap1302_init_cfg(sd, NULL);
 	if (ret < 0)
@@ -2266,6 +2334,7 @@ static int ap1302_parse_of(struct ap1302_device *ap1302)
 		 * with the test pattern generator.
 		 */
 		ap1302->sensor_info = &ap1302_sensor_info_tpg;
+		ap1302->width_factor = 1;
 		ret = 0;
 		goto done;
 	}
@@ -2296,7 +2365,10 @@ static int ap1302_parse_of(struct ap1302_device *ap1302)
 	if (!num_sensors) {
 		dev_err(ap1302->dev, "No sensor found\n");
 		ret = -EINVAL;
+		goto done;
 	}
+
+	ap1302->width_factor = num_sensors;
 
 done:
 	of_node_put(sensors);
