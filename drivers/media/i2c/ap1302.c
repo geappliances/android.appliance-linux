@@ -2236,7 +2236,7 @@ static int ap1302_config_v4l2(struct ap1302_device *ap1302)
 	dev_dbg(ap1302->dev, "name %s\n", sd->name);
 
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
-	sd->entity.function = MEDIA_ENT_F_CAM_SENSOR;
+	sd->entity.function = MEDIA_ENT_F_PROC_VIDEO_ISP;
 	sd->entity.ops = &ap1302_media_ops;
 
 	ap1302->pad.flags = MEDIA_PAD_FL_SOURCE;
