@@ -113,6 +113,11 @@ static const enum mtk_ddp_comp_id mt2712_mtk_ddp_third[] = {
 };
 
 static enum mtk_ddp_comp_id mt8167_mtk_ddp_main[] = {
+	DDP_COMPONENT_RDMA1,
+	DDP_COMPONENT_DPI1,
+};
+
+static enum mtk_ddp_comp_id mt8167_mtk_ddp_ext[] = {
 	DDP_COMPONENT_OVL0,
 	DDP_COMPONENT_COLOR0,
 	DDP_COMPONENT_CCORR,
@@ -121,11 +126,6 @@ static enum mtk_ddp_comp_id mt8167_mtk_ddp_main[] = {
 	DDP_COMPONENT_DITHER,
 	DDP_COMPONENT_RDMA0,
 	DDP_COMPONENT_DSI0,
-};
-
-static enum mtk_ddp_comp_id mt8167_mtk_ddp_ext[] = {
-	DDP_COMPONENT_RDMA1,
-	DDP_COMPONENT_DPI1,
 };
 
 static const enum mtk_ddp_comp_id mt8173_mtk_ddp_main[] = {
@@ -148,6 +148,12 @@ static const enum mtk_ddp_comp_id mt8173_mtk_ddp_ext[] = {
 };
 
 static const enum mtk_ddp_comp_id mt8183_mtk_ddp_main[] = {
+	DDP_COMPONENT_OVL_2L1,
+	DDP_COMPONENT_RDMA1,
+	DDP_COMPONENT_DPI0,
+};
+
+static const enum mtk_ddp_comp_id mt8183_mtk_ddp_ext[] = {
 	DDP_COMPONENT_OVL0,
 	DDP_COMPONENT_OVL_2L0,
 	DDP_COMPONENT_RDMA0,
@@ -157,12 +163,6 @@ static const enum mtk_ddp_comp_id mt8183_mtk_ddp_main[] = {
 	DDP_COMPONENT_GAMMA,
 	DDP_COMPONENT_DITHER,
 	DDP_COMPONENT_DSI0,
-};
-
-static const enum mtk_ddp_comp_id mt8183_mtk_ddp_ext[] = {
-	DDP_COMPONENT_OVL_2L1,
-	DDP_COMPONENT_RDMA1,
-	DDP_COMPONENT_DPI0,
 };
 
 static const struct mtk_mmsys_driver_data mt2701_mmsys_driver_data = {
