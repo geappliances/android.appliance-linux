@@ -741,7 +741,7 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
 	mutex_init(&node->vdev_lock);
 	INIT_LIST_HEAD(&cam->buf_list);
 
-	ret = video_register_device(vdev, VFL_TYPE_GRABBER, -1);
+	ret = video_register_device(vdev, VFL_TYPE_VIDEO, -1);
 	if (ret) {
 		dev_err(dev, "failed to register vde:%d\n", ret);
 		goto fail_vb2_rel;
