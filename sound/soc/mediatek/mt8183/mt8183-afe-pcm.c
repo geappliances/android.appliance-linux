@@ -1150,6 +1150,7 @@ static int mt8183_afe_pcm_dev_probe(struct platform_device *pdev)
 		goto err_pm_disable;
 	}
 
+#if 0
 	rstc = devm_reset_control_get(dev, "audiosys");
 	if (IS_ERR(rstc)) {
 		ret = PTR_ERR(rstc);
@@ -1162,6 +1163,7 @@ static int mt8183_afe_pcm_dev_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to trigger audio reset:%d\n", ret);
 		goto err_pm_disable;
 	}
+#endif
 
 	/* enable clock for regcache get default value from hw */
 	afe_priv->pm_runtime_bypass_reg_ctl = true;
