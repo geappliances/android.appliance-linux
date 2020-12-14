@@ -14,6 +14,7 @@
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-event.h>
 #include <media/v4l2-fwnode.h>
+#include <media/v4l2-mc.h>
 #include <media/v4l2-subdev.h>
 #include <linux/phy/phy.h>
 #include "mtk_seninf_reg.h"
@@ -922,6 +923,7 @@ static int seninf_link_setup(struct media_entity *entity,
 }
 
 static const struct media_entity_operations seninf_media_ops = {
+	.get_fwnode_pad = v4l2_subdev_get_fwnode_pad_1_to_1,
 	.link_setup = seninf_link_setup,
 	.link_validate = v4l2_subdev_link_validate,
 };
@@ -952,8 +954,7 @@ static int mtk_seninf_notifier_bound(
 
 	input->subdev = sd;
 
-	ret = media_create_pad_link(&sd->entity, 0, &priv->subdev.entity,
-				    input->port, 0);
+	ret = v4l2_create_fwnode_links_to_pad(sd, &priv->pads[input->port]);
 	if (ret) {
 		dev_err(priv->dev, "failed to create link for %s\n",
 			sd->entity.name);
