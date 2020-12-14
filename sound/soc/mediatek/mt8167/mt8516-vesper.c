@@ -36,10 +36,11 @@ static int num_vesper_cfg;
 static int tdmin_capture_startup(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_dai *dai;
 	int i, j, k;
 
-	for (i = 0; i < rtd->num_codecs; i++)
-		if (rtd->codec_dais[i]->active)
+	for_each_rtd_codec_dais(rtd, i, dai)
+		if (snd_soc_dai_active(dai))
 			return -EBUSY;
 
 	for (k = 0; k < num_vesper_cfg; k++)
@@ -49,14 +50,15 @@ static int tdmin_capture_startup(struct snd_pcm_substream *substream)
 	if (k == num_vesper_cfg)
 		return 0;
 
-	for (i = 0; i < rtd->num_codecs; i++) {
+	for_each_rtd_codec_dais(rtd, i, dai) {
 		for (j = 0; j < vesper_cfg[k].num_cfg; j++) {
-			if (rtd->codec_dais[i]->dev->of_node ==
-			    vesper_cfg[k].tdm_cfg[j].component_of_node) {
-				snd_soc_dai_set_tdm_slot(rtd->codec_dais[i],
+			if (dai->dev->of_node !=
+			    vesper_cfg[k].tdm_cfg[j].component_of_node)
+				continue;
+
+			snd_soc_dai_set_tdm_slot(dai,
 				vesper_cfg[k].tdm_cfg[j].tdm_mask, 0, 8, 32);
-				break;
-			}
+			break;
 		}
 	}
 
@@ -69,12 +71,12 @@ static int tdmin_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	unsigned int rate = params_rate(params);
 	unsigned int mclk_rate = rate * 256;
+	struct snd_soc_dai *dai;
 	int i;
 
 	/* codec mclk */
-	for (i = 0; i < rtd->num_codecs; i++)
-		snd_soc_dai_set_sysclk(rtd->codec_dais[i], 0, mclk_rate,
-				       SND_SOC_CLOCK_IN);
+	for_each_rtd_codec_dais(rtd, i, dai)
+		snd_soc_dai_set_sysclk(dai, 0, mclk_rate, SND_SOC_CLOCK_IN);
 
 	return 0;
 }
