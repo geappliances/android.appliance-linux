@@ -539,20 +539,6 @@
 			status = "disabled";
 		};
 
-		usb1: usb@11190000 {
-			compatible = "mediatek,mtk-musb";
-			reg = <0 0x11190000 0 0x1000>;
-			interrupts = <GIC_SPI 210 IRQ_TYPE_LEVEL_LOW>;
-			interrupt-names = "mc";
-			phys = <&usb1_port PHY_TYPE_USB2>;
-			clocks = <&topckgen CLK_TOP_USB>,
-				 <&topckgen CLK_TOP_USBIF>,
-				 <&topckgen CLK_TOP_USB_1P>;
-			clock-names = "main","mcu","univpll";
-			dr_mode = "host";
-			status = "disabled";
-		};
-
 		usb_phy: usb@11110000 {
 			compatible = "mediatek,generic-tphy-v1";
 			reg = <0 0x11110000 0 0x800>;
