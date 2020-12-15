@@ -21,7 +21,7 @@
 	};
 
 	firmware {
-		optee {
+		optee: optee@4fd00000 {
 			compatible = "linaro,optee-tz";
 			method = "smc";
 		};
