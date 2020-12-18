@@ -1325,6 +1325,7 @@ err_ipi_init:
 }
 
 static const struct of_device_id mtk_vcu_match[] = {
+	{.compatible = "mediatek,mt8183-vcu",},
 	{.compatible = "mediatek,mt8167-vcu",},
 	{},
 };
