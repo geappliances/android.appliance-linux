@@ -197,14 +197,12 @@
 		};
 
 		cam_rst {
-			gpio-hog;
 			gpios = <14 0>;
 			output-low;
 			line-name = "cam_rst";
 		};
 
 		cam_pwdn {
-			gpio-hog;
 			gpios = <15 0>;
 			output-low;
 			line-name = "cam_pwdn";
