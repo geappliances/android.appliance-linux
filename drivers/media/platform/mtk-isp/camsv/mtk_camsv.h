@@ -181,6 +181,15 @@ struct mtk_camsv_video_device {
  */
 struct mtk_camsv_dev {
 	struct device *dev;
+	void __iomem *regs;
+	struct clk *camsys_cam_cgpdn;
+	struct clk *camsys_camtg_cgpdn;
+	struct clk *camsys_camsv0;
+	struct device *larb_ipu;
+	struct device *larb_cam;
+	unsigned int irq;
+	const struct mtk_camsv_conf *conf;
+
 	struct media_pipeline pipeline;
 	struct media_device media_dev;
 	struct v4l2_subdev subdev;
@@ -195,6 +204,7 @@ struct mtk_camsv_dev {
 	unsigned int sequence;
 
 	struct mutex op_lock;
+	struct mutex protect_mutex;
 
 	struct list_head buf_list;
 };
@@ -215,26 +225,10 @@ struct mtk_camsv_conf {
 	bool enableFH;
 };
 
-struct mtk_camsv_p1_device {
-	struct device *dev;
-	struct mtk_camsv_dev camsv_dev;
-	void __iomem *regs;
-	struct clk *camsys_cam_cgpdn;
-	struct clk *camsys_camtg_cgpdn;
-	struct clk *camsys_camsv0;
-	struct device *larb_ipu;
-	struct device *larb_cam;
-	unsigned int irq;
-	const struct mtk_camsv_conf *conf;
-
-	struct mutex protect_mutex;
-};
-
-void mtk_camsv_setup(struct mtk_camsv_p1_device *p1_dev, u32 width, u32 height,
+void mtk_camsv_setup(struct mtk_camsv_dev *camsv_dev, u32 width, u32 height,
 		     u32 bpl, u32 mbus_fmt);
 
-int mtk_camsv_dev_init(struct platform_device *pdev,
-		       struct mtk_camsv_dev *camsv_dev);
+int mtk_camsv_dev_init(struct mtk_camsv_dev *camsv_dev);
 
 void mtk_camsv_dev_cleanup(struct mtk_camsv_dev *camsv_dev);
 

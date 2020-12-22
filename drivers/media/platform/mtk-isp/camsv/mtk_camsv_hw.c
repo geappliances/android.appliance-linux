@@ -67,123 +67,122 @@ static void fmt_to_sparams(u32 mbus_fmt, struct mtk_camsv_sparams *sparams)
 	}
 }
 
-void mtk_camsv_setup(struct mtk_camsv_p1_device *p1_dev, u32 w, u32 h, u32 bpl,
+void mtk_camsv_setup(struct mtk_camsv_dev *camsv_dev, u32 w, u32 h, u32 bpl,
 		     u32 mbus_fmt)
 {
-	const struct mtk_camsv_conf *conf = p1_dev->conf;
+	const struct mtk_camsv_conf *conf = camsv_dev->conf;
 	int poll_num = 1000;
 	u32 int_en = INT_ST_MASK_CAMSV;
 	struct mtk_camsv_sparams sparams;
 
 	fmt_to_sparams(mbus_fmt, &sparams);
 
-	mutex_lock(&p1_dev->protect_mutex);
+	mutex_lock(&camsv_dev->protect_mutex);
 
-	if (pm_runtime_get_sync(p1_dev->dev) < 0) {
-		dev_err(p1_dev->dev, "failed to get pm_runtime\n");
-		mutex_unlock(&p1_dev->protect_mutex);
+	if (pm_runtime_get_sync(camsv_dev->dev) < 0) {
+		dev_err(camsv_dev->dev, "failed to get pm_runtime\n");
+		mutex_unlock(&camsv_dev->protect_mutex);
 		return;
 	}
 
-	writel(conf->tg_sen_mode, p1_dev->regs + CAMSV_TG_SEN_MODE);
+	writel(conf->tg_sen_mode, camsv_dev->regs + CAMSV_TG_SEN_MODE);
 
-	writel(0x1U, p1_dev->regs + CAMSV_TG_TIME_STAMP_CTL);
+	writel(0x1U, camsv_dev->regs + CAMSV_TG_TIME_STAMP_CTL);
 
 	writel((w * sparams.w_factor) << 16U,
-	       p1_dev->regs + CAMSV_TG_SEN_GRAB_PXL);
+	       camsv_dev->regs + CAMSV_TG_SEN_GRAB_PXL);
 
-	writel(h << 16U, p1_dev->regs + CAMSV_TG_SEN_GRAB_LIN);
+	writel(h << 16U, camsv_dev->regs + CAMSV_TG_SEN_GRAB_LIN);
 
 	/* YUV_U2S_DIS: disable YUV sensor unsigned to signed */
-	writel(0x1000U, p1_dev->regs + CAMSV_TG_PATH_CFG);
+	writel(0x1000U, camsv_dev->regs + CAMSV_TG_PATH_CFG);
 
 	/* Reset CAMSV */
-	writel(CAMSV_SW_RST, p1_dev->regs + CAMSV_SW_CTL);
-	writel(0x0U, p1_dev->regs + CAMSV_SW_CTL);
-	writel(CAMSV_IMGO_RST_TRIG, p1_dev->regs + CAMSV_SW_CTL);
+	writel(CAMSV_SW_RST, camsv_dev->regs + CAMSV_SW_CTL);
+	writel(0x0U, camsv_dev->regs + CAMSV_SW_CTL);
+	writel(CAMSV_IMGO_RST_TRIG, camsv_dev->regs + CAMSV_SW_CTL);
 
-	while (readl(p1_dev->regs + CAMSV_SW_CTL) !=
+	while (readl(camsv_dev->regs + CAMSV_SW_CTL) !=
 		       (CAMSV_IMGO_RST_TRIG | CAMSV_IMGO_RST_ST) &&
 	       poll_num++ < 1000)
 		;
 
-	writel(0x0U, p1_dev->regs + CAMSV_SW_CTL);
+	writel(0x0U, camsv_dev->regs + CAMSV_SW_CTL);
 
-	writel(int_en, p1_dev->regs + CAMSV_INT_EN);
+	writel(int_en, camsv_dev->regs + CAMSV_INT_EN);
 
 	writel(conf->module_en | sparams.module_en_pak,
-	       p1_dev->regs + CAMSV_MODULE_EN);
-	writel(sparams.fmt_sel, p1_dev->regs + CAMSV_FMT_SEL);
-	writel(sparams.pak, p1_dev->regs + CAMSV_PAK);
+	       camsv_dev->regs + CAMSV_MODULE_EN);
+	writel(sparams.fmt_sel, camsv_dev->regs + CAMSV_FMT_SEL);
+	writel(sparams.pak, camsv_dev->regs + CAMSV_PAK);
 
 	/* Reset Frame Header */
 	if (conf->enableFH)
-		writel(0x0U, p1_dev->regs + CAMSV_DMA_FH_EN);
+		writel(0x0U, camsv_dev->regs + CAMSV_DMA_FH_EN);
 
-	writel(readl(p1_dev->regs + CAMSV_DMA_RSV1) & 0x7fffffff,
-	       p1_dev->regs + CAMSV_DMA_RSV1);
-	writel(0xffffffffU, p1_dev->regs + CAMSV_DMA_RSV6);
+	writel(readl(camsv_dev->regs + CAMSV_DMA_RSV1) & 0x7fffffff,
+	       camsv_dev->regs + CAMSV_DMA_RSV1);
+	writel(0xffffffffU, camsv_dev->regs + CAMSV_DMA_RSV6);
 
 	/* DMA performance : CQ ultra LSCI and BPCI. Multiplane ID */
-	writel(conf->dma_special_fun, p1_dev->regs + CAMSV_SPECIAL_FUN_EN);
+	writel(conf->dma_special_fun, camsv_dev->regs + CAMSV_SPECIAL_FUN_EN);
 
-	writel(0x0U, p1_dev->regs + CAMSV_FBC_IMGO_CTL1);
-	writel(0x00010000U, p1_dev->regs + CAMSV_FBC_IMGO_CTL1);
+	writel(0x0U, camsv_dev->regs + CAMSV_FBC_IMGO_CTL1);
+	writel(0x00010000U, camsv_dev->regs + CAMSV_FBC_IMGO_CTL1);
 
-	writel(bpl - 1U, p1_dev->regs + CAMSV_IMGO_XSIZE);
-	writel(h - 1U, p1_dev->regs + CAMSV_IMGO_YSIZE);
+	writel(bpl - 1U, camsv_dev->regs + CAMSV_IMGO_XSIZE);
+	writel(h - 1U, camsv_dev->regs + CAMSV_IMGO_YSIZE);
 
-	writel(sparams.imgo_stride | bpl, p1_dev->regs + CAMSV_IMGO_STRIDE);
+	writel(sparams.imgo_stride | bpl, camsv_dev->regs + CAMSV_IMGO_STRIDE);
 
-	writel(conf->imgo_con, p1_dev->regs + CAMSV_IMGO_CON);
-	writel(conf->imgo_con2, p1_dev->regs + CAMSV_IMGO_CON2);
-	writel(conf->imgo_con3, p1_dev->regs + CAMSV_IMGO_CON3);
+	writel(conf->imgo_con, camsv_dev->regs + CAMSV_IMGO_CON);
+	writel(conf->imgo_con2, camsv_dev->regs + CAMSV_IMGO_CON2);
+	writel(conf->imgo_con3, camsv_dev->regs + CAMSV_IMGO_CON3);
 
 	/* CMOS_EN first */
-	writel(readl(p1_dev->regs + CAMSV_TG_SEN_MODE) | 0x1U,
-	       p1_dev->regs + CAMSV_TG_SEN_MODE);
+	writel(readl(camsv_dev->regs + CAMSV_TG_SEN_MODE) | 0x1U,
+	       camsv_dev->regs + CAMSV_TG_SEN_MODE);
 
 	/* then CAMSV_FBC_IMGO_CTL1 : FBC_EN=1 , DMA_RING_EN=1 */
-	writel(readl(p1_dev->regs + CAMSV_FBC_IMGO_CTL1) | 0x00408000U,
-	       p1_dev->regs + CAMSV_FBC_IMGO_CTL1);
+	writel(readl(camsv_dev->regs + CAMSV_FBC_IMGO_CTL1) | 0x00408000U,
+	       camsv_dev->regs + CAMSV_FBC_IMGO_CTL1);
 
 	/* finally, CAMSV_MODULE_EN : IMGO_EN */
-	writel(readl(p1_dev->regs + CAMSV_MODULE_EN) | 0x00000010U,
-	       p1_dev->regs + CAMSV_MODULE_EN);
+	writel(readl(camsv_dev->regs + CAMSV_MODULE_EN) | 0x00000010U,
+	       camsv_dev->regs + CAMSV_MODULE_EN);
 
 	/* CAMSV_DMA_FH_EN : FRAME_HEADER_EN_IMGO */
 	if (conf->enableFH)
-		writel(0x1U, p1_dev->regs + CAMSV_DMA_FH_EN);
+		writel(0x1U, camsv_dev->regs + CAMSV_DMA_FH_EN);
 
-	pm_runtime_put_autosuspend(p1_dev->dev);
-	mutex_unlock(&p1_dev->protect_mutex);
+	pm_runtime_put_autosuspend(camsv_dev->dev);
+	mutex_unlock(&camsv_dev->protect_mutex);
 }
 
 static irqreturn_t isp_irq_camsv(int irq, void *data)
 {
-	struct mtk_camsv_p1_device *p1_dev = (struct mtk_camsv_p1_device *)data;
-	struct mtk_camsv_dev *cam = &p1_dev->camsv_dev;
+	struct mtk_camsv_dev *camsv_dev = (struct mtk_camsv_dev *)data;
 	struct mtk_camsv_dev_buffer *buf;
 	unsigned int irq_status;
 
-	mutex_lock(&p1_dev->protect_mutex);
+	mutex_lock(&camsv_dev->protect_mutex);
 
-	irq_status = readl(p1_dev->regs + CAMSV_INT_STATUS);
+	irq_status = readl(camsv_dev->regs + CAMSV_INT_STATUS);
 
 	if (irq_status & INT_ST_MASK_CAMSV_ERR) {
-		dev_err(p1_dev->dev, "irq error 0x%x\n",
+		dev_err(camsv_dev->dev, "irq error 0x%x\n",
 			(unsigned int)(irq_status & INT_ST_MASK_CAMSV_ERR));
 	}
 
 	/* De-queue frame */
 	if (irq_status & CAMSV_IRQ_SW_PASS1_DON) {
-		cam->sequence++;
+		camsv_dev->sequence++;
 
-		buf = list_first_entry_or_null(&cam->buf_list,
+		buf = list_first_entry_or_null(&camsv_dev->buf_list,
 					       struct mtk_camsv_dev_buffer,
 					       list);
 		if (buf) {
-			buf->v4l2_buf.sequence = cam->sequence;
+			buf->v4l2_buf.sequence = camsv_dev->sequence;
 			buf->v4l2_buf.vb2_buf.timestamp = ktime_get_ns();
 			vb2_buffer_done(&buf->v4l2_buf.vb2_buf,
 					VB2_BUF_STATE_DONE);
@@ -191,58 +190,58 @@ static irqreturn_t isp_irq_camsv(int irq, void *data)
 		}
 	}
 
-	mutex_unlock(&p1_dev->protect_mutex);
+	mutex_unlock(&camsv_dev->protect_mutex);
 
 	return IRQ_HANDLED;
 }
 
 static int mtk_camsv_runtime_suspend(struct device *dev)
 {
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
+	struct mtk_camsv_dev *camsv_dev = dev_get_drvdata(dev);
 
-	clk_disable_unprepare(p1_dev->camsys_camsv0);
-	clk_disable_unprepare(p1_dev->camsys_camtg_cgpdn);
-	clk_disable_unprepare(p1_dev->camsys_cam_cgpdn);
+	clk_disable_unprepare(camsv_dev->camsys_camsv0);
+	clk_disable_unprepare(camsv_dev->camsys_camtg_cgpdn);
+	clk_disable_unprepare(camsv_dev->camsys_cam_cgpdn);
 
-	if (p1_dev->larb_ipu != NULL)
-		mtk_smi_larb_put(p1_dev->larb_ipu);
+	if (camsv_dev->larb_ipu != NULL)
+		mtk_smi_larb_put(camsv_dev->larb_ipu);
 
-	if (p1_dev->larb_cam != NULL)
-		mtk_smi_larb_put(p1_dev->larb_cam);
+	if (camsv_dev->larb_cam != NULL)
+		mtk_smi_larb_put(camsv_dev->larb_cam);
 
 	return 0;
 }
 
 static int mtk_camsv_runtime_resume(struct device *dev)
 {
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
+	struct mtk_camsv_dev *camsv_dev = dev_get_drvdata(dev);
 	int ret;
 
-	if (p1_dev->larb_ipu != NULL && p1_dev->larb_cam != NULL) {
-		ret = mtk_smi_larb_get(p1_dev->larb_ipu);
+	if (camsv_dev->larb_ipu != NULL && camsv_dev->larb_cam != NULL) {
+		ret = mtk_smi_larb_get(camsv_dev->larb_ipu);
 		if (ret) {
 			dev_err(dev, "failed to get larb index 1, err %d", ret);
 			return ret;
 		}
 
-		ret = mtk_smi_larb_get(p1_dev->larb_cam);
+		ret = mtk_smi_larb_get(camsv_dev->larb_cam);
 		if (ret) {
 			dev_err(dev, "failed to get larb index 2, err %d", ret);
-			mtk_smi_larb_put(p1_dev->larb_ipu);
+			mtk_smi_larb_put(camsv_dev->larb_ipu);
 			return ret;
 		}
 	}
 
-	clk_prepare_enable(p1_dev->camsys_cam_cgpdn);
-	clk_prepare_enable(p1_dev->camsys_camtg_cgpdn);
-	clk_prepare_enable(p1_dev->camsys_camsv0);
+	clk_prepare_enable(camsv_dev->camsys_cam_cgpdn);
+	clk_prepare_enable(camsv_dev->camsys_camtg_cgpdn);
+	clk_prepare_enable(camsv_dev->camsys_camsv0);
 
 	return 0;
 }
 
 static int mtk_camsv_probe(struct platform_device *pdev)
 {
-	struct mtk_camsv_p1_device *p1_dev;
+	struct mtk_camsv_dev *camsv_dev;
 	struct device_node *larb_node1 = NULL;
 	struct device_node *larb_node2 = NULL;
 	struct platform_device *larb_pdev1 = NULL;
@@ -254,22 +253,22 @@ static int mtk_camsv_probe(struct platform_device *pdev)
 	if (!iommu_present(&platform_bus_type))
 		return -EPROBE_DEFER;
 
-	p1_dev = devm_kzalloc(dev, sizeof(*p1_dev), GFP_KERNEL);
-	if (!p1_dev)
+	camsv_dev = devm_kzalloc(dev, sizeof(*camsv_dev), GFP_KERNEL);
+	if (!camsv_dev)
 		return -ENOMEM;
 
-	p1_dev->conf = (struct mtk_camsv_conf *)of_device_get_match_data(dev);
-	if (!p1_dev->conf)
+	camsv_dev->conf = (struct mtk_camsv_conf *)of_device_get_match_data(dev);
+	if (!camsv_dev->conf)
 		return -ENODEV;
 
-	p1_dev->dev = dev;
-	dev_set_drvdata(dev, p1_dev);
+	camsv_dev->dev = dev;
+	dev_set_drvdata(dev, camsv_dev);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	p1_dev->regs = devm_ioremap_resource(dev, res);
-	if (IS_ERR(p1_dev->regs)) {
+	camsv_dev->regs = devm_ioremap_resource(dev, res);
+	if (IS_ERR(camsv_dev->regs)) {
 		dev_err(dev, "failed to map register base\n");
-		return PTR_ERR(p1_dev->regs);
+		return PTR_ERR(camsv_dev->regs);
 	}
 
 	larb_node1 = of_parse_phandle(pdev->dev.of_node, "mediatek,larb", 0);
@@ -292,58 +291,58 @@ static int mtk_camsv_probe(struct platform_device *pdev)
 	of_node_put(larb_node1);
 	of_node_put(larb_node2);
 
-	p1_dev->larb_ipu = &larb_pdev1->dev;
-	p1_dev->larb_cam = &larb_pdev2->dev;
+	camsv_dev->larb_ipu = &larb_pdev1->dev;
+	camsv_dev->larb_cam = &larb_pdev2->dev;
 
-	p1_dev->camsys_cam_cgpdn = devm_clk_get(dev, "camsys_cam_cgpdn");
-	if (IS_ERR(p1_dev->camsys_cam_cgpdn)) {
+	camsv_dev->camsys_cam_cgpdn = devm_clk_get(dev, "camsys_cam_cgpdn");
+	if (IS_ERR(camsv_dev->camsys_cam_cgpdn)) {
 		dev_err(dev, "failed to get camsys_cam_cgpdn clock\n");
-		return PTR_ERR(p1_dev->camsys_cam_cgpdn);
+		return PTR_ERR(camsv_dev->camsys_cam_cgpdn);
 	}
-	ret = clk_prepare(p1_dev->camsys_cam_cgpdn);
+	ret = clk_prepare(camsv_dev->camsys_cam_cgpdn);
 	if (ret < 0) {
 		dev_err(dev, "failed to prepare camsys_cam_cgpdn clock\n");
-		p1_dev->camsys_cam_cgpdn = ERR_PTR(-EINVAL);
+		camsv_dev->camsys_cam_cgpdn = ERR_PTR(-EINVAL);
 		return ret;
 	}
 
-	p1_dev->camsys_camtg_cgpdn = devm_clk_get(dev, "camsys_camtg_cgpdn");
-	if (IS_ERR(p1_dev->camsys_camtg_cgpdn)) {
+	camsv_dev->camsys_camtg_cgpdn = devm_clk_get(dev, "camsys_camtg_cgpdn");
+	if (IS_ERR(camsv_dev->camsys_camtg_cgpdn)) {
 		dev_err(dev, "failed to get camsys_camtg_cgpdn clock\n");
-		ret = PTR_ERR(p1_dev->camsys_camtg_cgpdn);
+		ret = PTR_ERR(camsv_dev->camsys_camtg_cgpdn);
 		goto err_clk;
 	}
-	ret = clk_prepare(p1_dev->camsys_camtg_cgpdn);
+	ret = clk_prepare(camsv_dev->camsys_camtg_cgpdn);
 	if (ret < 0) {
 		dev_err(dev, "failed to prepare camsys_camtg_cgpdn clock\n");
-		p1_dev->camsys_camtg_cgpdn = ERR_PTR(-EINVAL);
+		camsv_dev->camsys_camtg_cgpdn = ERR_PTR(-EINVAL);
 		goto err_clk;
 	}
 
-	p1_dev->camsys_camsv0 = devm_clk_get(dev, "camsys_camsv0");
-	if (IS_ERR(p1_dev->camsys_camsv0)) {
+	camsv_dev->camsys_camsv0 = devm_clk_get(dev, "camsys_camsv0");
+	if (IS_ERR(camsv_dev->camsys_camsv0)) {
 		dev_err(dev, "failed to get camsys_camsv0 clock\n");
-		ret = PTR_ERR(p1_dev->camsys_camsv0);
+		ret = PTR_ERR(camsv_dev->camsys_camsv0);
 		goto err_clk;
 	}
-	ret = clk_prepare(p1_dev->camsys_camsv0);
+	ret = clk_prepare(camsv_dev->camsys_camsv0);
 	if (ret < 0) {
 		dev_err(dev, "failed to prepare camsys_camsv0 clock\n");
-		p1_dev->camsys_camsv0 = ERR_PTR(-EINVAL);
+		camsv_dev->camsys_camsv0 = ERR_PTR(-EINVAL);
 		goto err_clk;
 	}
 
-	p1_dev->irq = platform_get_irq(pdev, 0);
-	ret = devm_request_threaded_irq(dev, p1_dev->irq, NULL, isp_irq_camsv,
+	camsv_dev->irq = platform_get_irq(pdev, 0);
+	ret = devm_request_threaded_irq(dev, camsv_dev->irq, NULL, isp_irq_camsv,
 				IRQF_SHARED | IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-				dev_name(dev), p1_dev);
+				dev_name(dev), camsv_dev);
 	if (ret) {
-		dev_err(dev, "failed to request irq=%d\n", p1_dev->irq);
+		dev_err(dev, "failed to request irq=%d\n", camsv_dev->irq);
 		goto err_clk;
 	}
 
 	/* initialise protection mutex */
-	mutex_init(&p1_dev->protect_mutex);
+	mutex_init(&camsv_dev->protect_mutex);
 
 	/* initialise runtime power management */
 	pm_runtime_set_autosuspend_delay(dev, MTK_CAMSV_AUTOSUSPEND_DELAY_MS);
@@ -357,22 +356,22 @@ static int mtk_camsv_probe(struct platform_device *pdev)
 	}
 
 	/* Initialize the v4l2 common part */
-	ret = mtk_camsv_dev_init(pdev, &p1_dev->camsv_dev);
+	ret = mtk_camsv_dev_init(camsv_dev);
 	if (ret)
 		goto err_destroy_mutex;
 
 	return 0;
 
 err_destroy_mutex:
-	mutex_destroy(&p1_dev->protect_mutex);
+	mutex_destroy(&camsv_dev->protect_mutex);
 
 err_clk:
-	if (p1_dev->camsys_cam_cgpdn)
-		clk_unprepare(p1_dev->camsys_cam_cgpdn);
-	if (p1_dev->camsys_camtg_cgpdn)
-		clk_unprepare(p1_dev->camsys_camtg_cgpdn);
-	if (p1_dev->camsys_camsv0)
-		clk_unprepare(p1_dev->camsys_camsv0);
+	if (camsv_dev->camsys_cam_cgpdn)
+		clk_unprepare(camsv_dev->camsys_cam_cgpdn);
+	if (camsv_dev->camsys_camtg_cgpdn)
+		clk_unprepare(camsv_dev->camsys_camtg_cgpdn);
+	if (camsv_dev->camsys_camsv0)
+		clk_unprepare(camsv_dev->camsys_camsv0);
 
 	return ret;
 }
@@ -380,12 +379,12 @@ err_clk:
 static int mtk_camsv_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
+	struct mtk_camsv_dev *camsv_dev = dev_get_drvdata(dev);
 
-	mtk_camsv_dev_cleanup(&p1_dev->camsv_dev);
+	mtk_camsv_dev_cleanup(camsv_dev);
 	pm_runtime_put_autosuspend(dev);
 	pm_runtime_disable(dev);
-	mutex_destroy(&p1_dev->protect_mutex);
+	mutex_destroy(&camsv_dev->protect_mutex);
 
 	return 0;
 }

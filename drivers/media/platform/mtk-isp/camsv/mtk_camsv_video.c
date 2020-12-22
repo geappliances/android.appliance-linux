@@ -186,10 +186,9 @@ static void
 mtk_camsv_dev_load_default_fmt(struct mtk_camsv_dev *cam,
 			       struct mtk_camsv_video_device *node)
 {
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 	struct v4l2_pix_format_mplane *fmt = &node->format;
 
-	fmt->num_planes = p1_dev->conf->enableFH ? 2 : 1;
+	fmt->num_planes = cam->conf->enableFH ? 2 : 1;
 	fmt->pixelformat = node->desc->fmts[0];
 	fmt->width = node->desc->def_width;
 	fmt->height = node->desc->def_height;
@@ -219,7 +218,6 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 	unsigned int max_buffer_count = node->desc->max_buf_count;
 	const struct v4l2_pix_format_mplane *fmt = &node->format;
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vq);
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 	unsigned int size;
 	unsigned int np_conf;
 	unsigned int i;
@@ -231,7 +229,7 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 	size = fmt->plane_fmt[0].sizeimage;
 	/* Add for q.create_bufs with fmt.g_sizeimage(p) / 2 test */
 
-	np_conf = p1_dev->conf->enableFH ? 2 : 1;
+	np_conf = cam->conf->enableFH ? 2 : 1;
 
 	if (*num_planes == 0) {
 		*num_planes = np_conf;
@@ -241,7 +239,7 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 		return -EINVAL;
 	}
 
-	mtk_camsv_setup(p1_dev, fmt->width, fmt->height,
+	mtk_camsv_setup(cam, fmt->width, fmt->height,
 			fmt->plane_fmt[0].bytesperline, node->fmtinfo->code);
 
 	return 0;
@@ -261,7 +259,6 @@ static int mtk_camsv_vb2_buf_prepare(struct vb2_buffer *vb)
 	struct mtk_camsv_video_device *node =
 		mtk_camsv_vbq_to_vdev(vb->vb2_queue);
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vb->vb2_queue);
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 	struct mtk_camsv_dev_buffer *buf = to_mtk_camsv_dev_buffer(vb);
 	const struct v4l2_pix_format_mplane *fmt = &node->format;
 	u32 size;
@@ -285,7 +282,7 @@ static int mtk_camsv_vb2_buf_prepare(struct vb2_buffer *vb)
 
 	if (buf->daddr == 0ULL) {
 		buf->daddr = vb2_dma_contig_plane_dma_addr(vb, 0);
-		if (p1_dev->conf->enableFH)
+		if (cam->conf->enableFH)
 			buf->fhaddr = vb2_dma_contig_plane_dma_addr(vb, 1);
 	}
 
@@ -296,10 +293,9 @@ static void mtk_camsv_vb2_buf_queue(struct vb2_buffer *vb)
 {
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vb->vb2_queue);
 	struct device *dev = cam->dev;
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
 	struct mtk_camsv_dev_buffer *buf = to_mtk_camsv_dev_buffer(vb);
 
-	mutex_lock(&p1_dev->protect_mutex);
+	mutex_lock(&cam->protect_mutex);
 
 	if (pm_runtime_get_sync(dev) < 0) {
 		dev_err(dev, "failed to get pm_runtime\n");
@@ -310,41 +306,39 @@ static void mtk_camsv_vb2_buf_queue(struct vb2_buffer *vb)
 	list_add_tail(&buf->list, &cam->buf_list);
 
 	/* update buffer internal address */
-	writel(buf->daddr, p1_dev->regs + CAMSV_FBC_IMGO_ENQ_ADDR);
-	if (p1_dev->conf->enableFH)
-		writel(buf->fhaddr, p1_dev->regs + CAMSV_IMGO_FH_BASE_ADDR);
+	writel(buf->daddr, cam->regs + CAMSV_FBC_IMGO_ENQ_ADDR);
+	if (cam->conf->enableFH)
+		writel(buf->fhaddr, cam->regs + CAMSV_IMGO_FH_BASE_ADDR);
 
-	writel(0x1U, p1_dev->regs + CAMSV_IMGO_FBC);
+	writel(0x1U, cam->regs + CAMSV_IMGO_FBC);
 
 out:
 	pm_runtime_put_autosuspend(dev);
-	mutex_unlock(&p1_dev->protect_mutex);
+	mutex_unlock(&cam->protect_mutex);
 }
 
 static void mtk_camsv_vb2_return_all_buffers(struct mtk_camsv_dev *cam,
 					     enum vb2_buffer_state state)
 {
-	struct device *dev = cam->dev;
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
 	struct mtk_camsv_dev_buffer *buf, *buf_prev;
 
-	mutex_lock(&p1_dev->protect_mutex);
+	mutex_lock(&cam->protect_mutex);
 	list_for_each_entry_safe(buf, buf_prev, &cam->buf_list, list) {
 		buf->daddr = 0ULL;
 		list_del(&buf->list);
 		vb2_buffer_done(&buf->v4l2_buf.vb2_buf, state);
 	}
-	mutex_unlock(&p1_dev->protect_mutex);
+	mutex_unlock(&cam->protect_mutex);
 }
 
-static void mtk_camsv_cmos_vf_enable(struct mtk_camsv_p1_device *p1_dev,
+static void mtk_camsv_cmos_vf_enable(struct mtk_camsv_dev *camsv_dev,
 				     bool enable, bool pak_en)
 {
-	struct device *dev = p1_dev->dev;
+	struct device *dev = camsv_dev->dev;
 	u32 mask = enable ? (u32)1 : ~(u32)1;
 	u32 clk_en;
 
-	mutex_lock(&p1_dev->protect_mutex);
+	mutex_lock(&camsv_dev->protect_mutex);
 	if (pm_runtime_get_sync(dev) < 0) {
 		dev_err(dev, "failed to get pm_runtime\n");
 		goto out;
@@ -355,19 +349,19 @@ static void mtk_camsv_cmos_vf_enable(struct mtk_camsv_p1_device *p1_dev,
 		if (pak_en)
 			clk_en |= CAMSV_PAK_DP_CLK_EN;
 
-		writel(clk_en, p1_dev->regs + CAMSV_CLK_EN);
-		writel(readl(p1_dev->regs + CAMSV_TG_VF_CON) | mask,
-		       p1_dev->regs + CAMSV_TG_VF_CON);
+		writel(clk_en, camsv_dev->regs + CAMSV_CLK_EN);
+		writel(readl(camsv_dev->regs + CAMSV_TG_VF_CON) | mask,
+		       camsv_dev->regs + CAMSV_TG_VF_CON);
 	} else {
-		writel(readl(p1_dev->regs + CAMSV_TG_SEN_MODE) & mask,
-		       p1_dev->regs + CAMSV_TG_SEN_MODE);
-		writel(readl(p1_dev->regs + CAMSV_TG_VF_CON) & mask,
-		       p1_dev->regs + CAMSV_TG_VF_CON);
+		writel(readl(camsv_dev->regs + CAMSV_TG_SEN_MODE) & mask,
+		       camsv_dev->regs + CAMSV_TG_SEN_MODE);
+		writel(readl(camsv_dev->regs + CAMSV_TG_VF_CON) & mask,
+		       camsv_dev->regs + CAMSV_TG_VF_CON);
 	}
 
 out:
 	pm_runtime_put_autosuspend(dev);
-	mutex_unlock(&p1_dev->protect_mutex);
+	mutex_unlock(&camsv_dev->protect_mutex);
 }
 
 static int mtk_camsv_verify_format(struct mtk_camsv_dev *cam,
@@ -397,7 +391,6 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vq);
 	struct mtk_camsv_video_device *node = mtk_camsv_vbq_to_vdev(vq);
 	struct device *dev = cam->dev;
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
 	int ret;
 
 	if (!node->enabled) {
@@ -407,7 +400,7 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 	}
 
 	/* Enable CMOS and VF */
-	mtk_camsv_cmos_vf_enable(p1_dev, true, node->fmtinfo->packed);
+	mtk_camsv_cmos_vf_enable(cam, true, node->fmtinfo->packed);
 
 	mutex_lock(&cam->op_lock);
 
@@ -454,11 +447,9 @@ static void mtk_camsv_vb2_stop_streaming(struct vb2_queue *vq)
 {
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vq);
 	struct mtk_camsv_video_device *node = mtk_camsv_vbq_to_vdev(vq);
-	struct device *dev = cam->dev;
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
 
 	/* Disable CMOS and VF */
-	mtk_camsv_cmos_vf_enable(p1_dev, false, false);
+	mtk_camsv_cmos_vf_enable(cam, false, false);
 
 	mutex_lock(&cam->op_lock);
 
@@ -564,7 +555,6 @@ static int mtk_camsv_vidioc_try_fmt(struct file *file, void *fh,
 {
 	struct mtk_camsv_dev *cam = video_drvdata(file);
 	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(file);
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
 	const struct mtk_camsv_format_info *fmtinfo;
 
@@ -576,7 +566,7 @@ static int mtk_camsv_vidioc_try_fmt(struct file *file, void *fh,
 	pix_mp->height = clamp_val(pix_mp->height, IMG_MIN_HEIGHT,
 				   IMG_MAX_HEIGHT);
 
-	pix_mp->num_planes = p1_dev->conf->enableFH ? 2 : 1;
+	pix_mp->num_planes = cam->conf->enableFH ? 2 : 1;
 
 	fmtinfo = mtk_camsv_format_info_by_fourcc(pix_mp->pixelformat);
 	calc_bpl_size_pix_mp(fmtinfo, pix_mp);

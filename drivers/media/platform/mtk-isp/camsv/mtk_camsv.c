@@ -488,31 +488,30 @@ static int mtk_camsv_v4l2_unregister(struct mtk_camsv_dev *cam)
 	return 0;
 }
 
-int mtk_camsv_dev_init(struct platform_device *pdev, struct mtk_camsv_dev *cam)
+int mtk_camsv_dev_init(struct mtk_camsv_dev *camsv_dev)
 {
 	int ret;
 
-	cam->dev = &pdev->dev;
-	mtk_camsv_video_init_nodes(cam);
+	mtk_camsv_video_init_nodes(camsv_dev);
 
-	mutex_init(&cam->op_lock);
+	mutex_init(&camsv_dev->op_lock);
 
 	/* v4l2 sub-device registration */
-	ret = mtk_camsv_v4l2_register(cam);
+	ret = mtk_camsv_v4l2_register(camsv_dev);
 	if (ret) {
-		mutex_destroy(&cam->op_lock);
+		mutex_destroy(&camsv_dev->op_lock);
 		return ret;
 	}
 
-	ret = mtk_camsv_v4l2_async_register(cam);
+	ret = mtk_camsv_v4l2_async_register(camsv_dev);
 	if (ret)
 		goto fail_v4l2_unreg;
 
 	return 0;
 
 fail_v4l2_unreg:
-	mutex_destroy(&cam->op_lock);
-	mtk_camsv_v4l2_unregister(cam);
+	mutex_destroy(&camsv_dev->op_lock);
+	mtk_camsv_v4l2_unregister(camsv_dev);
 	return ret;
 }
 
