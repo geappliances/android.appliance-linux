@@ -410,7 +410,7 @@ static struct platform_driver mtk_camsv_driver = {
 	.probe = mtk_camsv_probe,
 	.remove = mtk_camsv_remove,
 	.driver = {
-		.name = "mtk-camsv-p1",
+		.name = "mtk-camsv",
 		.of_match_table = of_match_ptr(mtk_camsv_of_ids),
 		.pm = &mtk_camsv_pm_ops,
 	}
@@ -418,5 +418,5 @@ static struct platform_driver mtk_camsv_driver = {
 
 module_platform_driver(mtk_camsv_driver);
 
-MODULE_DESCRIPTION("Mediatek CAMSV P1 driver");
+MODULE_DESCRIPTION("Mediatek CAMSV driver");
 MODULE_LICENSE("GPL v2");
