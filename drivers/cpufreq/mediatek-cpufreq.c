@@ -202,7 +202,8 @@ static int mtk_cpufreq_set_voltage(struct mtk_cpu_dvfs_info *info, int vproc)
 	if (info->need_voltage_tracking)
 		ret = mtk_cpufreq_voltage_tracking(info, vproc);
 	else
-		ret = regulator_set_voltage(info->proc_reg, vproc,
+		ret = regulator_set_voltage(info->proc_reg,
+					    min(vproc, MAX_VOLT_LIMIT),
 					    MAX_VOLT_LIMIT);
 	if (!ret)
 		info->old_vproc = vproc;
