@@ -1374,7 +1374,7 @@ static int mipicsi_subdev_notify_complete(struct v4l2_async_notifier *notifier)
 		return ret;
 	}
 
-	ret = video_register_device(mipicsi->vdev, VFL_TYPE_GRABBER, -1);
+	ret = video_register_device(mipicsi->vdev, VFL_TYPE_VIDEO, -1);
 	if (ret) {
 		dev_err(dev, "Failed to register video device\n");
 		return ret;
