@@ -697,48 +697,6 @@ static struct snd_soc_card mt8516_pumpkin_card = {
 	.resume_pre = mt8516_pumpkin_resume_pre,
 };
 
-static int mt8516_pumpkin_gpio_probe(struct snd_soc_card *card)
-{
-	struct mt8516_pumpkin_priv *card_data;
-	int ret = 0;
-	int i;
-
-	card_data = snd_soc_card_get_drvdata(card);
-
-	card_data->pinctrl = devm_pinctrl_get(card->dev);
-	if (IS_ERR(card_data->pinctrl)) {
-		ret = PTR_ERR(card_data->pinctrl);
-		dev_err(card->dev, "%s pinctrl_get failed %d\n",
-			__func__, ret);
-		goto exit;
-	}
-
-	for (i = 0 ; i < PIN_STATE_MAX ; i++) {
-		card_data->pin_states[i] =
-			pinctrl_lookup_state(card_data->pinctrl,
-				mt8516_pumpkin_pinctrl_pin_str[i]);
-		if (IS_ERR(card_data->pin_states[i])) {
-			ret = PTR_ERR(card_data->pin_states[i]);
-			dev_warn(card->dev, "%s Can't find pinctrl state %s %d\n",
-				__func__, mt8516_pumpkin_pinctrl_pin_str[i], ret);
-		}
-	}
-	/* default state */
-	if (!IS_ERR(card_data->pin_states[PIN_STATE_DEFAULT])) {
-		ret = pinctrl_select_state(card_data->pinctrl,
-				card_data->pin_states[PIN_STATE_DEFAULT]);
-		if (ret) {
-			dev_err(card->dev, "%s failed to select state %d\n",
-				__func__, ret);
-			goto exit;
-		}
-	}
-
-exit:
-
-	return ret;
-}
-
 static int set_card_codec_info(struct snd_soc_card *card)
 {
 	struct snd_soc_dai_link_component *dai_link_codecs, *dlc;
@@ -844,8 +802,6 @@ static int mt8516_pumpkin_dev_probe(struct platform_device *pdev)
 	}
 
 	snd_soc_card_set_drvdata(card, card_data);
-
-	mt8516_pumpkin_gpio_probe(card);
 
 	ret = devm_snd_soc_register_card(&pdev->dev, card);
 	if (ret) {
