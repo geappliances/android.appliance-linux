@@ -187,7 +187,7 @@ static inline int vpu_wdt_reg_handler(struct platform_device *pdev,
 	if (vpu->ops->wdt_reg_handler)
 		return vpu->ops->wdt_reg_handler(vpu, vpu_wdt_reset_func, priv, id);
 
-	return -ENOTSUPP;
+	return 0;
 }
 
 /**
