@@ -509,7 +509,7 @@
 			mediatek,mdpid = <0>;
 			clocks = <&mmsys CLK_MM_MDP_RDMA>,
 				 <&mmsys CLK_MM_MDP_RDMA>;
-			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
+			power-domains = <&spm MT8167_POWER_DOMAIN_MM>;
 			iommus = <&iommu M4U_PORT_MDP_RDMA>;
 			mediatek,larb = <&larb0>;
 			mediatek,vpu = <&mdp_vcu>;
@@ -521,21 +521,21 @@
 			compatible = "mediatek,mt8167-mdp-rsz";
 			reg = <0 14002000 0 0x1000>;
 			clocks = <&mmsys CLK_MM_MDP_RSZ0>;
-			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
+			power-domains = <&spm MT8167_POWER_DOMAIN_MM>;
 		};
 
 		mdp_rsz1: rsz@14003000 {
 			compatible = "mediatek,mt8167-mdp-rsz";
 			reg = <0 14003000 0 0x1000>;
 			clocks = <&mmsys CLK_MM_MDP_RSZ1>;
-			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
+			power-domains = <&spm MT8167_POWER_DOMAIN_MM>;
 		};
 
 		mdp_wdma: wdma@14004000 {
 			compatible = "mediatek,mt8167-mdp-wdma";
 			reg = <0 14004000 0 0x1000>;
 			clocks = <&mmsys CLK_MM_MDP_WDMA>;
-			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
+			power-domains = <&spm MT8167_POWER_DOMAIN_MM>;
 			iommus = <&iommu M4U_PORT_MDP_WDMA>;
 			mediatek,larb = <&larb0>;
 		};
@@ -544,7 +544,7 @@
 			compatible = "mediatek,mt8167-mdp-wrot";
 			reg = <0 14005000 0 0x1000>;
 			clocks = <&mmsys CLK_MM_MDP_WROT>;
-			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
+			power-domains = <&spm MT8167_POWER_DOMAIN_MM>;
 			iommus = <&iommu M4U_PORT_MDP_WROT>;
 			mediatek,larb = <&larb0>;
 		};
@@ -553,7 +553,7 @@
 			compatible = "mediatek,mt8167-mdp-tdshp";
 			reg = <0 14006000 0 0x1000>;
 			clocks = <&mmsys CLK_MM_MDP_TDSHP>;
-			power-domains = <&scpsys MT8167_POWER_DOMAIN_MM>;
+			power-domains = <&spm MT8167_POWER_DOMAIN_MM>;
 		};
 
 		vcodec_dec: codec@16000000 {
@@ -582,7 +582,7 @@
 				 <&iommu M4U_PORT_HW_VDEC_PRED_WR_EXT>,
 				 <&iommu M4U_PORT_HW_VDEC_PPWRAP_EXT>;
 			mediatek,vpu = <&vcu>;
-			power-domains = <&scpsys MT8167_POWER_DOMAIN_VDEC>;
+			power-domains = <&spm MT8167_POWER_DOMAIN_VDEC>;
 			clocks = <&topckgen CLK_TOP_VDEC_MM_SEL>,
 			      <&topckgen CLK_TOP_UNIVPLL_D4>;
 			clock-names = "vdec_sel",
@@ -631,7 +631,7 @@
 			mediatek,mipicsi = <&mipicsi>;
 			iommus = <&iommu M4U_PORT_CAM_IMGO>;
 			mediatek,larb = <&larb1>;
-			power-domains = <&scpsys MT8167_POWER_DOMAIN_ISP>;
+			power-domains = <&spm MT8167_POWER_DOMAIN_ISP>;
 
 			mediatek,seninf_mux_camsv = <&seninf1_mux_camsv0>;
 			reg = <0 0x10011800 0 0x60>,
