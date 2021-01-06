@@ -219,7 +219,7 @@ static int venc_encode_frame(struct venc_inst *inst,
 	*bs_size = inst->vcu_inst.bs_size;
 
 	++inst->frm_cnt;
-	pr_err("XXX: frm %d bs_size %d key_frm %d <-",
+	mtk_vcodec_debug(inst, "frm %d bs_size %d key_frm %d <-",
 			 inst->frm_cnt, *bs_size, inst->vcu_inst.is_key_frm);
 
 	return ret;
