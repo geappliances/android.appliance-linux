@@ -344,7 +344,6 @@ static int mt8516_vesper_dev_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = &mt8516_vesper_card;
 	struct device_node *platform_node;
-	struct device_node *codec_node;
 	int ret, i;
 
 	card->dev = &pdev->dev;
@@ -359,12 +358,6 @@ static int mt8516_vesper_dev_probe(struct platform_device *pdev)
 					 "mediatek,platform", 0);
 	if (!platform_node) {
 		dev_err(&pdev->dev, "Property 'platform' missing or invalid\n");
-		return -EINVAL;
-	}
-	codec_node = of_parse_phandle(pdev->dev.of_node,
-					 "mediatek,audio-codec", 0);
-	if (!codec_node) {
-		dev_err(&pdev->dev, "Property 'audio-codec' missing or invalid\n");
 		return -EINVAL;
 	}
 
