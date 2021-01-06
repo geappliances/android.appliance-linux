@@ -32,7 +32,8 @@
 #define COMPAT_VCUD_MVA_ALLOCATION	_IOWR('v', 1, struct compat_mem_obj)
 #define COMPAT_VCUD_MVA_FREE		_IOWR('v', 2, struct compat_mem_obj)
 #define COMPAT_VCUD_CACHE_FLUSH_ALL	_IOWR('v', 3, struct compat_mem_obj)
-#define COMPAT_VCUD_SET_MMAP_TYPE	_IOWR('v', 4, struct map_obj)
+#define COMPAT_VCUD_MVA_MAP_CACHE	_IOWR('v', 6, struct compat_mem_obj)
+#define COMPAT_VCUD_SET_MMAP_TYPE	_IOW('v', 8, struct compat_map_obj)
 
 /**
  * struct mem_obj - memory buffer allocated in kernel
@@ -65,6 +66,12 @@ struct compat_mem_obj {
 	compat_ulong_t iova;
 	compat_ulong_t len;
 	compat_u64 va;
+};
+
+struct compat_map_obj {
+	compat_ulong_t map_buf;
+	compat_ulong_t map_type;
+	compat_u64 reserved;
 };
 #endif
 
