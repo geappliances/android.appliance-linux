@@ -29,6 +29,10 @@
 		compatible = "android,firmware";
 		/* reserved for android overlay */
 	};
+
+	/* XXX: ANDROID overlay */
+	backlight_lcd0: backlight_lcd0 {
+	};
 };
 
 &dpi1 {
