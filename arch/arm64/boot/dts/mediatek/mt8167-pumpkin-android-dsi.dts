@@ -75,6 +75,11 @@
 	};
 };
 
+&backlight_lcd0{
+	compatible = "raspberrypi,rpi-backlight";
+	status = "okay";
+};
+
 &dsi {
 	status = "okay";
 	#address-cells = <1>;
@@ -94,6 +99,7 @@
 		compatible = "pumpkin,7inch-touchscreen-panel-dsi";
 		reg = <0>;
 		pumpkin,touchscreen = <&touchscreen>;
+		backlight = <&backlight_lcd0>;
 
 		port {
 			panel_in: endpoint {
