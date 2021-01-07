@@ -456,6 +456,12 @@ config BACKLIGHT_LED
 	  If you have a LCD backlight adjustable by LED class driver, say Y
 	  to enable this driver.
 
+config BACKLIGHT_RPI
+        tristate "RPI Backlight driver"
+        depends on BACKLIGHT_CLASS_DEVICE
+        help
+          Support for rpi backlight control on device.
+
 endif # BACKLIGHT_CLASS_DEVICE
 
 endmenu
