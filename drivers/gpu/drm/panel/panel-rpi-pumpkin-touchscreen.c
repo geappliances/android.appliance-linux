@@ -208,7 +208,7 @@ struct rpi_touchscreen {
 
 static const struct drm_display_mode rpi_touchscreen_modes[] = {
 	{
-#define PIXEL_CLOCK   27112000
+#define PIXEL_CLOCK   33300000
 		/* Round up the pixel clock a bit (10khz), so that the
 		 * "don't run things faster than the requested clock
 		 * rate" rule of the clk driver doesn't reject the
@@ -216,13 +216,13 @@ static const struct drm_display_mode rpi_touchscreen_modes[] = {
 		 */
 		.clock = PIXEL_CLOCK / 1000,
 		.hdisplay = 800,
-		.hsync_start = 800 + 20,
-		.hsync_end = 800 + 20 + 32,
-		.htotal = 800 + 20 + 32 + 16,
-		.vdisplay = 498,
-		.vsync_start = 498 + 2,
-		.vsync_end = 498 + 2 + 3,
-		.vtotal = 498 + 2 + 3 + 20,
+		.hsync_start = 800 + 160,
+		.hsync_end = 800 + 160 + 5,
+		.htotal = 800 + 160 + 5 + 40,
+		.vdisplay = 480,
+		.vsync_start = 480 + 22,
+		.vsync_end = 480 + 22 + 10,
+		.vtotal = 480 + 22 + 10 + 23,
 		.vrefresh = 60,
 	},
 };
@@ -303,10 +303,10 @@ static int rpi_touchscreen_enable(struct drm_panel *panel)
 
 	rpi_touchscreen_write(ts, SPICMR, 0x00);
 #if 1
-	rpi_touchscreen_write(ts, HSR, 0x002c0002);    // H Back Porch = 44, H Pulse Width = 2
-	rpi_touchscreen_write(ts, VSR, 0x00150002);    // V Back Porch = 21, V Pulse Width = 2
-	rpi_touchscreen_write(ts, HDISPR, 0x003d0320); // H Front Porch = 61, HDISP Size = 800
-	rpi_touchscreen_write(ts, VDISPR, 0x000701e0); // V Front Porch = 7, VDISP Size = 480
+	rpi_touchscreen_write(ts, HSR, 0x00280005);    // H Back Porch = 40, H Pulse Width = 5
+	rpi_touchscreen_write(ts, VSR, 0x0017000A);    // V Back Porch = 23, V Pulse Width = 10
+	rpi_touchscreen_write(ts, HDISPR, 0x00A00320); // H Front Porch = 160, HDISP Size = 800
+	rpi_touchscreen_write(ts, VDISPR, 0x001601e0); // V Front Porch = 22, VDISP Size = 480
 #endif
 	rpi_touchscreen_write(ts, LCDCTRL, 0x00100152);
 	rpi_touchscreen_write(ts, SYSCTRL, 0x040f);
