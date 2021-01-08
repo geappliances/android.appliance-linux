@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2020 BayLibre, SAS.
- * Author: Fabien Parent <fparent@baylibre.com>
+ * Copyright (c) 2020 Laurent Pinchart <laurent.pinchart@ideasonboard.com>
  */
 
 /dts-v1/;
@@ -117,6 +116,8 @@
 };
 
 &seninf {
+	status = "okay";
+
 	ports {
 		port@0 {
 			mipi_ar0330_1: endpoint {
@@ -134,4 +135,8 @@
 			};
 		};
 	};
+};
+
+&camsv0 {
+	status = "okay";
 };
