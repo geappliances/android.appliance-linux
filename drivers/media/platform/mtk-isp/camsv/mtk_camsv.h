@@ -63,13 +63,13 @@ enum TEST_MODE { TEST_PATTERN_DISABLED = 0x0, TEST_PATTERN_SENINF };
  * or mtk_camsv_video_device:id
  */
 enum {
-	MTK_CAMSV_P1_MAIN_STREAM_OUT = 0,
-	MTK_CAMSV_P1_TOTAL_NODES
+	MTK_CAMSV_MAIN_STREAM_OUT = 0,
+	MTK_CAMSV_TOTAL_NODES
 };
 
 #define MTK_CAMSV_CIO_PAD_SENINF	0
 #define MTK_CAMSV_CIO_PAD_NODE(n)	((n) + 1)
-#define MTK_CAMSV_CIO_NUM_PADS		(MTK_CAMSV_P1_TOTAL_NODES + 1)
+#define MTK_CAMSV_CIO_NUM_PADS		(MTK_CAMSV_TOTAL_NODES + 1)
 
 struct mtk_camsv_format_info {
 	u32 code;
@@ -197,7 +197,7 @@ struct mtk_camsv_dev {
 	struct v4l2_async_notifier notifier;
 	struct media_pad subdev_pads[MTK_CAMSV_CIO_NUM_PADS];
 	struct v4l2_mbus_framefmt formats[MTK_CAMSV_CIO_NUM_PADS];
-	struct mtk_camsv_video_device vdev_nodes[MTK_CAMSV_P1_TOTAL_NODES];
+	struct mtk_camsv_video_device vdev_nodes[MTK_CAMSV_TOTAL_NODES];
 	struct v4l2_subdev *seninf;
 	unsigned int streaming;
 	unsigned int stream_count;
