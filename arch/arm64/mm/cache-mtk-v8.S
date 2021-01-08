@@ -70,6 +70,7 @@ ENTRY(__disable_dcache)
 	isb	sy
 	ret
 ENDPROC(__disable_dcache)
+EXPORT_SYMBOL(__disable_dcache)
 
 ENTRY(__enable_cache)
 	mrs	x0, SCTLR_EL1
@@ -207,14 +208,17 @@ dcsw_loop_table:
 ENTRY(__inner_flush_dcache_all)
 	__inner_dcache_all #DCCISW
 ENDPROC(__inner_flush_dcache_all)
+EXPORT_SYMBOL(__inner_flush_dcache_all)
 
 ENTRY(__inner_flush_dcache_L1)
 	__inner_dcache_L1 #DCCISW
 ENDPROC(__inner_flush_dcache_L1)
+EXPORT_SYMBOL(__inner_flush_dcache_L1)
 
 ENTRY(__inner_flush_dcache_L2)
 	__inner_dcache_L2 #DCCISW
 ENDPROC(__inner_flush_dcache_L2)
+EXPORT_SYMBOL(__inner_flush_dcache_L2)
 
 ENTRY(__inner_clean_dcache_all)
 	__inner_dcache_all #DCCSW
