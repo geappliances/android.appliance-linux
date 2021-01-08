@@ -795,7 +795,7 @@ static const u32 stream_out_fmts[] = {
 
 static const struct mtk_camsv_dev_node_desc capture_queues[] = {
 	{
-		.id = MTK_CAMSV_P1_MAIN_STREAM_OUT,
+		.id = MTK_CAMSV_MAIN_STREAM_OUT,
 		.name = "main stream",
 		.cap = V4L2_CAP_VIDEO_CAPTURE_MPLANE,
 		.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
