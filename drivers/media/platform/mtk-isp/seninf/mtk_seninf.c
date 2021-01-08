@@ -445,9 +445,6 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	val = 1 << ((dpcm == 0x2a) ? 15 : ((dpcm & 0xF) + 7));
 	writel(val, input->base + SENINF_CSI2_DPCM);
 
-	/* HQ */
-	// writel(0x1, input->base + SENINF_CSI2_DPCM);
-
 	/* Settle delay */
 	SENINF_BITS(input->base, SENINF_CSI2_LNRD_TIMING,
 		    DATA_SETTLE_PARAMETER, SENINF_SETTLE_DELAY);
@@ -1010,7 +1007,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 
 	/*
 	 * Select the PHY. SENINF2, SENINF3 and SENINF5 are hardwired to the
-	 * CSI1, CSI2 and CSI0B PHYs respectively. SENINF1 uses CSI0 or CSI0A
+	 * CSI0B, CSI1 and CSI2 PHYs respectively. SENINF1 uses CSI0 or CSI0A
 	 * depending on the clock and data lanes routing.
 	 */
 	switch (input->seninf) {
@@ -1213,7 +1210,7 @@ static int seninf_probe(struct platform_device *pdev)
 	priv->mux_sel = 0;
 
 	ret = mtk_seninf_media_register(priv);
-	if (!ret) /* register success */
+	if (!ret)
 		pm_runtime_enable(dev);
 
 	return ret;
