@@ -20,5 +20,6 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt8183-pumpkin-urt-umo-9465md-t.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8183-pumpkin-ar0330-single.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8183-pumpkin-ar0330-dual.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8183-pumpkin-ap1302-ar0330-single.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt8183-pumpkin-ap1302-ar0144-single.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8183-pumpkin-ap1302-ar0330-single-ar0144-single.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8516-pumpkin.dtb
