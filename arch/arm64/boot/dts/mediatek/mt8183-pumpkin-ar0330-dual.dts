@@ -1,0 +1,140 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2020 Laurent Pinchart <laurent.pinchart@ideasonboard.com>
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/clock/mt8183-clk.h>
+#include <dt-bindings/gpio/gpio.h>
+#include "mt8183-pinfunc.h"
+
+&reserved_memory {
+	ramoops@0x4FF00000 {
+		compatible = "ramoops";
+		reg = <0x0 0x4FF00000 0x0 0x00100000>;
+		record-size = <0x8000>;
+		console-size = <0x8000>;
+		ftrace-size = <0x0>;
+		pmsg-size = <0x8000>;
+	};
+};
+
+&pio {
+	cam0_pins_default: cam0_pins_default {
+		pins_clk_rst {
+			pinmux = <PINMUX_GPIO99__FUNC_CMMCLK0>,
+				 <PINMUX_GPIO157__FUNC_GPIO157>;
+		};
+	};
+
+	cam1_pins_default: cam1_pins_default {
+		pins_clk_rst {
+			pinmux = <PINMUX_GPIO100__FUNC_CMMCLK1>,
+				 <PINMUX_GPIO102__FUNC_GPIO102>;
+		};
+	};
+};
+
+&mt6358_vldo28_reg {
+	regulator-min-microvolt = <2800000>;
+	regulator-max-microvolt = <2800000>;
+};
+
+&mt6358_vcama1_reg {
+	regulator-min-microvolt = <2800000>;
+	regulator-max-microvolt = <2800000>;
+};
+
+&mt6358_vcama2_reg {
+	regulator-min-microvolt = <2800000>;
+	regulator-max-microvolt = <2800000>;
+};
+
+&mt6358_vcamio_reg {
+	regulator-min-microvolt = <1800000>;
+	regulator-max-microvolt = <1800000>;
+};
+
+&i2c2 {
+	sensor@10 {
+		compatible = "onnn,ar0330";
+		reg = <0x10>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&cam0_pins_default>;
+
+		clocks = <&topckgen CLK_TOP_MUX_CAMTG>;
+		clock-frequency = <24000000>;
+
+		reset-gpios = <&pio 157 GPIO_ACTIVE_LOW>;
+
+		vddpll-supply = <&mt6358_vldo28_reg>;
+		vaa-supply = <&mt6358_vcama1_reg>;
+		vddio-supply = <&mt6358_vcamio_reg>;
+
+		port@0 {
+			ar0330_1_endpoint: endpoint {
+				remote-endpoint = <&mipi_ar0330_1>;
+				bus-type = <4>;
+				clock-lanes = <0>;
+				data-lanes = <1 2>;
+			};
+		};
+	};
+};
+
+&i2c4 {
+	sensor@10 {
+		compatible = "onnn,ar0330";
+		reg = <0x10>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&cam1_pins_default>;
+
+		clocks = <&topckgen CLK_TOP_MUX_CAMTG2>;
+		clock-frequency = <24000000>;
+
+		reset-gpios = <&pio 102 GPIO_ACTIVE_LOW>;
+
+		vddpll-supply = <&mt6358_vldo28_reg>;
+		vaa-supply = <&mt6358_vcama2_reg>;
+		vddio-supply = <&mt6358_vcamio_reg>;
+
+		port@0 {
+			ar0330_2_endpoint: endpoint {
+				remote-endpoint = <&mipi_ar0330_2>;
+				bus-type = <4>;
+				clock-lanes = <0>;
+				data-lanes = <1 2>;
+			};
+		};
+	};
+};
+
+&seninf {
+	status = "okay";
+
+	ports {
+		port@0 {
+			mipi_ar0330_1: endpoint {
+				clock-lanes = <1>;
+				data-lanes = <0 2>;
+				remote-endpoint = <&ar0330_1_endpoint>;
+			};
+		};
+
+		port@1 {
+			mipi_ar0330_2: endpoint {
+				clock-lanes = <2>;
+				data-lanes = <1 3>;
+				remote-endpoint = <&ar0330_2_endpoint>;
+			};
+		};
+	};
+};
+
+&camsv0 {
+	status = "okay";
+};
