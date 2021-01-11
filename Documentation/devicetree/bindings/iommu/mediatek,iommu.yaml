@@ -121,6 +121,7 @@ properties:
 
   power-domains:
     maxItems: 1
+      dt-binding/memory/mt8183-larb-port.h for mt8183.
 
 required:
   - compatible
