@@ -21,3 +21,14 @@
 		pmsg-size = <0x8000>;
 	};
 };
+
+&sound {
+	dai-link-hdmi {
+		sound-dai = <&afe>;
+		dai-link-name = "HDMI Playback";
+
+		codec-0 {
+			sound-dai = <&hdmi>;
+		};
+	};
+};
