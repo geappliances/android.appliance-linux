@@ -106,6 +106,8 @@
 #define BYTE_OFF_8(x)			(u8)(((x) >> 8) & 0xFF)
 #define BYTE_OFF_16(x)			(u8)(((x) >> 16) & 0xFF)
 
+#define POLL_INTERVAL_MS		17	/* 17ms = 60fps */
+
 enum edt_fw_status {
 	EDT_RUN_IN_ERROR,
 	EDT_RUN_IN_APP,
@@ -184,6 +186,9 @@ struct edt_rpi_ft5x06_ts_data {
 	struct edt_reg_addr reg_addr;
 	enum edt_ver version;
 	struct edt_fw_param *fw_param;
+
+	struct timer_list timer;
+	struct work_struct work_i2c_poll;
 };
 
 struct edt_i2c_chip_data {
@@ -331,6 +336,22 @@ static irqreturn_t edt_rpi_ft5x06_ts_isr(int irq, void *dev_id)
 
 out:
 	return IRQ_HANDLED;
+}
+
+static void edt_rpi_ft5x06_ts_irq_poll_timer(struct timer_list *t)
+{
+	struct edt_rpi_ft5x06_ts_data *tsdata = from_timer(tsdata, t, timer);
+
+	schedule_work(&tsdata->work_i2c_poll);
+	mod_timer(&tsdata->timer, jiffies + msecs_to_jiffies(POLL_INTERVAL_MS));
+}
+
+static void edt_rpi_ft5x06_ts_work_i2c_poll(struct work_struct *work)
+{
+	struct edt_rpi_ft5x06_ts_data *tsdata = container_of(work,
+			struct edt_rpi_ft5x06_ts_data, work_i2c_poll);
+
+	edt_rpi_ft5x06_ts_isr(0, tsdata);
 }
 
 static int edt_ft5x06_register_write(struct edt_rpi_ft5x06_ts_data *tsdata,
@@ -1641,17 +1662,26 @@ static int edt_rpi_ft5x06_ts_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, tsdata);
 
-	irq_flags = irq_get_trigger_type(client->irq);
-	if (irq_flags == IRQF_TRIGGER_NONE)
-		irq_flags = IRQF_TRIGGER_FALLING;
-	irq_flags |= IRQF_ONESHOT;
+	if (client->irq) {
+		irq_flags = irq_get_trigger_type(client->irq);
+		if (irq_flags == IRQF_TRIGGER_NONE)
+			irq_flags = IRQF_TRIGGER_FALLING;
+		irq_flags |= IRQF_ONESHOT;
 
-	error = devm_request_threaded_irq(&client->dev, client->irq,
-					NULL, edt_rpi_ft5x06_ts_isr, irq_flags,
-					client->name, tsdata);
-	if (error) {
-		dev_err(&client->dev, "Unable to request touchscreen IRQ.\n");
-		return error;
+		error = devm_request_threaded_irq(&client->dev, client->irq,
+						NULL, edt_rpi_ft5x06_ts_isr, irq_flags,
+						client->name, tsdata);
+		if (error) {
+			dev_err(&client->dev, "Unable to request touchscreen IRQ.\n");
+			return error;
+		}
+	} else {
+		INIT_WORK(&tsdata->work_i2c_poll,
+			  edt_rpi_ft5x06_ts_work_i2c_poll);
+		timer_setup(&tsdata->timer, edt_rpi_ft5x06_ts_irq_poll_timer, 0);
+		tsdata->timer.expires = jiffies +
+					msecs_to_jiffies(POLL_INTERVAL_MS);
+		add_timer(&tsdata->timer);
 	}
 
 	error = devm_device_add_group(&client->dev, &edt_ft5x06_attr_group);
