@@ -61,7 +61,7 @@
 	};
 
 	touch: ft5x06@38 {
-		compatible = "focaltech,ft6236";
+		compatible = "pumpkin,rpi-ts";
 		reg = <0x38>;
 		status = "okay";
 		pinctrl-0 = <&ts_pins>;
