@@ -63,6 +63,7 @@
 #define TOUCH_EVENT_UP			0x01
 #define TOUCH_EVENT_ON			0x02
 #define TOUCH_EVENT_RESERVED		0x03
+#define EDT_TOUCH_MAX_SUPPORTED_POINTS	10
 
 #define EDT_NAME_LEN			23
 #define EDT_SWITCH_MODE_RETRIES		10
@@ -180,6 +181,7 @@ struct edt_rpi_ft5x06_ts_data {
 	int offset;
 	int report_rate;
 	int max_support_points;
+	int known_ids;
 
 	char name[EDT_NAME_LEN];
 
@@ -193,6 +195,20 @@ struct edt_rpi_ft5x06_ts_data {
 
 struct edt_i2c_chip_data {
 	int  max_support_points;
+};
+
+struct edt_ts_regs {
+	u8 device_mode;
+	u8 gesture_id;
+	u8 num_points;
+	struct edt_ts_touch {
+		u8 xh;
+		u8 xl;
+		u8 yh;
+		u8 yl;
+		u8 pressure;
+		u8 area;
+	} point[EDT_TOUCH_MAX_SUPPORTED_POINTS];
 };
 
 static int edt_rpi_ft5x06_ts_readwrite(struct i2c_client *client,
@@ -252,6 +268,8 @@ static irqreturn_t edt_rpi_ft5x06_ts_isr(int irq, void *dev_id)
 	struct device *dev = &tsdata->client->dev;
 	u8 cmd;
 	u8 rdbuf[63];
+	int modified_ids = 0;
+	long released_ids;
 	int i, type, x, y, id;
 	int offset, tplen, datalen, crclen;
 	int error;
@@ -302,36 +320,41 @@ static irqreturn_t edt_rpi_ft5x06_ts_isr(int irq, void *dev_id)
 		if (!edt_rpi_ft5x06_ts_check_crc(tsdata, rdbuf, datalen))
 			goto out;
 	}
+	struct edt_ts_regs *ts_data = (struct edt_ts_regs* )&rdbuf[0];
 
-	for (i = 0; i < tsdata->max_support_points; i++) {
-		u8 *buf = &rdbuf[i * tplen + offset];
-		bool down;
+	if (ts_data->num_points == 0xff ||
+	    (ts_data->num_points == 0 && tsdata->known_ids == 0))
+		goto out;
 
-		type = buf[0] >> 6;
-		/* ignore Reserved events */
-		if (type == TOUCH_EVENT_RESERVED)
-			continue;
+	for (i = 0; i < ts_data->num_points; i++) {
+		x = (((int)ts_data->point[i].xh & 0xf) << 8) + ts_data->point[i].xl;
+		y = (((int)ts_data->point[i].yh & 0xf) << 8) + ts_data->point[i].yl;
+		id = (ts_data->point[i].yh >> 4) & 0xf;
+		type = (ts_data->point[i].xh >> 6) & 0x03;
 
 		/* M06 sometimes sends bogus coordinates in TOUCH_DOWN */
 		if (tsdata->version == EDT_M06 && type == TOUCH_EVENT_DOWN)
 			continue;
 
-		x = ((buf[0] << 8) | buf[1]) & 0x0fff;
-		y = ((buf[2] << 8) | buf[3]) & 0x0fff;
-		id = (buf[2] >> 4) & 0x0f;
-		down = type != TOUCH_EVENT_UP;
-
-		input_mt_slot(tsdata->input, id);
-		input_mt_report_slot_state(tsdata->input, MT_TOOL_FINGER, down);
-
-		if (!down)
-			continue;
-
-		touchscreen_report_pos(tsdata->input, &tsdata->prop, x, y,
-				       true);
+		modified_ids |= BIT(id);
+		if (type == TOUCH_EVENT_DOWN ||
+		    type == TOUCH_EVENT_ON) {
+			input_mt_slot(tsdata->input, id);
+			input_mt_report_slot_state(tsdata->input, MT_TOOL_FINGER, 1);
+			touchscreen_report_pos(tsdata->input, &tsdata->prop, x, y, true);
+		}
 	}
 
-	input_mt_report_pointer_emulation(tsdata->input, true);
+	released_ids = tsdata->known_ids & ~modified_ids;
+
+	for_each_set_bit(i, &released_ids, EDT_TOUCH_MAX_SUPPORTED_POINTS) {
+		input_mt_slot(tsdata->input, i);
+		input_mt_report_slot_state(tsdata->input, MT_TOOL_FINGER, 0);
+		modified_ids &= ~(BIT(i));
+	}
+	tsdata->known_ids = modified_ids;
+
+	input_mt_sync_frame(tsdata->input);
 	input_sync(tsdata->input);
 
 out:
