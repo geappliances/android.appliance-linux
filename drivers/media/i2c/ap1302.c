@@ -35,12 +35,28 @@
 #define AP1302_MAX_WIDTH			4224U
 #define AP1302_MAX_HEIGHT 			4092U
 
-#define AP1302_REG_16BIT(n)			((2 << 24) | (n))
-#define AP1302_REG_32BIT(n)			((4 << 24) | (n))
-#define AP1302_REG_SIZE(n)			((n) >> 24)
-#define AP1302_REG_ADDR(n)			((n) & 0x0000ffff)
-#define AP1302_REG_PAGE(n)			((n) & 0x00ff0000)
-#define AP1302_REG_PAGE_MASK			0x00ff0000
+/*
+ * Register address macros encode the size and address of registers as 32-bit
+ * integers formatted as follows.
+ *
+ * AR0S SSRR RRRR RRRR RRRR RRRR RRRR RRRR
+ *
+ * A: Advanced (1) or base (0) register
+ * S: Size (2: 16-bit, 4: 32-bit)
+ * R: Register address
+ *
+ * For base registers, the address is limited to the 16 low order bits. For
+ * advanced registers, the address is a 32-bit value.
+ */
+#define AP1302_REG_ADV				BIT(31)
+#define AP1302_REG_16BIT(n)			((2 << 26) | (n))
+#define AP1302_REG_32BIT(n)			((4 << 26) | (n))
+#define AP1302_REG_ADV_16BIT(n)			(AP1302_REG_ADV | (2 << 26) | (n))
+#define AP1302_REG_ADV_32BIT(n)			(AP1302_REG_ADV | (4 << 26) | (n))
+#define AP1302_REG_SIZE(n)			(((n) >> 26) & 0x7)
+#define AP1302_REG_ADDR(n)			((n) & 0x43ffffff)
+#define AP1302_REG_PAGE_MASK			0x43fff000
+#define AP1302_REG_PAGE(n)			((n) & 0x43fff000)
 
 /* Info Registers */
 #define AP1302_CHIP_VERSION			AP1302_REG_16BIT(0x0000)
@@ -278,7 +294,7 @@
 #define AP1302_SIP_CRC				AP1302_REG_16BIT(0xf052)
 
 /* Advanced System Registers */
-#define AP1302_ADV_IRQ_SYS_INTE			AP1302_REG_32BIT(0x00230000)
+#define AP1302_ADV_IRQ_SYS_INTE			AP1302_REG_ADV_32BIT(0x00230000)
 #define AP1302_ADV_IRQ_SYS_INTE_TEST_COUNT	BIT(25)
 #define AP1302_ADV_IRQ_SYS_INTE_HINF_1		BIT(24)
 #define AP1302_ADV_IRQ_SYS_INTE_HINF_0		BIT(23)
@@ -302,7 +318,7 @@
 
 /* Advanced Slave MIPI Registers */
 #define AP1302_ADV_SINF_MIPI_INTERNAL_p_LANE_n_STAT(p, n) \
-	AP1302_REG_32BIT(0x00420008 + (p) * 0x50000 + (n) * 0x20)
+	AP1302_REG_ADV_32BIT(0x00420008 + (p) * 0x50000 + (n) * 0x20)
 #define AP1302_LANE_ERR_LP_VAL(n)		(((n) >> 30) & 3)
 #define AP1302_LANE_ERR_STATE(n)		(((n) >> 24) & 0xf)
 #define AP1302_LANE_ERR				BIT(18)
@@ -323,7 +339,7 @@
 #define AP1302_LANE_STATE_TURN_MARK		0xb
 #define AP1302_LANE_STATE_ERROR_S		0xc
 
-#define AP1302_ADV_CAPTURE_A_FV_CNT		AP1302_REG_32BIT(0x00490040)
+#define AP1302_ADV_CAPTURE_A_FV_CNT		AP1302_REG_ADV_32BIT(0x00490040)
 
 struct ap1302_device;
 
@@ -521,13 +537,13 @@ static int __ap1302_write(struct ap1302_device *ap1302, u32 reg, u32 val)
 static int ap1302_write(struct ap1302_device *ap1302, u32 reg, u32 val,
 			int *err)
 {
-	u32 page = AP1302_REG_PAGE(reg);
 	int ret;
 
 	if (err && *err)
 		return *err;
 
-	if (page) {
+	if (reg & AP1302_REG_ADV) {
+		u32 page = AP1302_REG_PAGE(reg);
 		if (ap1302->reg_page != page) {
 			ret = __ap1302_write(ap1302, AP1302_ADVANCED_BASE,
 					     page);
@@ -537,6 +553,7 @@ static int ap1302_write(struct ap1302_device *ap1302, u32 reg, u32 val,
 			ap1302->reg_page = page;
 		}
 
+		reg &= ~AP1302_REG_ADV;
 		reg &= ~AP1302_REG_PAGE_MASK;
 		reg += AP1302_REG_ADV_START;
 	}
@@ -611,10 +628,10 @@ static int __ap1302_read(struct ap1302_device *ap1302, u32 reg, u32 *val)
 
 static int ap1302_read(struct ap1302_device *ap1302, u32 reg, u32 *val)
 {
-	u32 page = AP1302_REG_PAGE(reg);
 	int ret;
 
-	if (page) {
+	if (reg & AP1302_REG_ADV) {
+		u32 page = AP1302_REG_PAGE(reg);
 		if (ap1302->reg_page != page) {
 			ret = __ap1302_write(ap1302, AP1302_ADVANCED_BASE,
 					     page);
@@ -624,6 +641,7 @@ static int ap1302_read(struct ap1302_device *ap1302, u32 reg, u32 *val)
 			ap1302->reg_page = page;
 		}
 
+		reg &= ~AP1302_REG_ADV;
 		reg &= ~AP1302_REG_PAGE_MASK;
 		reg += AP1302_REG_ADV_START;
 	}
