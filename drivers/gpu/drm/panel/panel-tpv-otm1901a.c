@@ -7,12 +7,12 @@
  */
 
 #include <linux/backlight.h>
+#include <linux/delay.h>
 #include <linux/gpio/consumer.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/regulator/consumer.h>
 
-#include <drm/drmP.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_panel.h>
@@ -407,28 +407,28 @@ static const struct drm_display_mode default_mode = {
 	.vsync_start = 1920 + 20,
 	.vsync_end = 1920 + 20 + 2,
 	.vtotal = 1920 + 20 + 2 + 8,
-	.vrefresh = 60,
 };
 
-static int tpv_otm_panel_get_modes(struct drm_panel *panel)
+static int tpv_otm_panel_get_modes(struct drm_panel *panel,
+				   struct drm_connector *connector)
 {
 	struct drm_display_mode *mode;
 
-	mode = drm_mode_duplicate(panel->drm, &default_mode);
+	mode = drm_mode_duplicate(connector->dev, &default_mode);
 	if (!mode) {
-		dev_err(panel->drm->dev, "failed to add mode %ux%ux@%u\n",
+		dev_err(panel->dev, "failed to add mode %ux%ux@%u\n",
 				default_mode.hdisplay, default_mode.vdisplay,
-				default_mode.vrefresh);
+				drm_mode_vrefresh(&default_mode));
 		return -ENOMEM;
 	}
 
 	drm_mode_set_name(mode);
 
-	drm_mode_probed_add(panel->connector, mode);
+	drm_mode_probed_add(connector, mode);
 
 
-	panel->connector->display_info.width_mm = 80;
-	panel->connector->display_info.height_mm = 136;
+	connector->display_info.width_mm = 80;
+	connector->display_info.height_mm = 136;
 
 	return 1;
 }
@@ -476,11 +476,12 @@ static int tpv_otm_panel_add(struct tpv_otm_panel *tpv_otm)
 		return PTR_ERR(tpv_otm->backlight);
 	}
 
-	drm_panel_init(&tpv_otm->base);
-	tpv_otm->base.funcs = &tpv_otm_panel_funcs;
-	tpv_otm->base.dev = &tpv_otm->dsi->dev;
+	drm_panel_init(&tpv_otm->base, &tpv_otm->dsi->dev, &tpv_otm_panel_funcs,
+		       DRM_MODE_CONNECTOR_DSI);
 
-	return drm_panel_add(&tpv_otm->base);
+	drm_panel_add(&tpv_otm->base);
+
+	return 0;
 }
 
 static void tpv_otm_panel_del(struct tpv_otm_panel *tpv_otm)
