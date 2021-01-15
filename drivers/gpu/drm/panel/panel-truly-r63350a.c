@@ -7,12 +7,12 @@
  */
 
 #include <linux/backlight.h>
+#include <linux/delay.h>
 #include <linux/gpio/consumer.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/regulator/consumer.h>
 
-#include <drm/drmP.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_panel.h>
@@ -295,27 +295,27 @@ static const struct drm_display_mode default_mode = {
 	.vsync_start = 1920 + 10,
 	.vsync_end = 1920 + 10 + 2,
 	.vtotal = 1920 + 10 + 2 + 4,
-	.vrefresh = 60,
 };
 
-static int truly_r_panel_get_modes(struct drm_panel *panel)
+static int truly_r_panel_get_modes(struct drm_panel *panel,
+				   struct drm_connector *connector)
 {
 	struct drm_display_mode *mode;
 
-	mode = drm_mode_duplicate(panel->drm, &default_mode);
+	mode = drm_mode_duplicate(connector->dev, &default_mode);
 	if (!mode) {
-		dev_err(panel->drm->dev, "failed to add mode %ux%ux@%u\n",
+		dev_err(panel->dev, "failed to add mode %ux%ux@%u\n",
 				default_mode.hdisplay, default_mode.vdisplay,
-				default_mode.vrefresh);
+				drm_mode_vrefresh(&default_mode));
 		return -ENOMEM;
 	}
 
 	drm_mode_set_name(mode);
 
-	drm_mode_probed_add(panel->connector, mode);
+	drm_mode_probed_add(connector, mode);
 
-	panel->connector->display_info.width_mm = 68;
-	panel->connector->display_info.height_mm = 120;
+	connector->display_info.width_mm = 68;
+	connector->display_info.height_mm = 120;
 
 	return 1;
 }
@@ -363,11 +363,12 @@ static int truly_r_panel_add(struct truly_r_panel *truly_r)
 		return PTR_ERR(truly_r->backlight);
 	}
 
-	drm_panel_init(&truly_r->base);
-	truly_r->base.funcs = &truly_r_panel_funcs;
-	truly_r->base.dev = &truly_r->dsi->dev;
+	drm_panel_init(&truly_r->base, &truly_r->dsi->dev, &truly_r_panel_funcs,
+		       DRM_MODE_CONNECTOR_DSI);
 
-	return drm_panel_add(&truly_r->base);
+	drm_panel_add(&truly_r->base);
+
+	return 0;
 }
 
 static void truly_r_panel_del(struct truly_r_panel *truly_r)
