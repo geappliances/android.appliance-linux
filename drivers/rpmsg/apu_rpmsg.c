@@ -351,10 +351,14 @@ unsigned int rpmsg_eptdev_poll(struct file *fp, struct poll_table_struct *wait)
 
 	poll_wait(fp, &apu->waitqueue, wait);
 	spin_lock_irqsave(&apu->ctx_lock, flags);
-	if (apu->available_response) {
+	if (apu->available_response > 0) {
 		spin_unlock_irqrestore(&apu->ctx_lock, flags);
 		return POLLIN;
+	} else if (apu->available_response == -ENODEV) {
+		spin_unlock_irqrestore(&apu->ctx_lock, flags);
+		return POLLERR;
 	}
+
 	spin_unlock_irqrestore(&apu->ctx_lock, flags);
 	return 0;
 }
@@ -696,9 +700,19 @@ free_apu:
 static void apu_rpmsg_remove(struct rpmsg_device *rpdev)
 {
 	struct rpmsg_apu *apu = dev_get_drvdata(&rpdev->dev);
+	unsigned long flags;
 
 	if (apu_iovad)
 		kref_put(&apu_iovad->refcount, iova_domain_release);
+
+	/*
+	 * Notify user application to stop polling because device is being
+	 * removed. FIXME: There should be another better way to do that.
+	 */
+	spin_lock_irqsave(&apu->ctx_lock, flags);
+	apu->available_response = -ENODEV;
+	wake_up(&apu->waitqueue);
+	spin_unlock_irqrestore(&apu->ctx_lock, flags);
 
 	device_del(&apu->dev);
 	put_device(&apu->dev);
