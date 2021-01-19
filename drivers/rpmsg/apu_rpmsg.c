@@ -440,8 +440,8 @@ static long rpmsg_eptdev_ioctl(struct file *fp, unsigned int cmd,
 				apu->available_response--;
 				ida_simple_remove(&req_ida, req->id);
 				list_for_each_entry_safe(buffer, tmp, &rpmsg_req->buffers, req_node) {
-					kref_put(&buffer->refcount, apu_device_memory_unmap);
 					list_del(&buffer->req_node);
+					kref_put(&buffer->refcount, apu_device_memory_unmap);
 				}
 				list_del(&rpmsg_req->node);
 				kfree(rpmsg_req->req);
