@@ -37,7 +37,9 @@ int venc_if_init(struct mtk_vcodec_ctx *ctx, unsigned int fourcc)
 	switch (fourcc) {
 	case V4L2_PIX_FMT_H264:
 		ctx->enc_if = get_enc_common_if();
-		ctx->oal_vcodec = 1;
+		/* Unlike MT8183, MT8167 embeds an "oal" encoder */
+		if (of_find_compatible_node(NULL, NULL, "mediatek,mt8167-vcodec-enc"))
+			ctx->oal_vcodec = 1;
 		break;
 	default:
 		return -EINVAL;
