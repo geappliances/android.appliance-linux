@@ -906,6 +906,7 @@ static long mtk_vcu_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 	struct mtk_vcu *vcu_dev;
 	struct device *dev;
 	struct map_obj mem_map_obj;
+	struct compat_map_obj mem_map_obj_compat;
 	struct share_obj share_buff_data;
 	struct mem_obj mem_buff_data;
 	struct mtk_vcu_queue *vcu_queue = (struct mtk_vcu_queue *)file->private_data;
@@ -932,6 +933,25 @@ static long mtk_vcu_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 			return -EINVAL;
 		}
 		break;
+    case COMPAT_VCUD_SET_MMAP_TYPE:
+		user_data_addr = (unsigned char *)arg;
+		ret = (long)copy_from_user(&mem_map_obj_compat, user_data_addr,
+			(unsigned long)sizeof(struct compat_map_obj));
+
+		if (ret != 0L) {
+			pr_err("[VCU] %s(%d) Copy data to user failed!\n",
+				__func__, __LINE__);
+			return -EINVAL;
+		}
+
+		pr_err("[VCU] VCUD_SET_MMAP_TYPE(%d) mem_map_obj:(%u %u)\n",
+				 __LINE__,mem_map_obj_compat.map_buf,mem_map_obj_compat.map_type);
+
+		vcu_queue->map_buf = mem_map_obj_compat.map_buf;
+		vcu_queue->map_type = mem_map_obj_compat.map_type;
+
+		break;
+
     case VCUD_SET_MMAP_TYPE:
 
 		user_data_addr = (unsigned char *)arg;
