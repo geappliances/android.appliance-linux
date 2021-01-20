@@ -525,17 +525,21 @@ static int __ap1302_write(struct ap1302_device *ap1302, u32 reg, u32 val)
 	return 0;
 }
 
-static int ap1302_write(struct ap1302_device *ap1302, u32 reg, u32 val)
+static int ap1302_write(struct ap1302_device *ap1302, u32 reg, u32 val,
+			int *err)
 {
 	u32 page = AP1302_REG_PAGE(reg);
 	int ret;
+
+	if (err && *err)
+		return *err;
 
 	if (page) {
 		if (ap1302->reg_page != page) {
 			ret = __ap1302_write(ap1302, AP1302_ADVANCED_BASE,
 					     page);
 			if (ret < 0)
-				return ret;
+				goto done;
 
 			ap1302->reg_page = page;
 		}
@@ -544,11 +548,17 @@ static int ap1302_write(struct ap1302_device *ap1302, u32 reg, u32 val)
 		reg += AP1302_REG_ADV_START;
 	}
 
-	return __ap1302_write(ap1302, reg, val);
+	ret =__ap1302_write(ap1302, reg, val);
+
+done:
+	if (err && ret)
+		*err = ret;
+
+	return ret;
 }
 
 static int ap1302_write_ctx(struct ap1302_device *ap1302,
-			    enum ap1302_context ctx, u32 reg, u32 val)
+			    enum ap1302_context ctx, u32 reg, u32 val, int *err)
 {
 	/*
 	 * The snapshot context is missing the S1_SENSOR_MODE register,
@@ -561,7 +571,7 @@ static int ap1302_write_ctx(struct ap1302_device *ap1302,
 
 	reg += ctx * AP1302_CTX_OFFSET;
 
-	return ap1302_write(ap1302, reg, val);
+	return ap1302_write(ap1302, reg, val, err);
 }
 
 static int __ap1302_read(struct ap1302_device *ap1302, u32 reg, u32 *val)
@@ -661,33 +671,26 @@ static int ap1302_sipm_read(struct ap1302_device *ap1302, unsigned int port,
 	if (ret < 0)
 		return ret;
 
-	ret = ap1302_write(ap1302, AP1302_DMA_SIZE, size);
-	if (ret < 0)
-		return ret;
-
+	ap1302_write(ap1302, AP1302_DMA_SIZE, size, &ret);
 	src = AP1302_DMA_SIP_SIPM(port)
 	    | (size == 2 ? AP1302_DMA_SIP_DATA_16_BIT : 0)
 	    | AP1302_DMA_SIP_ADDR_16_BIT
 	    | AP1302_DMA_SIP_ID(ap1302->sensor_info->i2c_addr)
 	    | AP1302_DMA_SIP_REG(AP1302_REG_ADDR(reg));
-	ret = ap1302_write(ap1302, AP1302_DMA_SRC, src);
-	if (ret < 0)
-		return ret;
+	ap1302_write(ap1302, AP1302_DMA_SRC, src, &ret);
 
 	/*
 	 * Use the AP1302_DMA_DST register as both the destination address, and
 	 * the scratch pad to store the read value.
 	 */
-	ret = ap1302_write(ap1302, AP1302_DMA_DST,
-			   AP1302_REG_ADDR(AP1302_DMA_DST));
-	if (ret < 0)
-		return ret;
+	ap1302_write(ap1302, AP1302_DMA_DST, AP1302_REG_ADDR(AP1302_DMA_DST),
+		     &ret);
 
-	ret = ap1302_write(ap1302, AP1302_DMA_CTRL,
-			   AP1302_DMA_CTRL_SCH_NORMAL |
-			   AP1302_DMA_CTRL_DST_REG |
-			   AP1302_DMA_CTRL_SRC_SIP |
-			   AP1302_DMA_CTRL_MODE_COPY);
+	ap1302_write(ap1302, AP1302_DMA_CTRL,
+		     AP1302_DMA_CTRL_SCH_NORMAL |
+		     AP1302_DMA_CTRL_DST_REG |
+		     AP1302_DMA_CTRL_SRC_SIP |
+		     AP1302_DMA_CTRL_MODE_COPY, &ret);
 	if (ret < 0)
 		return ret;
 
@@ -723,9 +726,7 @@ static int ap1302_sipm_write(struct ap1302_device *ap1302, unsigned int port,
 	if (ret < 0)
 		return ret;
 
-	ret = ap1302_write(ap1302, AP1302_DMA_SIZE, size);
-	if (ret < 0)
-		return ret;
+	ap1302_write(ap1302, AP1302_DMA_SIZE, size, &ret);
 
 	/*
 	 * Use the AP1302_DMA_SRC register as both the source address, and the
@@ -738,8 +739,8 @@ static int ap1302_sipm_write(struct ap1302_device *ap1302, unsigned int port,
 	 * value is thus unconditionally shifted by 16 bits, unlike for DMA
 	 * reads.
 	 */
-	ret = ap1302_write(ap1302, AP1302_DMA_SRC,
-			   (val << 16) | AP1302_REG_ADDR(AP1302_DMA_SRC));
+	ap1302_write(ap1302, AP1302_DMA_SRC,
+		     (val << 16) | AP1302_REG_ADDR(AP1302_DMA_SRC), &ret);
 	if (ret < 0)
 		return ret;
 
@@ -748,15 +749,13 @@ static int ap1302_sipm_write(struct ap1302_device *ap1302, unsigned int port,
 	    | AP1302_DMA_SIP_ADDR_16_BIT
 	    | AP1302_DMA_SIP_ID(ap1302->sensor_info->i2c_addr)
 	    | AP1302_DMA_SIP_REG(AP1302_REG_ADDR(reg));
-	ret = ap1302_write(ap1302, AP1302_DMA_DST, dst);
-	if (ret < 0)
-		return ret;
+	ap1302_write(ap1302, AP1302_DMA_DST, dst, &ret);
 
-	ret = ap1302_write(ap1302, AP1302_DMA_CTRL,
-			   AP1302_DMA_CTRL_SCH_NORMAL |
-			   AP1302_DMA_CTRL_DST_SIP |
-			   AP1302_DMA_CTRL_SRC_REG |
-			   AP1302_DMA_CTRL_MODE_COPY);
+	ap1302_write(ap1302, AP1302_DMA_CTRL,
+		     AP1302_DMA_CTRL_SCH_NORMAL |
+		     AP1302_DMA_CTRL_DST_SIP |
+		     AP1302_DMA_CTRL_SRC_REG |
+		     AP1302_DMA_CTRL_MODE_COPY, &ret);
 	if (ret < 0)
 		return ret;
 
@@ -1073,20 +1072,14 @@ done:
 
 static int ap1302_configure(struct ap1302_device *ap1302)
 {
-	int ret;
+	int ret = 0;
 
-	ret = ap1302_write_ctx(ap1302, AP1302_CTX_PREVIEW, AP1302_CTX_WIDTH,
-			       ap1302->formats[0].format.width);
-	if (ret < 0)
-		return ret;
-
-	ret = ap1302_write_ctx(ap1302, AP1302_CTX_PREVIEW, AP1302_CTX_HEIGHT,
-			       ap1302->formats[0].format.height);
-	if (ret < 0)
-		return ret;
-
-	ret = ap1302_write_ctx(ap1302, AP1302_CTX_PREVIEW, AP1302_CTX_OUT_FMT,
-			       ap1302->formats[0].info->out_fmt);
+	ap1302_write_ctx(ap1302, AP1302_CTX_PREVIEW, AP1302_CTX_WIDTH,
+			 ap1302->formats[0].format.width, &ret);
+	ap1302_write_ctx(ap1302, AP1302_CTX_PREVIEW, AP1302_CTX_HEIGHT,
+			 ap1302->formats[0].format.height, &ret);
+	ap1302_write_ctx(ap1302, AP1302_CTX_PREVIEW, AP1302_CTX_OUT_FMT,
+			 ap1302->formats[0].info->out_fmt, &ret);
 	if (ret < 0)
 		return ret;
 
@@ -1097,27 +1090,24 @@ static int ap1302_configure(struct ap1302_device *ap1302)
 
 static int ap1302_stall(struct ap1302_device *ap1302, bool stall)
 {
-	int ret;
+	int ret = 0;
 
 	if (stall) {
-		ret = ap1302_write(ap1302, AP1302_SYS_START,
-				   AP1302_SYS_START_PLL_LOCK |
-				   AP1302_SYS_START_STALL_MODE_DISABLED);
-		if (ret < 0)
-			return ret;
-
-		ret = ap1302_write(ap1302, AP1302_SYS_START,
-				   AP1302_SYS_START_PLL_LOCK |
-				   AP1302_SYS_START_STALL_EN |
-				   AP1302_SYS_START_STALL_MODE_DISABLED);
+		ap1302_write(ap1302, AP1302_SYS_START,
+			     AP1302_SYS_START_PLL_LOCK |
+			     AP1302_SYS_START_STALL_MODE_DISABLED, &ret);
+		ap1302_write(ap1302, AP1302_SYS_START,
+			     AP1302_SYS_START_PLL_LOCK |
+			     AP1302_SYS_START_STALL_EN |
+			     AP1302_SYS_START_STALL_MODE_DISABLED, &ret);
 		if (ret < 0)
 			return ret;
 
 		msleep(200);
 
-		ret = ap1302_write(ap1302, AP1302_ADV_IRQ_SYS_INTE,
-				   AP1302_ADV_IRQ_SYS_INTE_SIPM |
-				   AP1302_ADV_IRQ_SYS_INTE_SIPS_FIFO_WRITE);
+		ap1302_write(ap1302, AP1302_ADV_IRQ_SYS_INTE,
+			     AP1302_ADV_IRQ_SYS_INTE_SIPM |
+			     AP1302_ADV_IRQ_SYS_INTE_SIPS_FIFO_WRITE, &ret);
 		if (ret < 0)
 			return ret;
 
@@ -1127,7 +1117,7 @@ static int ap1302_stall(struct ap1302_device *ap1302, bool stall)
 				    AP1302_SYS_START_PLL_LOCK |
 				    AP1302_SYS_START_STALL_STATUS |
 				    AP1302_SYS_START_STALL_EN |
-				    AP1302_SYS_START_STALL_MODE_DISABLED);
+				    AP1302_SYS_START_STALL_MODE_DISABLED, NULL);
 	}
 }
 
@@ -1165,12 +1155,12 @@ static int ap1302_set_wb_mode(struct ap1302_device *ap1302, s32 mode)
 	else
 		val &= ~AP1302_AWB_CTRL_FLASH;
 
-	return ap1302_write(ap1302, AP1302_AWB_CTRL, val);
+	return ap1302_write(ap1302, AP1302_AWB_CTRL, val, NULL);
 }
 
 static int ap1302_set_zoom(struct ap1302_device *ap1302, s32 val)
 {
-	return ap1302_write(ap1302, AP1302_DZ_TGT_FCT, val);
+	return ap1302_write(ap1302, AP1302_DZ_TGT_FCT, val, NULL);
 }
 
 static u16 ap1302_sfx_values[] = {
@@ -1194,7 +1184,8 @@ static u16 ap1302_sfx_values[] = {
 
 static int ap1302_set_special_effect(struct ap1302_device *ap1302, s32 val)
 {
-	return ap1302_write(ap1302, AP1302_SFX_MODE, ap1302_sfx_values[val]);
+	return ap1302_write(ap1302, AP1302_SFX_MODE, ap1302_sfx_values[val],
+			    NULL);
 }
 
 static u16 ap1302_scene_mode_values[] = {
@@ -1217,7 +1208,7 @@ static u16 ap1302_scene_mode_values[] = {
 static int ap1302_set_scene_mode(struct ap1302_device *ap1302, s32 val)
 {
 	return ap1302_write(ap1302, AP1302_SCENE_CTRL,
-			    ap1302_scene_mode_values[val]);
+			    ap1302_scene_mode_values[val], NULL);
 }
 
 static const u16 ap1302_flicker_values[] = {
@@ -1230,7 +1221,7 @@ static const u16 ap1302_flicker_values[] = {
 static int ap1302_set_flicker_freq(struct ap1302_device *ap1302, s32 val)
 {
 	return ap1302_write(ap1302, AP1302_FLICK_CTRL,
-			    ap1302_flicker_values[val]);
+			    ap1302_flicker_values[val], NULL);
 }
 
 static int ap1302_s_ctrl(struct v4l2_ctrl *ctrl)
@@ -1706,7 +1697,7 @@ static void ap1302_log_lane_state(struct ap1302_sensor *sensor,
 	for (lane = 0; lane < 4; ++lane)
 		ap1302_write(sensor->ap1302,
 			     AP1302_ADV_SINF_MIPI_INTERNAL_p_LANE_n_STAT(index, lane),
-			     AP1302_LANE_ERR | AP1302_LANE_ABORT);
+			     AP1302_LANE_ERR | AP1302_LANE_ABORT, NULL);
 }
 
 static int ap1302_log_status(struct v4l2_subdev *sd)
@@ -2060,7 +2051,7 @@ static int ap1302_load_firmware(struct ap1302_device *ap1302)
 	fw_size = ap1302->fw->size - sizeof(*fw_hdr);
 
 	/* Clear the CRC register. */
-	ret = ap1302_write(ap1302, AP1302_SIP_CRC, 0xffff);
+	ret = ap1302_write(ap1302, AP1302_SIP_CRC, 0xffff, NULL);
 	if (ret)
 		return ret;
 
@@ -2073,7 +2064,7 @@ static int ap1302_load_firmware(struct ap1302_device *ap1302)
 	if (ret)
 		return ret;
 
-	ret = ap1302_write(ap1302, AP1302_BOOTDATA_STAGE, 0x0002);
+	ret = ap1302_write(ap1302, AP1302_BOOTDATA_STAGE, 0x0002, NULL);
 	if (ret)
 		return ret;
 
@@ -2102,7 +2093,7 @@ static int ap1302_load_firmware(struct ap1302_device *ap1302)
 	 * Write 0xffff to the bootdata_stage register to indicate to the
 	 * AP1302 that the whole bootdata content has been loaded.
 	 */
-	ret = ap1302_write(ap1302, AP1302_BOOTDATA_STAGE, 0xffff);
+	ret = ap1302_write(ap1302, AP1302_BOOTDATA_STAGE, 0xffff, NULL);
 	if (ret)
 		return ret;
 
