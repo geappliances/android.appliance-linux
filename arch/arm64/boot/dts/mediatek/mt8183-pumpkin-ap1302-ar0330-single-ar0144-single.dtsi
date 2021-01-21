@@ -80,6 +80,8 @@
 		pinctrl-0 = <&cam1_pins_default>;
 
 		clocks = <&topckgen CLK_TOP_MUX_CAMTG2>;
+		assigned-clocks = <&topckgen CLK_TOP_MUX_CAMTG2>;
+		assigned-clock-parents = <&topckgen CLK_TOP_UNIVP_192M_D4>;
 
 		reset-gpios = <&pio 102 GPIO_ACTIVE_LOW>;
 		standby-gpios = <&pio 40 GPIO_ACTIVE_HIGH>;
@@ -121,6 +123,8 @@
 		pinctrl-0 = <&cam2_pins_default>;
 
 		clocks = <&topckgen CLK_TOP_MUX_CAMTG3>;
+		assigned-clocks = <&topckgen CLK_TOP_MUX_CAMTG3>;
+		assigned-clock-parents = <&topckgen CLK_TOP_UNIVP_192M_D4>;
 
 		reset-gpios = <&pio 109 GPIO_ACTIVE_LOW>;
 		standby-gpios = <&pio 39 GPIO_ACTIVE_HIGH>;
