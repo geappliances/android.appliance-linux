@@ -190,6 +190,16 @@ enum vcu_ipi_id {
 #define MAP_VENC_CACHE_MAX_NUM 30
 #define VCU_IPIMSG_VENC_BASE 0xD000
 
+static inline enum ipi_id ipi_vpu_id_fixup(enum ipi_id id)
+{
+	switch (id) {
+	case IPI_VENC_H264:
+		return VCU_IPI_VENC_H264;
+	default:
+		return id;
+	}
+}
+
 static inline enum vcu_ipi_id ipi_vpu_to_vcu(enum ipi_id id)
 {
 	switch (id) {
@@ -452,11 +462,12 @@ static inline bool vcu_running(struct mtk_vcu *vcu)
 }
 
 int vcu_ipi_register(struct mtk_vpu_plat *vpu,
-		     enum ipi_id id, ipi_handler_t handler,
+		     enum ipi_id vpu_id, ipi_handler_t handler,
 		     const char *name, void *priv)
 {
 	struct mtk_vcu *vcu = to_vcu(vpu);
 	struct vcu_ipi_desc *ipi_desc;
+	enum ipi_id id = ipi_vpu_id_fixup(vpu_id);
 
 	if (vcu == NULL) {
 		dev_err(vcu->dev, "vcu device in not ready\n");
@@ -477,11 +488,12 @@ int vcu_ipi_register(struct mtk_vpu_plat *vpu,
 }
 
 int vcu_ipi_send(struct mtk_vpu_plat *vpu,
-		 enum ipi_id id, void *buf,
+		 enum ipi_id vpu_id, void *buf,
 		 unsigned int len)
 {
 	int i = 0;
 	struct mtk_vcu *vcu = to_vcu(vpu);
+	enum ipi_id id = ipi_vpu_id_fixup(vpu_id);
 	struct share_obj send_obj;
 	unsigned long timeout;
 	int ret;
@@ -504,7 +516,7 @@ int vcu_ipi_send(struct mtk_vpu_plat *vpu,
 	/* send the command to VCU */
 	memcpy((void *)vcu->user_obj[i].share_buf, buf, len);
 	vcu->user_obj[i].len = len;
-	vcu->user_obj[i].id = (int)ipi_vpu_to_vcu(id);
+	vcu->user_obj[i].id = (int)ipi_vpu_to_vcu(vpu_id);
 
 	atomic_set(&vcu->ipi_got[i], 1);
 	atomic_set(&vcu->ipi_done[i], 0);
@@ -551,6 +563,7 @@ static int vcu_ipi_get(struct mtk_vcu *vcu, unsigned long arg)
 	int i = 0, ret;
 	unsigned char *user_data_addr = NULL;
 	struct share_obj share_buff_data;
+	enum ipi_id id;
 
 	user_data_addr = (unsigned char *)arg;
 	ret = (long)copy_from_user(&share_buff_data, user_data_addr,
