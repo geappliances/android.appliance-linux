@@ -117,6 +117,8 @@ struct mtk_seninf_input {
 
 	struct v4l2_subdev *subdev;
 	struct v4l2_mbus_framefmt format;
+
+	unsigned int source_pad;
 };
 
 struct mtk_seninf {
@@ -138,7 +140,6 @@ struct mtk_seninf {
 	struct mtk_seninf_input inputs[SENINF_NUM_INPUTS];
 	struct mtk_seninf_input *active_input;
 
-	unsigned int mux_sel;
 	bool is_testmode;
 };
 
@@ -263,10 +264,7 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 			       struct mtk_seninf_input *input)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
-	unsigned int mux = priv->mux_sel;
-	void __iomem *pseninf_top = priv->base;
-	void __iomem *pseninf = priv->base + 0x1000 * mux;
-	unsigned int val;
+	unsigned int val, pos;
 	unsigned int pix_sel_ext;
 	unsigned int pix_sel;
 	unsigned int hs_pol = 0;
@@ -276,10 +274,10 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	fmtinfo = mtk_seninf_format_info(input->format.code);
 
 	/* Enable mux */
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_SRC_SEL,
+	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
+	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_SRC_SEL,
 		    SENINF_MIPI_SENSOR);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
+	SENINF_BITS(input->base, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
 		    SENINF_NORMAL_MODEL);
 
 	switch (pixel_mode) {
@@ -297,36 +295,41 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 		break;
 	}
 
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL_EXT, SENINF_PIX_SEL_EXT,
+	SENINF_BITS(input->base, SENINF_MUX_CTRL_EXT, SENINF_PIX_SEL_EXT,
 		    pix_sel_ext);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
+	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
 
 	if (!(fmtinfo->flags & MTK_SENINF_FORMAT_JPEG)) {
-		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
-		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1b);
-		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1f);
+		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
+		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1b);
+		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1f);
 	} else {
-		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 0);
-		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x18);
-		SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1e);
+		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 0);
+		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x18);
+		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1e);
 	}
 
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
+	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
+	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
 
-	val = readl(pseninf + SENINF_MUX_CTRL);
-	writel(val | 0x00000003, pseninf + SENINF_MUX_CTRL);
-	writel(val & 0xfffffffc, pseninf + SENINF_MUX_CTRL);
+	val = readl(input->base + SENINF_MUX_CTRL);
+	writel(val | 0x00000003, input->base + SENINF_MUX_CTRL);
+	writel(val & 0xfffffffc, input->base + SENINF_MUX_CTRL);
 
-	/* Set top mux */
-	val = (readl(pseninf_top + SENINF_TOP_MUX_CTRL) &
-		(~(0xf << (mux * 4))))	| ((input->seninf & 0xF) << (mux * 4));
-	writel(val, pseninf_top + SENINF_TOP_MUX_CTRL);
-	/* HQ */
-	writel(0xc2000, pseninf + SENINF_MUX_SPARE);
+	writel(0x00043210, priv->base + SENINF_TOP_MUX_CTRL);
 
 	/* HQ */
-	writel(0x76543010, pseninf_top + SENINF_TOP_CAM_MUX_CTRL);
+	writel(0xc2000, input->base + SENINF_MUX_SPARE);
+
+	/*
+	 * Hardcode the top mux (from SENINF input to async FIFO) with a direct
+	 * mapping, and use the top cam mux to configure routing from the async
+	 * FIFOs to the outputs (CAM and CAMSV).
+	 */
+	pos = input->source_pad - SENINF_NUM_INPUTS + 2;
+	val = (readl(priv->base + SENINF_TOP_CAM_MUX_CTRL) & ~(0xF << (pos * 4))) |
+		((input->seninf & 0xF) << (pos * 4));
+	writel(val, priv->base + SENINF_TOP_CAM_MUX_CTRL);
 }
 
 static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
@@ -986,6 +989,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	input->seninf = port_to_seninf[port];
 	input->base = priv->base + 0x1000 * input->seninf;
 	input->bus = vep->bus.mipi_csi2;
+	input->source_pad = port + SENINF_NUM_INPUTS;
 
 	/*
 	 * Select the PHY. SENINF2, SENINF3 and SENINF5 are hardwired to the
@@ -1294,12 +1298,6 @@ static int seninf_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to get seninf clock:%d\n", ret);
 		return ret;
 	}
-
-	/*
-	 * TODO: Support multiple source connections. For now only the first
-	 * source port is used, hardcode mux_sel to 0.
-	 */
-	priv->mux_sel = 0;
 
 	ret = mtk_seninf_v4l2_register(priv);
 	if (!ret)
