@@ -352,6 +352,14 @@
 		};
 	};
 
+	spi_pins_a: spi@0 {
+		pins1 {
+			pinmux = <MT8516_PIN_49_SPI_CK__FUNC_SPI_CLK>,
+				 <MT8516_PIN_51_SPI_MO__FUNC_SPI_MO>;
+			bias-disable;
+		};
+	};
+
 	i2c0_pins_a: i2c0@0 {
 		pins1 {
 			pinmux = <MT8516_PIN_58_SDA0__FUNC_SDA0_0>,
@@ -552,4 +560,10 @@
 
 	usb1_default_pins: usb1_pins {
 	};
+
+};
+
+&spi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&spi_pins_a>;
 };
