@@ -471,6 +471,12 @@ static const struct ap1302_sensor_info ap1302_sensor_info[] = {
 		.name = "ar1335",
 		.i2c_addr = 0x36,
 		.resolution = { 4208, 3120 },
+		.supplies = (const struct ap1302_sensor_supply[]) {
+			{ "vaa", 0 },
+			{ "vddio", 0 },
+			{ "vdd", 0 },
+			{ NULL, 0 },
+		},
 	},
 };
 
