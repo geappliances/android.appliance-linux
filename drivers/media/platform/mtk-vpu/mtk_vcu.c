@@ -150,8 +150,11 @@ enum mtk_vcu_daemon_id {
 enum vcu_ipi_id {
 	VCU_IPI_VPU_INIT = 0,
 	VCU_IPI_VDEC_H264,
+	VCU_IPI_VDEC_H265,
 	VCU_IPI_VDEC_VP8 = 3,
 	VCU_IPI_VDEC_VP9,
+	VCU_IPI_VDEC_MPEG4,
+	VCU_IPI_VDEC_MPEG12 = 7,
 	VCU_IPI_VENC_H264 = 11,
 	VCU_IPI_VENC_VP8,
 	VCU_IPI_MDP,
@@ -195,6 +198,12 @@ static inline enum ipi_id ipi_vpu_id_fixup(enum ipi_id id)
 	switch (id) {
 	case IPI_VENC_H264:
 		return VCU_IPI_VENC_H264;
+	case IPI_VCU_VDEC_H265:
+		return VCU_IPI_VDEC_H265;
+	case IPI_VCU_VDEC_MPEG4:
+		return VCU_IPI_VDEC_MPEG4;
+	case IPI_VCU_VDEC_MPEG12:
+		return VCU_IPI_VDEC_MPEG12;
 	default:
 		return id;
 	}
@@ -219,6 +228,12 @@ static inline enum vcu_ipi_id ipi_vpu_to_vcu(enum ipi_id id)
 		return VCU_IPI_MDP;
 	case IPI_VENC_HYBRID_H264:
 		return VCU_IPI_VENC_HYBRID_H264;
+	case IPI_VCU_VDEC_H265:
+		return VCU_IPI_VDEC_H265;
+	case IPI_VCU_VDEC_MPEG4:
+		return VCU_IPI_VDEC_MPEG4;
+	case IPI_VCU_VDEC_MPEG12:
+		return VCU_IPI_VDEC_MPEG12;
 	case IPI_MAX:
 	default:
 		return VCU_IPI_MAX;
@@ -234,10 +249,16 @@ static inline enum ipi_id ipi_vcu_to_vpu(enum vcu_ipi_id id)
 		return IPI_VPU_INIT;
 	case VCU_IPI_VDEC_H264:
 		return IPI_VDEC_H264;
+	case VCU_IPI_VDEC_H265:
+		return IPI_VCU_VDEC_H265;
 	case VCU_IPI_VDEC_VP8:
 		return IPI_VDEC_VP8;
 	case VCU_IPI_VDEC_VP9:
 		return IPI_VDEC_VP9;
+	case VCU_IPI_VDEC_MPEG4:
+		return IPI_VCU_VDEC_MPEG4;
+	case VCU_IPI_VDEC_MPEG12:
+		return IPI_VCU_VDEC_MPEG12;
 	case VCU_IPI_VENC_H264:
 		return IPI_VENC_H264;
 	case VCU_IPI_VENC_VP8:
