@@ -193,11 +193,21 @@ static int vdec_init(struct mtk_vcodec_ctx *ctx, unsigned long *h_vdec)
 	case V4L2_PIX_FMT_H264:
 		inst->vcu.id = IPI_VDEC_H264;
 	break;
+	case V4L2_PIX_FMT_HEVC:
+		inst->vcu.id = IPI_VCU_VDEC_H265;
+	break;
 	case V4L2_PIX_FMT_VP8:
 		inst->vcu.id = IPI_VDEC_VP8;
 	break;
 	case V4L2_PIX_FMT_VP9:
 		inst->vcu.id = IPI_VDEC_VP9;
+	break;
+	case V4L2_PIX_FMT_MPEG4:
+		inst->vcu.id = IPI_VCU_VDEC_MPEG4;
+	break;
+	case V4L2_PIX_FMT_MPEG1:
+	case V4L2_PIX_FMT_MPEG2:
+		inst->vcu.id = IPI_VCU_VDEC_MPEG12;
 	break;
 	default:
 		mtk_vcodec_err(inst, "vdec_init no fourcc");

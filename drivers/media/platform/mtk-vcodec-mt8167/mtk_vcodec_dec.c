@@ -49,12 +49,32 @@ static struct mtk_video_fmt mtk_video_formats[] = {
 		.num_planes = 1,
 	},
 	{
+		.fourcc = V4L2_PIX_FMT_HEVC,
+		.type = MTK_FMT_DEC,
+		.num_planes = 1,
+	},
+	{
 		.fourcc = V4L2_PIX_FMT_VP8,
 		.type = MTK_FMT_DEC,
 		.num_planes = 1,
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_VP9,
+		.type = MTK_FMT_DEC,
+		.num_planes = 1,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_MPEG1,
+		.type = MTK_FMT_DEC,
+		.num_planes = 1,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_MPEG2,
+		.type = MTK_FMT_DEC,
+		.num_planes = 1,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_MPEG4,
 		.type = MTK_FMT_DEC,
 		.num_planes = 1,
 	},
@@ -67,6 +87,11 @@ static const struct mtk_codec_framesizes mtk_vdec_framesizes[] = {
 				MTK_VDEC_MIN_H, MTK_VDEC_MAX_H, 16 },
 	},
 	{
+		.fourcc	= V4L2_PIX_FMT_HEVC,
+		.stepwise = {  MTK_VDEC_MIN_W, VCODEC_DEC_4K_CODED_WIDTH, 16,
+				MTK_VDEC_MIN_H, VCODEC_DEC_4K_CODED_HEIGHT, 16 },
+	},
+	{
 		.fourcc	= V4L2_PIX_FMT_VP8,
 		.stepwise = {  MTK_VDEC_MIN_W, MTK_VDEC_MAX_W, 16,
 				MTK_VDEC_MIN_H, MTK_VDEC_MAX_H, 16 },
@@ -74,6 +99,21 @@ static const struct mtk_codec_framesizes mtk_vdec_framesizes[] = {
 	{
 		.fourcc	= V4L2_PIX_FMT_VP9,
 		.stepwise = {  1, MTK_VDEC_MAX_W, 16, 1, MTK_VDEC_MAX_H, 16 },
+	},
+	{
+		.fourcc	= V4L2_PIX_FMT_MPEG1,
+		.stepwise = {  MTK_VDEC_MIN_W, MTK_VDEC_MAX_W, 16,
+				MTK_VDEC_MIN_H, MTK_VDEC_MAX_H, 16 },
+	},
+	{
+		.fourcc	= V4L2_PIX_FMT_MPEG2,
+		.stepwise = {  MTK_VDEC_MIN_W, MTK_VDEC_MAX_W, 16,
+				MTK_VDEC_MIN_H, MTK_VDEC_MAX_H, 16 },
+	},
+	{
+		.fourcc	= V4L2_PIX_FMT_MPEG4,
+		.stepwise = {  MTK_VDEC_MIN_W, MTK_VDEC_MAX_W, 16,
+				MTK_VDEC_MIN_H, MTK_VDEC_MAX_H, 16 },
 	},
 };
 
