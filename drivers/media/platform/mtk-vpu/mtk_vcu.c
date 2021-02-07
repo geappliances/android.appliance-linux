@@ -584,7 +584,6 @@ static int vcu_ipi_get(struct mtk_vcu *vcu, unsigned long arg)
 	int i = 0, ret;
 	unsigned char *user_data_addr = NULL;
 	struct share_obj share_buff_data;
-	enum ipi_id id;
 
 	user_data_addr = (unsigned char *)arg;
 	ret = (long)copy_from_user(&share_buff_data, user_data_addr,
