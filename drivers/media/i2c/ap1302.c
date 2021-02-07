@@ -18,7 +18,6 @@
 #include <linux/media.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
 
 #include <media/media-entity.h>
@@ -53,7 +52,7 @@
 #define AP1302_SIPM_ERR_0			AP1302_REG_16BIT(0x0014)
 #define AP1302_SIPM_ERR_1			AP1302_REG_16BIT(0x0016)
 #define AP1302_CHIP_REV				AP1302_REG_16BIT(0x0050)
-#define AP1302_CON_BUF(n)			AP1302_REG_16BIT(0x0a2c + (n))
+#define AP1302_CON_BUF				AP1302_REG_16BIT(0x0a2c)
 #define AP1302_CON_BUF_SIZE			512
 
 /* Control Registers */
@@ -389,8 +388,6 @@ struct ap1302_device {
 	struct gpio_desc *reset_gpio;
 	struct gpio_desc *standby_gpio;
 	struct clk *clock;
-	struct regmap *regmap16;
-	struct regmap *regmap32;
 	u32 reg_page;
 
 	const struct firmware *fw;
@@ -495,42 +492,24 @@ static const struct ap1302_sensor_info ap1302_sensor_info_tpg = {
  * Register Configuration
  */
 
-static const struct regmap_config ap1302_reg16_config = {
-	.reg_bits = 16,
-	.val_bits = 16,
-	.reg_stride = 2,
-	.reg_format_endian = REGMAP_ENDIAN_BIG,
-	.val_format_endian = REGMAP_ENDIAN_BIG,
-	.cache_type = REGCACHE_NONE,
-};
-
-static const struct regmap_config ap1302_reg32_config = {
-	.reg_bits = 16,
-	.val_bits = 32,
-	.reg_stride = 4,
-	.reg_format_endian = REGMAP_ENDIAN_BIG,
-	.val_format_endian = REGMAP_ENDIAN_BIG,
-	.cache_type = REGCACHE_NONE,
-};
-
 static int __ap1302_write(struct ap1302_device *ap1302, u32 reg, u32 val)
 {
 	unsigned int size = AP1302_REG_SIZE(reg);
 	u16 addr = AP1302_REG_ADDR(reg);
+	unsigned int i;
+	u8 buf[6];
 	int ret;
 
-	switch (size) {
-	case 2:
-		ret = regmap_write(ap1302->regmap16, addr, val);
-		break;
-	case 4:
-		ret = regmap_write(ap1302->regmap32, addr, val);
-		break;
-	default:
-		return -EINVAL;
+	buf[0] = (addr >> 8) & 0xff;
+	buf[1] = (addr >> 0) & 0xff;
+
+	for (i = 0; i < size; ++i) {
+		buf[2 + size - i - 1] = val & 0xff;
+		val >>= 8;
 	}
 
-	if (ret) {
+	ret = i2c_master_send(ap1302->client, buf, size + 2);
+	if (ret != size + 2) {
 		dev_err(ap1302->dev, "%s: register 0x%04x %s failed: %d\n",
 			__func__, addr, "write", ret);
 		return ret;
@@ -571,31 +550,61 @@ done:
 	return ret;
 }
 
-static int __ap1302_read(struct ap1302_device *ap1302, u32 reg, u32 *val)
+static int __ap1302_read_raw(struct ap1302_device *ap1302, u16 addr,
+			     unsigned int size, u8 *data)
 {
-	unsigned int size = AP1302_REG_SIZE(reg);
-	u16 addr = AP1302_REG_ADDR(reg);
+	u8 buf[2];
 	int ret;
 
-	switch (size) {
-	case 2:
-		ret = regmap_read(ap1302->regmap16, addr, val);
-		break;
-	case 4:
-		ret = regmap_read(ap1302->regmap32, addr, val);
-		break;
-	default:
-		return -EINVAL;
-	}
+	struct i2c_msg msgs[2] = {
+		{
+			.addr = ap1302->client->addr,
+			.flags = 0,
+			.len = 2,
+			.buf = buf,
+		}, {
+			.addr = ap1302->client->addr,
+			.flags = I2C_M_RD,
+			.len = size,
+			.buf = data,
+		}
+	};
 
-	if (ret) {
+	buf[0] = (addr >> 8) & 0xff;
+	buf[1] = (addr >> 0) & 0xff;
+
+	ret = i2c_transfer(ap1302->client->adapter, msgs, ARRAY_SIZE(msgs));
+	if (ret != ARRAY_SIZE(msgs)) {
 		dev_err(ap1302->dev, "%s: register 0x%04x %s failed: %d\n",
 			__func__, addr, "read", ret);
 		return ret;
 	}
 
+	return 0;
+}
+
+static int __ap1302_read(struct ap1302_device *ap1302, u32 reg, u32 *val)
+{
+	unsigned int size = AP1302_REG_SIZE(reg);
+	u16 addr = AP1302_REG_ADDR(reg);
+	unsigned int i;
+	u32 value = 0;
+	u8 data[4];
+	int ret;
+
+	ret = __ap1302_read_raw(ap1302, addr, size, data);
+	if (ret < 0)
+		return ret;
+
+	for (i = 0; i < size; ++i) {
+		value <<= 8;
+		value |= data[i];
+	}
+
 	dev_dbg(ap1302->dev, "%s: R0x%04x = 0x%0*x\n", __func__,
-		addr, size * 2, *val);
+		addr, size * 2, value);
+
+	*val = value;
 
 	return 0;
 }
@@ -1040,8 +1049,8 @@ static int ap1302_dump_console(struct ap1302_device *ap1302)
 	if (!buffer)
 		return -ENOMEM;
 
-	ret = regmap_raw_read(ap1302->regmap16, AP1302_CON_BUF(0), buffer,
-			      AP1302_CON_BUF_SIZE);
+	ret = __ap1302_read_raw(ap1302, AP1302_REG_ADDR(AP1302_CON_BUF),
+				AP1302_CON_BUF_SIZE, buffer);
 	if (ret < 0) {
 		dev_err(ap1302->dev, "Failed to read console buffer: %d\n",
 			ret);
@@ -2144,16 +2153,22 @@ static int ap1302_request_firmware(struct ap1302_device *ap1302)
 /*
  * ap1302_write_fw_window() - Write a piece of firmware to the AP1302
  * @win_pos: Firmware load window current position
- * @buf: Firmware data buffer
+ * @data: Firmware data buffer
  * @len: Firmware data length
+ * @buf: Write buffer
  *
  * The firmware is loaded through a window in the registers space. Writes are
  * sequential starting at address 0x8000, and must wrap around when reaching
- * 0x9fff. This function write the firmware data stored in @buf to the AP1302,
+ * 0x9fff. This function writes the firmware data stored in @data to the AP1302,
  * keeping track of the window position in the @win_pos argument.
+ *
+ * The write buffer is used to format the data to be written to the device
+ * through I2C. It must be allocated by the caller, be suitable for DMA, be at
+ * least AP1302_FW_WINDOW_OFFSET + 2 bytes long, and may be reused across
+ * multiple calls to this function.
  */
-static int ap1302_write_fw_window(struct ap1302_device *ap1302, const u8 *buf,
-				  u32 len, unsigned int *win_pos)
+static int ap1302_write_fw_window(struct ap1302_device *ap1302, const u8 *data,
+				  u32 len, unsigned int *win_pos, u8 *buf)
 {
 	while (len > 0) {
 		unsigned int write_addr;
@@ -2167,12 +2182,21 @@ static int ap1302_write_fw_window(struct ap1302_device *ap1302, const u8 *buf,
 		write_addr = *win_pos + AP1302_FW_WINDOW_OFFSET;
 		write_size = min(len, AP1302_FW_WINDOW_SIZE - *win_pos);
 
-		ret = regmap_raw_write(ap1302->regmap16, write_addr, buf,
-				       write_size);
-		if (ret)
-			return ret;
+		buf[0] = (write_addr >> 8) & 0xff;
+		buf[1] = (write_addr >> 0) & 0xff;
 
-		buf += write_size;
+		memcpy(&buf[2], data, write_size);
+
+		ret = i2c_master_send_dmasafe(ap1302->client, buf,
+					      write_size + 2);
+		if (ret != write_size + 2) {
+			dev_err(ap1302->dev,
+				"%s: firmware write @0x%04x failed: %d\n",
+				__func__, write_addr, ret);
+			return ret;
+		}
+
+		data += write_size;
 		len -= write_size;
 
 		*win_pos += write_size;
@@ -2190,7 +2214,12 @@ static int ap1302_load_firmware(struct ap1302_device *ap1302)
 	const u8 *fw_data;
 	unsigned int win_pos = 0;
 	unsigned int crc;
+	u8 *buf;
 	int ret;
+
+	buf = kmalloc(AP1302_FW_WINDOW_SIZE + 2, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
 
 	fw_hdr = (const struct ap1302_firmware_header *)ap1302->fw->data;
 	fw_data = (u8 *)&fw_hdr[1];
@@ -2199,40 +2228,42 @@ static int ap1302_load_firmware(struct ap1302_device *ap1302)
 	/* Clear the CRC register. */
 	ret = ap1302_write(ap1302, AP1302_SIP_CRC, 0xffff, NULL);
 	if (ret)
-		return ret;
+		goto done;
 
 	/*
 	 * Load the PLL initialization settings, set the bootdata stage to 2 to
 	 * apply the basic_init_hp settings, and wait 1ms for the PLL to lock.
 	 */
 	ret = ap1302_write_fw_window(ap1302, fw_data, fw_hdr->pll_init_size,
-				     &win_pos);
+				     &win_pos, buf);
 	if (ret)
-		return ret;
+		goto done;
 
 	ret = ap1302_write(ap1302, AP1302_BOOTDATA_STAGE, 0x0002, NULL);
 	if (ret)
-		return ret;
+		goto done;
 
 	usleep_range(1000, 2000);
 
 	/* Load the rest of the bootdata content and verify the CRC. */
 	ret = ap1302_write_fw_window(ap1302, fw_data + fw_hdr->pll_init_size,
-				     fw_size - fw_hdr->pll_init_size, &win_pos);
+				     fw_size - fw_hdr->pll_init_size, &win_pos,
+				     buf);
 	if (ret)
-		return ret;
+		goto done;
 
 	msleep(40);
 
 	ret = ap1302_read(ap1302, AP1302_SIP_CRC, &crc);
 	if (ret)
-		return ret;
+		goto done;
 
 	if (crc != fw_hdr->crc) {
 		dev_warn(ap1302->dev,
 			 "CRC mismatch: expected 0x%04x, got 0x%04x\n",
 			 fw_hdr->crc, crc);
-		return -EAGAIN;
+		ret = -EAGAIN;
+		goto done;
 	}
 
 	/*
@@ -2241,10 +2272,14 @@ static int ap1302_load_firmware(struct ap1302_device *ap1302)
 	 */
 	ret = ap1302_write(ap1302, AP1302_BOOTDATA_STAGE, 0xffff, NULL);
 	if (ret)
-		return ret;
+		goto done;
 
 	/* The AP1302 starts outputting frames right after boot, stop it. */
-	return ap1302_stall(ap1302, true);
+	ret = ap1302_stall(ap1302, true);
+
+done:
+	kfree(buf);
+	return ret;
 }
 
 static int ap1302_detect_chip(struct ap1302_device *ap1302)
@@ -2537,22 +2572,6 @@ static int ap1302_probe(struct i2c_client *client, const struct i2c_device_id *i
 	ap1302->client = client;
 
 	mutex_init(&ap1302->lock);
-
-	ap1302->regmap16 = devm_regmap_init_i2c(client, &ap1302_reg16_config);
-	if (IS_ERR(ap1302->regmap16)) {
-		dev_err(ap1302->dev, "regmap16 init failed: %ld\n",
-			PTR_ERR(ap1302->regmap16));
-		ret = -ENODEV;
-		goto error;
-	}
-
-	ap1302->regmap32 = devm_regmap_init_i2c(client, &ap1302_reg32_config);
-	if (IS_ERR(ap1302->regmap32)) {
-		dev_err(ap1302->dev, "regmap32 init failed: %ld\n",
-			PTR_ERR(ap1302->regmap32));
-		ret = -ENODEV;
-		goto error;
-	}
 
 	ret = ap1302_parse_of(ap1302);
 	if (ret < 0)
