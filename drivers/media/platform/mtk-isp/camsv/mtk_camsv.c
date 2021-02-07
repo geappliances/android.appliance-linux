@@ -19,6 +19,12 @@ static inline struct mtk_camsv_dev *to_mtk_camsv_dev(struct v4l2_subdev *sd)
 	return container_of(sd, struct mtk_camsv_dev, subdev);
 }
 
+static inline struct mtk_camsv_dev *
+notifier_to_mtk_camsv_dev(struct v4l2_async_notifier *an)
+{
+	return container_of(an, struct mtk_camsv_dev, notifier);
+}
+
 static const u32 mtk_camsv_mbus_formats[] = {
 	MEDIA_BUS_FMT_SBGGR8_1X8,
 	MEDIA_BUS_FMT_SGBRG8_1X8,
@@ -265,8 +271,7 @@ static int mtk_camsv_dev_notifier_bound(struct v4l2_async_notifier *notifier,
 					struct v4l2_subdev *sd,
 					struct v4l2_async_subdev *asd)
 {
-	struct mtk_camsv_dev *cam =
-		container_of(notifier, struct mtk_camsv_dev, notifier);
+	struct mtk_camsv_dev *cam = notifier_to_mtk_camsv_dev(notifier);
 
 	if (!(sd->entity.function & MEDIA_ENT_F_VID_IF_BRIDGE)) {
 		dev_err(cam->dev, "no MEDIA_ENT_F_VID_IF_BRIDGE function\n");
@@ -282,16 +287,13 @@ static void mtk_camsv_dev_notifier_unbind(struct v4l2_async_notifier *notifier,
 					  struct v4l2_subdev *sd,
 					  struct v4l2_async_subdev *asd)
 {
-	struct mtk_camsv_dev *cam =
-		container_of(notifier, struct mtk_camsv_dev, notifier);
-
+	struct mtk_camsv_dev *cam = notifier_to_mtk_camsv_dev(notifier);
 	cam->seninf = NULL;
 }
 
 static int mtk_camsv_dev_notifier_complete(struct v4l2_async_notifier *notifier)
 {
-	struct mtk_camsv_dev *cam =
-		container_of(notifier, struct mtk_camsv_dev, notifier);
+	struct mtk_camsv_dev *cam = notifier_to_mtk_camsv_dev(notifier);
 	struct device *dev = cam->dev;
 	int seninf_pad;
 	int ret;
