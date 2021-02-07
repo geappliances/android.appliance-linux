@@ -93,12 +93,6 @@ struct mtk_camsv_sparams {
 	unsigned int imgo_stride;
 };
 
-static inline struct mtk_camsv_dev_buffer *
-to_mtk_camsv_dev_buffer(struct vb2_buffer *buf)
-{
-	return container_of(buf, struct mtk_camsv_dev_buffer, v4l2_buf.vb2_buf);
-}
-
 /*
  * struct mtk_camsv_dev_node_desc - MTK camera device node descriptor
  *
@@ -208,11 +202,6 @@ struct mtk_camsv_dev {
 
 	struct list_head buf_list;
 };
-
-static inline struct mtk_camsv_dev *to_mtk_camsv_dev(struct v4l2_subdev *sd)
-{
-	return container_of(sd, struct mtk_camsv_dev, subdev);
-}
 
 struct mtk_camsv_conf {
 	unsigned int tg_sen_mode;
