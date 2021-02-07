@@ -30,9 +30,9 @@ file_to_mtk_camsv_node(struct file *__file)
 }
 
 static inline struct mtk_camsv_video_device *
-mtk_camsv_vbq_to_vdev(struct vb2_queue *__vq)
+vb2_queue_to_mtk_camsv_video_device(struct vb2_queue *vq)
 {
-	return container_of(__vq, struct mtk_camsv_video_device, vbq);
+	return container_of(vq, struct mtk_camsv_video_device, vbq);
 }
 
 static inline struct mtk_camsv_dev_buffer *
@@ -220,7 +220,8 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 				     unsigned int sizes[],
 				     struct device *alloc_devs[])
 {
-	struct mtk_camsv_video_device *node = mtk_camsv_vbq_to_vdev(vq);
+	struct mtk_camsv_video_device *node =
+		vb2_queue_to_mtk_camsv_video_device(vq);
 	unsigned int max_buffer_count = node->desc->max_buf_count;
 	const struct v4l2_pix_format_mplane *fmt = &node->format;
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vq);
@@ -263,7 +264,7 @@ static int mtk_camsv_vb2_buf_init(struct vb2_buffer *vb)
 static int mtk_camsv_vb2_buf_prepare(struct vb2_buffer *vb)
 {
 	struct mtk_camsv_video_device *node =
-		mtk_camsv_vbq_to_vdev(vb->vb2_queue);
+		vb2_queue_to_mtk_camsv_video_device(vb->vb2_queue);
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vb->vb2_queue);
 	struct mtk_camsv_dev_buffer *buf = to_mtk_camsv_dev_buffer(vb);
 	const struct v4l2_pix_format_mplane *fmt = &node->format;
@@ -395,7 +396,8 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 					 unsigned int count)
 {
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vq);
-	struct mtk_camsv_video_device *node = mtk_camsv_vbq_to_vdev(vq);
+	struct mtk_camsv_video_device *node =
+		vb2_queue_to_mtk_camsv_video_device(vq);
 	struct device *dev = cam->dev;
 	int ret;
 
@@ -452,7 +454,8 @@ fail_ret_buf:
 static void mtk_camsv_vb2_stop_streaming(struct vb2_queue *vq)
 {
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vq);
-	struct mtk_camsv_video_device *node = mtk_camsv_vbq_to_vdev(vq);
+	struct mtk_camsv_video_device *node =
+		vb2_queue_to_mtk_camsv_video_device(vq);
 
 	/* Disable CMOS and VF */
 	mtk_camsv_cmos_vf_enable(cam, false, false);
