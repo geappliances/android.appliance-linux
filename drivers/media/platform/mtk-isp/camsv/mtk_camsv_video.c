@@ -35,6 +35,12 @@ mtk_camsv_vbq_to_vdev(struct vb2_queue *__vq)
 	return container_of(__vq, struct mtk_camsv_video_device, vbq);
 }
 
+static inline struct mtk_camsv_dev_buffer *
+to_mtk_camsv_dev_buffer(struct vb2_buffer *buf)
+{
+	return container_of(buf, struct mtk_camsv_dev_buffer, v4l2_buf.vb2_buf);
+}
+
 /* -----------------------------------------------------------------------------
  * Format Information
  */

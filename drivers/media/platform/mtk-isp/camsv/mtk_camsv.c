@@ -14,6 +14,11 @@
 
 #include "mtk_camsv.h"
 
+static inline struct mtk_camsv_dev *to_mtk_camsv_dev(struct v4l2_subdev *sd)
+{
+	return container_of(sd, struct mtk_camsv_dev, subdev);
+}
+
 static const u32 mtk_camsv_mbus_formats[] = {
 	MEDIA_BUS_FMT_SBGGR8_1X8,
 	MEDIA_BUS_FMT_SGBRG8_1X8,
