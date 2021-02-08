@@ -52,6 +52,8 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c1_pins_a>;
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	touchscreen: touchscreen@0 {
 		compatible = "pumpkin,7inch-touchscreen-panel";
@@ -88,6 +90,8 @@
 	#size-cells = <0>;
 
 	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
 		port@0 {
 			reg = <0>;
 
