@@ -67,6 +67,8 @@
 };
 
 &i2c2 {
+	#address-cells = <1>;
+	#size-cells = <0>;
 	clock-frequency = <400000>;
 
 	camera@3c {
@@ -106,6 +108,8 @@
 };
 
 &i2c4 {
+	#address-cells = <1>;
+	#size-cells = <0>;
 	clock-frequency = <400000>;
 
 	camera@3c {
