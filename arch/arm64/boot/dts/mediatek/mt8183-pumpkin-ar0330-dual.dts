@@ -60,6 +60,8 @@
 };
 
 &i2c2 {
+	#address-cells = <1>;
+	#size-cells = <0>;
 	sensor@10 {
 		compatible = "onnn,ar0330";
 		reg = <0x10>;
@@ -88,6 +90,8 @@
 };
 
 &i2c4 {
+	#address-cells = <1>;
+	#size-cells = <0>;
 	sensor@10 {
 		compatible = "onnn,ar0330";
 		reg = <0x10>;
