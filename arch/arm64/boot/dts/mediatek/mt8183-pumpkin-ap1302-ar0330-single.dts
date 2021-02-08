@@ -67,6 +67,8 @@
 };
 
 &i2c2 {
+	#address-cells = <1>;
+	#size-cells = <0>;
 	clock-frequency = <400000>;
 
 	camera@3c {
@@ -109,7 +111,8 @@
 
 &i2c4 {
 	clock-frequency = <400000>;
-
+	#address-cells = <1>;
+	#size-cells = <0>;
 	camera@3c {
 		compatible = "onnn,ap1302";
 		reg = <0x3c>;
