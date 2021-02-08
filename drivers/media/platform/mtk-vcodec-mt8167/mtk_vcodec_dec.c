@@ -24,7 +24,7 @@
 #include "vdec_drv_if.h"
 #include "mtk_vcodec_dec_pm.h"
 
-#define OUT_FMT_IDX	4
+#define OUT_FMT_IDX	2
 #define CAP_FMT_IDX	0
 
 #define MTK_VDEC_MIN_W	64U
