@@ -841,8 +841,3 @@ void mtk_camsv_video_init_nodes(struct mtk_camsv_dev *cam)
 
 	vb2_dma_contig_set_max_seg_size(cam->dev, DMA_BIT_MASK(32));
 }
-
-void mtk_camsv_video_cleanup_nodes(struct mtk_camsv_dev *cam)
-{
-	vb2_dma_contig_clear_max_seg_size(cam->dev);
-}
