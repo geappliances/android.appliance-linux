@@ -951,6 +951,8 @@ struct ufs_hba {
 #endif
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_root;
+	struct delayed_work debugfs_ee_work;
+	u32 debugfs_ee_rate_limit_ms;
 #endif
 
 	ANDROID_KABI_RESERVE(1);
@@ -1426,6 +1428,8 @@ int ufshcd_dump_regs(struct ufs_hba *hba, size_t offset, size_t len,
 		     const char *prefix);
 int ufshcd_uic_hibern8_exit(struct ufs_hba *hba);
 
+int __ufshcd_write_ee_control(struct ufs_hba *hba, u32 ee_ctrl_mask);
+int ufshcd_write_ee_control(struct ufs_hba *hba);
 int ufshcd_update_ee_control(struct ufs_hba *hba, u16 *mask, u16 *other_mask,
 			     u16 set, u16 clr);
 
