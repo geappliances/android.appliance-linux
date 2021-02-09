@@ -225,6 +225,5 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
 			     struct mtk_camsv_video_device *node);
 void mtk_camsv_video_unregister(struct mtk_camsv_video_device *node);
 void mtk_camsv_video_init_nodes(struct mtk_camsv_dev *cam);
-void mtk_camsv_video_cleanup_nodes(struct mtk_camsv_dev *cam);
 
 #endif /* __MTK_CAMSV_H__ */

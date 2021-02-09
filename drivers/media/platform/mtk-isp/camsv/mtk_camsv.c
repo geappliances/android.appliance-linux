@@ -484,7 +484,7 @@ static int mtk_camsv_v4l2_unregister(struct mtk_camsv_dev *cam)
 	for (i = 0; i < MTK_CAMSV_TOTAL_NODES; i++)
 		mtk_camsv_video_unregister(&cam->vdev_nodes[i]);
 
-	mtk_camsv_video_cleanup_nodes(cam);
+	vb2_dma_contig_clear_max_seg_size(cam->dev);
 
 	v4l2_device_unregister_subdev(&cam->subdev);
 	v4l2_device_unregister(&cam->v4l2_dev);
