@@ -42,15 +42,17 @@
  * AR0S SSRR RRRR RRRR RRRR RRRR RRRR RRRR
  *
  * A: Advanced (1) or base (0) register
- * S: Size (2: 16-bit, 4: 32-bit)
+ * S: Size (1: 8-bit, 2: 16-bit, 4: 32-bit)
  * R: Register address
  *
  * For base registers, the address is limited to the 16 low order bits. For
  * advanced registers, the address is a 32-bit value.
  */
 #define AP1302_REG_ADV				BIT(31)
+#define AP1302_REG_8BIT(n)			((1 << 26) | (n))
 #define AP1302_REG_16BIT(n)			((2 << 26) | (n))
 #define AP1302_REG_32BIT(n)			((4 << 26) | (n))
+#define AP1302_REG_ADV_8BIT(n)			(AP1302_REG_ADV | (1 << 26) | (n))
 #define AP1302_REG_ADV_16BIT(n)			(AP1302_REG_ADV | (2 << 26) | (n))
 #define AP1302_REG_ADV_32BIT(n)			(AP1302_REG_ADV | (4 << 26) | (n))
 #define AP1302_REG_SIZE(n)			(((n) >> 26) & 0x7)
@@ -61,14 +63,14 @@
 /* Info Registers */
 #define AP1302_CHIP_VERSION			AP1302_REG_16BIT(0x0000)
 #define AP1302_CHIP_ID				0x0265
-#define AP1302_FRAME_CNT			AP1302_REG_16BIT(0x0002)
+#define AP1302_FRAME_CNT			AP1302_REG_8BIT(0x0002)
 #define AP1302_ERROR				AP1302_REG_16BIT(0x0006)
 #define AP1302_ERR_FILE				AP1302_REG_32BIT(0x0008)
 #define AP1302_ERR_LINE				AP1302_REG_16BIT(0x000c)
 #define AP1302_SIPM_ERR_0			AP1302_REG_16BIT(0x0014)
 #define AP1302_SIPM_ERR_1			AP1302_REG_16BIT(0x0016)
 #define AP1302_CHIP_REV				AP1302_REG_16BIT(0x0050)
-#define AP1302_CON_BUF				AP1302_REG_16BIT(0x0a2c)
+#define AP1302_CON_BUF				AP1302_REG_8BIT(0x0a2c)
 #define AP1302_CON_BUF_SIZE			512
 
 /* Control Registers */
@@ -339,7 +341,7 @@
 #define AP1302_LANE_STATE_TURN_MARK		0xb
 #define AP1302_LANE_STATE_ERROR_S		0xc
 
-#define AP1302_ADV_CAPTURE_A_FV_CNT		AP1302_REG_ADV_32BIT(0x00490040)
+#define AP1302_ADV_CAPTURE_A_FV_CNT		AP1302_REG_ADV_16BIT(0x00490042)
 
 struct ap1302_device;
 
@@ -1754,9 +1756,8 @@ static void ap1302_log_lane_state(struct ap1302_sensor *sensor,
 static int ap1302_log_status(struct v4l2_subdev *sd)
 {
 	struct ap1302_device *ap1302 = to_ap1302(sd);
-	u16 frame_count_icp;
-	u16 frame_count_brac;
-	u16 frame_count_hinf;
+	u16 frame_count_in;
+	u16 frame_count_out;
 	u32 warning[4];
 	u32 error[3];
 	unsigned int i;
@@ -1818,17 +1819,16 @@ static int ap1302_log_status(struct v4l2_subdev *sd)
 	if (ret < 0)
 		return ret;
 
-	frame_count_hinf = value >> 8;
-	frame_count_brac = value & 0xff;
+	frame_count_out = value;
 
 	ret = ap1302_read(ap1302, AP1302_ADV_CAPTURE_A_FV_CNT, &value);
 	if (ret < 0)
 		return ret;
 
-	frame_count_icp = value & 0xffff;
+	frame_count_in = value & 0xffff;
 
-	dev_info(ap1302->dev, "Frame counters: ICP %u, HINF %u, BRAC %u\n",
-		 frame_count_icp, frame_count_hinf, frame_count_brac);
+	dev_info(ap1302->dev, "Frame counters: IN %u, OUT %u\n",
+		 frame_count_in, frame_count_out);
 
 	
 	/* Sample the lane state. */
