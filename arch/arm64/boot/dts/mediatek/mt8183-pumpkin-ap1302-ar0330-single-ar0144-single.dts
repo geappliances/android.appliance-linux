@@ -3,4 +3,24 @@
  * Copyright (c) 2020 Laurent Pinchart <laurent.pinchart@ideasonboard.com>
  */
 
-#include "mt8183-pumpkin-ap1302-ar0330-single-ar0144-single.dtsi"
+#include "mt8183-pumpkin-ap1302-ar0330-dual-ar0144-dual.dtsi"
+
+&i2c2 {
+	camera@3c {
+		sensors {
+			sensor@1 {
+				status = "disabled";
+			};
+		};
+	};
+};
+
+&i2c4 {
+	camera@3c {
+		sensors {
+			sensor@1 {
+				status = "disabled";
+			};
+		};
+	};
+};
