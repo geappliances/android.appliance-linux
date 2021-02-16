@@ -104,6 +104,8 @@ static int rpi_backlight_remove(struct platform_device *pdev)
 	struct rpi_backlight_t *rpi_backlight = bl_get_data(bl);
 
 	put_device(&rpi_backlight->i2c->dev);
+
+	return 0;
 }
 
 static const struct of_device_id rpi_backlight_of_match[] = {
