@@ -824,7 +824,7 @@ static int ap1302_sipm_data_get(void *arg, u64 *val)
 		goto unlock;
 	}
 
-	ret = ap1302_sipm_read(ap1302, addr >> 30, addr & ~BIT(31),
+	ret = ap1302_sipm_read(ap1302, addr >> 31, addr & ~BIT(31),
 			       &value);
 	if (!ret)
 		*val = value;
@@ -849,7 +849,7 @@ static int ap1302_sipm_data_set(void *arg, u64 val)
 		goto unlock;
 	}
 
-	ret = ap1302_sipm_write(ap1302, addr >> 30, addr & ~BIT(31),
+	ret = ap1302_sipm_write(ap1302, addr >> 31, addr & ~BIT(31),
 				val);
 
 unlock:
