@@ -664,9 +664,8 @@ static int ap1302_dma_wait_idle(struct ap1302_device *ap1302)
 }
 
 static int ap1302_sipm_read(struct ap1302_device *ap1302, unsigned int port,
-			    u32 reg, u32 *val)
+			    unsigned int size, u16 reg, u32 *val)
 {
-	unsigned int size = AP1302_REG_SIZE(reg);
 	u32 src;
 	int ret;
 
@@ -682,7 +681,7 @@ static int ap1302_sipm_read(struct ap1302_device *ap1302, unsigned int port,
 	    | (size == 2 ? AP1302_DMA_SIP_DATA_16_BIT : 0)
 	    | AP1302_DMA_SIP_ADDR_16_BIT
 	    | AP1302_DMA_SIP_ID(ap1302->sensor_info->i2c_addr)
-	    | AP1302_DMA_SIP_REG(AP1302_REG_ADDR(reg));
+	    | AP1302_DMA_SIP_REG(reg);
 	ap1302_write(ap1302, AP1302_DMA_SRC, src, &ret);
 
 	/*
@@ -719,9 +718,8 @@ static int ap1302_sipm_read(struct ap1302_device *ap1302, unsigned int port,
 }
 
 static int ap1302_sipm_write(struct ap1302_device *ap1302, unsigned int port,
-			     u32 reg, u32 val)
+			     unsigned int size, u16 reg, u32 val)
 {
-	unsigned int size = AP1302_REG_SIZE(reg);
 	u32 dst;
 	int ret;
 
@@ -754,7 +752,7 @@ static int ap1302_sipm_write(struct ap1302_device *ap1302, unsigned int port,
 	    | (size == 2 ? AP1302_DMA_SIP_DATA_16_BIT : 0)
 	    | AP1302_DMA_SIP_ADDR_16_BIT
 	    | AP1302_DMA_SIP_ID(ap1302->sensor_info->i2c_addr)
-	    | AP1302_DMA_SIP_REG(AP1302_REG_ADDR(reg));
+	    | AP1302_DMA_SIP_REG(reg);
 	ap1302_write(ap1302, AP1302_DMA_DST, dst, &ret);
 
 	ap1302_write(ap1302, AP1302_DMA_CTRL,
@@ -824,8 +822,8 @@ static int ap1302_sipm_data_get(void *arg, u64 *val)
 		goto unlock;
 	}
 
-	ret = ap1302_sipm_read(ap1302, addr >> 31, addr & ~BIT(31),
-			       &value);
+	ret = ap1302_sipm_read(ap1302, addr >> 31, (addr >> 24) & 7,
+			       addr & 0xffff, &value);
 	if (!ret)
 		*val = value;
 
@@ -849,8 +847,8 @@ static int ap1302_sipm_data_set(void *arg, u64 val)
 		goto unlock;
 	}
 
-	ret = ap1302_sipm_write(ap1302, addr >> 31, addr & ~BIT(31),
-				val);
+	ret = ap1302_sipm_write(ap1302, addr >> 31, (addr >> 24) & 7,
+				addr & 0xffff, val);
 
 unlock:
 	mutex_unlock(&ap1302->debugfs.lock);
