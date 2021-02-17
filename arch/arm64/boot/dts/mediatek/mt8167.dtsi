@@ -598,5 +598,11 @@
 			input-enable;
 			bias-pull-down;
 		};
+};
+
+&cluster0_opp {
+	opp-1500000000 {
+		opp-hz = /bits/ 64 <1500000000>;
+		opp-microvolt = <1300000>;
 	};
 };
