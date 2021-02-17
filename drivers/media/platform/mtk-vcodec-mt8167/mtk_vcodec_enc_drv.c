@@ -331,8 +331,8 @@ static int mtk_vcodec_probe(struct platform_device *pdev)
 	vfd_enc->lock           = &dev->dev_mutex;
 	vfd_enc->v4l2_dev       = &dev->v4l2_dev;
 	vfd_enc->vfl_dir        = VFL_DIR_M2M;
-	vfd_enc->device_caps	= V4L2_CAP_VIDEO_M2M |
-			V4L2_CAP_STREAMING;
+	vfd_enc->device_caps	= V4L2_CAP_VIDEO_M2M_MPLANE |
+					V4L2_CAP_STREAMING;
 
 	snprintf(vfd_enc->name, sizeof(vfd_enc->name), "%s",
 		 MTK_VCODEC_ENC_NAME);
