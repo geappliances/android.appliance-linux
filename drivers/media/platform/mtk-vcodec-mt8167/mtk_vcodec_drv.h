@@ -337,6 +337,11 @@ struct mtk_vcodec_ctx {
 	enum mtk_encode_param param_change;
 	struct mtk_enc_params enc_params;
 
+	struct mtk_video_fmt *formats;
+	unsigned int num_formats;
+	struct mtk_video_fmt *out_fmt_default;
+	struct mtk_video_fmt *cap_fmt_default;
+
 	const struct vdec_common_if *dec_if;
 	const struct venc_common_if *enc_if;
 	unsigned long drv_handle;
