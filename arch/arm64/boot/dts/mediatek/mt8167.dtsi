@@ -598,6 +598,7 @@
 			input-enable;
 			bias-pull-down;
 		};
+	};
 };
 
 &cluster0_opp {
