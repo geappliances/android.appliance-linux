@@ -296,6 +296,8 @@ static int mtk_crtc_ddp_hw_init(struct mtk_drm_crtc *mtk_crtc)
 		unsigned int local_layer;
 
 		plane_state = to_mtk_plane_state(plane->state);
+	
+		plane->helper_private->atomic_update(plane, plane->state);
 
 		if (i >= comp_layer_nr) {
 			comp = mtk_crtc->ddp_comp[1];
