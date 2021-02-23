@@ -797,6 +797,84 @@ static int vidioc_venc_dqbuf(struct file *file, void *priv,
 	return v4l2_m2m_dqbuf(file, ctx->m2m_ctx, buf);
 }
 
+static void vidioc_mark_last_buf(struct mtk_vcodec_ctx *ctx)
+{
+	static const struct v4l2_event eos_event = {
+		.type = V4L2_EVENT_EOS
+	};
+	struct vb2_v4l2_buffer *next_dst_buf;
+
+	ctx->is_draining = true;
+
+	ctx->last_src_buf = v4l2_m2m_last_src_buf(ctx->m2m_ctx);
+	if (ctx->last_src_buf)
+		return;
+
+	next_dst_buf = v4l2_m2m_dst_buf_remove(ctx->m2m_ctx);
+	if (!next_dst_buf) {
+		ctx->next_is_last = true;
+		return;
+	}
+
+	next_dst_buf->flags |= V4L2_BUF_FLAG_LAST;
+	vb2_buffer_done(&next_dst_buf->vb2_buf, VB2_BUF_STATE_DONE);
+	ctx->is_draining = false;
+	ctx->is_stopped = true;
+	v4l2_event_queue_fh(&ctx->fh, &eos_event);
+}
+
+static int vidioc_encoder_cmd(struct file *file, void *priv,
+			      struct v4l2_encoder_cmd *cmd)
+{
+	struct mtk_vcodec_ctx *ctx = fh_to_ctx(priv);
+	struct vb2_queue *dst_vq;
+	int ret;
+
+	ret = v4l2_m2m_ioctl_try_encoder_cmd(file, priv, cmd);
+	if (ret)
+		return ret;
+
+	if (!vb2_is_streaming(&ctx->fh.m2m_ctx->cap_q_ctx.q) ||
+	    !vb2_is_streaming(&ctx->fh.m2m_ctx->out_q_ctx.q))
+		return 0;
+
+	mtk_v4l2_debug(1, "encoder cmd=%u", cmd->cmd);
+
+	switch (cmd->cmd) {
+	case V4L2_ENC_CMD_STOP:
+		if (ctx->is_draining)
+			return -EBUSY;
+		if (ctx->is_stopped)
+			return 0;
+		vidioc_mark_last_buf(ctx);
+		break;
+
+	case V4L2_ENC_CMD_START:
+		if (ctx->is_draining)
+			return -EBUSY;
+		if (ctx->is_stopped)
+			vb2_clear_last_buffer_dequeued(dst_vq);
+		ctx->is_stopped = false;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int vidioc_subscribe_event(struct v4l2_fh *fh,
+				  const struct v4l2_event_subscription *sub)
+{
+	switch (sub->type) {
+	case V4L2_EVENT_EOS:
+		return v4l2_event_subscribe(fh, sub, 0, NULL);
+	default:
+		return v4l2_ctrl_subscribe_event(fh, sub);
+	}
+}
+
 const struct v4l2_ioctl_ops mtk_venc_ioctl_ops = {
 	.vidioc_streamon		= v4l2_m2m_ioctl_streamon,
 	.vidioc_streamoff		= v4l2_m2m_ioctl_streamoff,
@@ -814,7 +892,7 @@ const struct v4l2_ioctl_ops mtk_venc_ioctl_ops = {
 	.vidioc_try_fmt_vid_cap_mplane	= vidioc_try_fmt_vid_cap_mplane,
 	.vidioc_try_fmt_vid_out_mplane	= vidioc_try_fmt_vid_out_mplane,
 	.vidioc_expbuf			= v4l2_m2m_ioctl_expbuf,
-	.vidioc_subscribe_event		= v4l2_ctrl_subscribe_event,
+	.vidioc_subscribe_event		= vidioc_subscribe_event,
 	.vidioc_unsubscribe_event	= v4l2_event_unsubscribe,
 
 	.vidioc_s_parm			= vidioc_venc_s_parm,
@@ -830,6 +908,9 @@ const struct v4l2_ioctl_ops mtk_venc_ioctl_ops = {
 
 	.vidioc_g_selection		= vidioc_venc_g_selection,
 	.vidioc_s_selection		= vidioc_venc_s_selection,
+	
+	.vidioc_encoder_cmd		= vidioc_encoder_cmd,
+	.vidioc_try_encoder_cmd		= v4l2_m2m_ioctl_try_encoder_cmd,
 };
 
 static int vb2ops_venc_queue_setup(struct vb2_queue *vq,
@@ -895,6 +976,9 @@ static int vb2ops_venc_buf_prepare(struct vb2_buffer *vb)
 
 static void vb2ops_venc_buf_queue(struct vb2_buffer *vb)
 {
+	static const struct v4l2_event eos_event = {
+		.type = V4L2_EVENT_EOS
+	};
 	struct mtk_vcodec_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
 	struct vb2_v4l2_buffer *vb2_v4l2 =
 			container_of(vb, struct vb2_v4l2_buffer, vb2_buf);
@@ -902,6 +986,24 @@ static void vb2ops_venc_buf_queue(struct vb2_buffer *vb)
 	struct mtk_video_enc_buf *mtk_buf =
 			container_of(vb2_v4l2, struct mtk_video_enc_buf, vb);
 	mtk_v4l2_debug(2,"vb2ops_venc_buf_queue vb->vb2_queue->type is %d\n",vb->vb2_queue->type );
+
+	if (!V4L2_TYPE_IS_OUTPUT(vb->vb2_queue->type) &&
+	    vb2_is_streaming(&ctx->fh.m2m_ctx->cap_q_ctx.q) &&
+	    ctx->next_is_last) {
+		unsigned int i;
+
+		for (i = 0; i < vb->num_planes; i++)
+			vb->planes[i].bytesused = 0;
+		vb2_v4l2->flags = V4L2_BUF_FLAG_LAST;
+		vb2_v4l2->field = V4L2_FIELD_NONE;
+		vb2_v4l2->sequence = ctx->sequence_cap++;
+		vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
+		ctx->is_draining = false;
+		ctx->is_stopped = true;
+		ctx->next_is_last = false;
+		v4l2_event_queue_fh(&ctx->fh, &eos_event);
+		return;
+	}
 
 	if ((vb->vb2_queue->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) &&
 	    (ctx->param_change != MTK_ENCODE_PARAM_NONE)) {
@@ -978,6 +1080,8 @@ static int vb2ops_venc_start_streaming(struct vb2_queue *q, unsigned int count)
 		ctx->state = MTK_STATE_HEADER;
 	}
 
+	ctx->last_src_buf = NULL;
+
 	return 0;
 
 err_set_param:
@@ -996,10 +1100,33 @@ err_set_param:
 
 static void vb2ops_venc_stop_streaming(struct vb2_queue *q)
 {
+	static const struct v4l2_event eos_event = {
+		.type = V4L2_EVENT_EOS
+	};
 	struct mtk_vcodec_ctx *ctx = vb2_get_drv_priv(q);
 	struct vb2_v4l2_buffer *src_buf, *dst_buf;
 	int ret;
 	int i;
+
+	if (V4L2_TYPE_IS_OUTPUT(q->type)) {
+		if (ctx->is_draining) {
+			struct vb2_v4l2_buffer *next_dst_buf;
+
+			ctx->last_src_buf = NULL;
+			next_dst_buf = v4l2_m2m_dst_buf_remove(ctx->m2m_ctx);
+			if (!next_dst_buf)
+				ctx->next_is_last = true;
+			else {
+				next_dst_buf->flags |= V4L2_BUF_FLAG_LAST;
+				v4l2_m2m_buf_done(next_dst_buf, VB2_BUF_STATE_DONE);
+				v4l2_event_queue_fh(&ctx->fh, &eos_event);
+			}
+		}
+	} else {
+		ctx->is_draining = false;
+		ctx->is_stopped = false;
+		ctx->next_is_last = false;
+	}
 
 	mtk_v4l2_debug(2, "[%d]-> type=%d", ctx->id, q->type);
 
@@ -1183,6 +1310,9 @@ static void mtk_venc_worker(struct work_struct *work)
 	struct venc_done_result enc_result;
 	int ret, i, length;
 	char *frame_data;
+	static const struct v4l2_event eos_event = {
+		.type = V4L2_EVENT_EOS
+	};
 
 	/* check dst_buf, dst_buf may be removed in device_run
 	 * to stored encdoe header so we need check dst_buf and
@@ -1271,6 +1401,11 @@ static void mtk_venc_worker(struct work_struct *work)
 	if (enc_result.is_key_frm)
 		dst_buf->flags |= V4L2_BUF_FLAG_KEYFRAME;
 
+	if (src_buf == ctx->last_src_buf) {
+		dst_buf->flags |= V4L2_BUF_FLAG_LAST;
+		v4l2_event_queue_fh(&ctx->fh, &eos_event);
+	}
+
 	if (ret) {
 		dst_buf->planes[0].bytesused = 0;
 		v4l2_m2m_buf_done(src_buf, VB2_BUF_STATE_ERROR);
@@ -1338,6 +1473,9 @@ static void m2mops_venc_device_run(void *priv)
 static int m2mops_venc_job_ready(void *m2m_priv)
 {
 	struct mtk_vcodec_ctx *ctx = m2m_priv;
+
+	if (ctx->is_stopped)
+		return 0;
 
 	if (ctx->state == MTK_STATE_ABORT || ctx->state == MTK_STATE_FREE) {
 		mtk_v4l2_debug(4, "[%d]Not ready: state=0x%x.",
