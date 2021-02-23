@@ -355,6 +355,8 @@ struct mtk_vcodec_ctx {
 	wait_queue_head_t queue;
 	unsigned int irq_status;
 
+	unsigned long sequence_out, sequence_cap;
+
 	struct v4l2_ctrl_handler ctrl_hdl;
 	struct work_struct decode_work;
 	struct work_struct encode_work;
