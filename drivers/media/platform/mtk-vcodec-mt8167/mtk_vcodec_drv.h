@@ -22,6 +22,7 @@
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
 #include <media/videobuf2-core.h>
+#include <media/v4l2-mem2mem.h>
 #include "mtk_vcodec_util.h"
 
 #ifdef CONFIG_VB2_MEDIATEK_DMA_SG
@@ -359,6 +360,10 @@ struct mtk_vcodec_ctx {
 	struct work_struct encode_work;
 	struct vdec_pic_info last_decoded_picinfo;
 	struct mtk_video_dec_buf *empty_flush_buf;
+	struct vb2_v4l2_buffer *last_src_buf;
+	bool is_stopped;
+	bool is_draining;
+	bool next_is_last;
 	int oal_vcodec;
 	struct vb2_buffer *pend_src_buf;
 
