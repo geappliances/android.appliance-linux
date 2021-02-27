@@ -4,6 +4,7 @@
  */
 #include <linux/sched.h>
 #include <linux/of.h>
+#include <uapi/linux/sched/types.h>
 #include "mt76.h"
 
 #define CHAN2G(_idx, _freq) {			\
@@ -455,6 +456,7 @@ int mt76_register_device(struct mt76_dev *dev, bool vht,
 {
 	struct ieee80211_hw *hw = dev->hw;
 	struct mt76_phy *phy = &dev->phy;
+	struct sched_param sp;
 	int ret;
 
 	dev_set_drvdata(dev->dev, dev);
@@ -487,7 +489,8 @@ int mt76_register_device(struct mt76_dev *dev, bool vht,
 		return ret;
 
 	WARN_ON(mt76_worker_setup(hw, &dev->tx_worker, NULL, "tx"));
-	sched_set_fifo_low(dev->tx_worker.task);
+	sp.sched_priority = 1;
+	sched_setscheduler_nocheck(current, SCHED_FIFO, &sp);
 
 	return 0;
 }
