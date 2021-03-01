@@ -178,7 +178,7 @@ struct mtk_camsv_dev {
 	void __iomem *regs;
 	struct clk *camsys_cam_cgpdn;
 	struct clk *camsys_camtg_cgpdn;
-	struct clk *camsys_camsv0;
+	struct clk *camsys_camsv;
 	struct device *larb_ipu;
 	struct device *larb_cam;
 	unsigned int irq;
