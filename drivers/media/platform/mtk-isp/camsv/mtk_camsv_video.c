@@ -730,7 +730,7 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
 	vdev->fops = &mtk_camsv_v4l2_fops;
 	vdev->release = video_device_release_empty;
 	vdev->lock = &node->vdev_lock;
-	vdev->v4l2_dev = &cam->v4l2_dev;
+	vdev->v4l2_dev = cam->subdev.v4l2_dev;
 	vdev->queue = &node->vbq;
 	vdev->vfl_dir = output ? VFL_DIR_TX : VFL_DIR_RX;
 	vdev->entity.function = MEDIA_ENT_F_IO_V4L;

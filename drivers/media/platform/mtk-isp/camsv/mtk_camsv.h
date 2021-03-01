@@ -159,10 +159,7 @@ struct mtk_camsv_video_device {
  *
  * @dev: Pointer to device.
  * @pipeline: Media pipeline information.
- * @media_dev: Media device instance.
  * @subdev: The V4L2 sub-device instance.
- * @v4l2_dev: The V4L2 device driver instance.
- * @notifier: The v4l2_device notifier data.
  * @subdev_pads: Media pads of this sub-device.
  * @formats: Media bus format for all pads.
  * @vdev_nodes: The array list of mtk_camsv_video_device nodes.
@@ -185,10 +182,7 @@ struct mtk_camsv_dev {
 	const struct mtk_camsv_conf *conf;
 
 	struct media_pipeline pipeline;
-	struct media_device media_dev;
 	struct v4l2_subdev subdev;
-	struct v4l2_device v4l2_dev;
-	struct v4l2_async_notifier notifier;
 	struct media_pad subdev_pads[MTK_CAMSV_CIO_NUM_PADS];
 	struct v4l2_mbus_framefmt formats[MTK_CAMSV_CIO_NUM_PADS];
 	struct mtk_camsv_video_device vdev_nodes[MTK_CAMSV_TOTAL_NODES];
