@@ -9,6 +9,7 @@
 #define __MTK_MDP_CORE_H__
 
 #include <linux/videodev2.h>
+#include <media/media-device.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-mem2mem.h>
@@ -163,6 +164,7 @@ struct mtk_mdp_dev {
 	struct v4l2_m2m_dev		*m2m_dev;
 	struct list_head		ctx_list;
 	struct video_device		*vdev;
+	struct media_device		mdev;
 	struct v4l2_device		v4l2_dev;
 	struct workqueue_struct		*job_wq;
 	struct platform_device		*vpu_dev;
