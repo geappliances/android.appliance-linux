@@ -199,7 +199,7 @@ static int mtk_camsv_runtime_suspend(struct device *dev)
 {
 	struct mtk_camsv_dev *camsv_dev = dev_get_drvdata(dev);
 
-	clk_disable_unprepare(camsv_dev->camsys_camsv0);
+	clk_disable_unprepare(camsv_dev->camsys_camsv);
 	clk_disable_unprepare(camsv_dev->camsys_camtg_cgpdn);
 	clk_disable_unprepare(camsv_dev->camsys_cam_cgpdn);
 
@@ -234,7 +234,7 @@ static int mtk_camsv_runtime_resume(struct device *dev)
 
 	clk_prepare_enable(camsv_dev->camsys_cam_cgpdn);
 	clk_prepare_enable(camsv_dev->camsys_camtg_cgpdn);
-	clk_prepare_enable(camsv_dev->camsys_camsv0);
+	clk_prepare_enable(camsv_dev->camsys_camsv);
 
 	return 0;
 }
@@ -319,16 +319,16 @@ static int mtk_camsv_probe(struct platform_device *pdev)
 		goto err_clk;
 	}
 
-	camsv_dev->camsys_camsv0 = devm_clk_get(dev, "camsys_camsv0");
-	if (IS_ERR(camsv_dev->camsys_camsv0)) {
-		dev_err(dev, "failed to get camsys_camsv0 clock\n");
-		ret = PTR_ERR(camsv_dev->camsys_camsv0);
+	camsv_dev->camsys_camsv = devm_clk_get(dev, "camsys_camsv");
+	if (IS_ERR(camsv_dev->camsys_camsv)) {
+		dev_err(dev, "failed to get camsys_camsv clock\n");
+		ret = PTR_ERR(camsv_dev->camsys_camsv);
 		goto err_clk;
 	}
-	ret = clk_prepare(camsv_dev->camsys_camsv0);
+	ret = clk_prepare(camsv_dev->camsys_camsv);
 	if (ret < 0) {
-		dev_err(dev, "failed to prepare camsys_camsv0 clock\n");
-		camsv_dev->camsys_camsv0 = ERR_PTR(-EINVAL);
+		dev_err(dev, "failed to prepare camsys_camsv clock\n");
+		camsv_dev->camsys_camsv = ERR_PTR(-EINVAL);
 		goto err_clk;
 	}
 
@@ -370,8 +370,8 @@ err_clk:
 		clk_unprepare(camsv_dev->camsys_cam_cgpdn);
 	if (camsv_dev->camsys_camtg_cgpdn)
 		clk_unprepare(camsv_dev->camsys_camtg_cgpdn);
-	if (camsv_dev->camsys_camsv0)
-		clk_unprepare(camsv_dev->camsys_camsv0);
+	if (camsv_dev->camsys_camsv)
+		clk_unprepare(camsv_dev->camsys_camsv);
 
 	return ret;
 }
