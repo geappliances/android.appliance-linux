@@ -21,6 +21,20 @@
 
 #define V4L2_CID_MTK_MDP_CONTRAST_AUTO (V4L2_CID_USER_BASE | 0x1000)
 
+#define IMG_MAX_WIDTH                  5376
+#define IMG_MAX_HEIGHT                 4032
+#define IMG_MIN_WIDTH                  80
+#define IMG_MIN_HEIGHT                 60
+
+static struct v4l2_frmsize_stepwise mdp_frmsize_stepwise = {
+       .max_width = IMG_MAX_WIDTH,
+       .min_width = IMG_MIN_WIDTH,
+       .max_height = IMG_MAX_HEIGHT,
+       .min_height = IMG_MIN_HEIGHT,
+       .step_height = 1,
+       .step_width = 1,
+};
+
 /**
  *  struct mtk_mdp_pix_limit - image pixel size limits
  *  @org_w: source pixel width
@@ -823,6 +837,21 @@ static int mtk_mdp_enum_fmt(struct v4l2_fmtdesc *f, u32 type)
 	return 0;
 }
 
+static int mtk_mdp_m2m_enum_framesizes(struct file *file, void *fh,
+                                            struct v4l2_frmsizeenum *sizes)
+{
+        if (sizes->index)
+                return -EINVAL;
+
+        if (mtk_mdp_find_fmt(sizes->pixel_format, V4L2_BUF_TYPE_VIDEO_CAPTURE) == NULL)
+                return -EINVAL;
+
+        sizes->type = V4L2_FRMSIZE_TYPE_CONTINUOUS;
+        memcpy(&sizes->stepwise, &mdp_frmsize_stepwise, sizeof(sizes->stepwise));
+
+        return 0;
+}
+
 static int mtk_mdp_m2m_enum_fmt_vid_cap(struct file *file, void *priv,
 					struct v4l2_fmtdesc *f)
 {
@@ -1132,6 +1161,7 @@ static int mtk_mdp_m2m_s_selection(struct file *file, void *fh,
 
 static const struct v4l2_ioctl_ops mtk_mdp_m2m_ioctl_ops = {
 	.vidioc_querycap		= mtk_mdp_m2m_querycap,
+	.vidioc_enum_framesizes         = mtk_mdp_m2m_enum_framesizes,
 	.vidioc_enum_fmt_vid_cap	= mtk_mdp_m2m_enum_fmt_vid_cap,
 	.vidioc_enum_fmt_vid_out	= mtk_mdp_m2m_enum_fmt_vid_out,
 	.vidioc_g_fmt_vid_cap_mplane	= mtk_mdp_m2m_g_fmt_mplane,
