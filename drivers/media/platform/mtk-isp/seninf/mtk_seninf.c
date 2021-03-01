@@ -120,6 +120,7 @@ struct mtk_seninf {
 	struct clk_bulk_data *clks;
 	void __iomem *base;
 
+	struct media_device media_dev;
 	struct v4l2_subdev subdev;
 	struct media_pad pads[SENINF_NUM_PADS];
 	struct v4l2_async_notifier notifier;
@@ -1073,18 +1074,61 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 
 static int mtk_seninf_media_register(struct mtk_seninf *priv)
 {
-	struct v4l2_subdev *sd = &priv->subdev;
 	struct media_pad *pads = priv->pads;
+	struct device *dev = priv->dev;
+	struct media_device *media_dev = &priv->media_dev;
+	unsigned int i;
+	int ret;
+
+	media_dev->dev = dev;
+	strscpy(media_dev->model, dev_driver_string(dev), sizeof(media_dev->model));
+	snprintf(media_dev->bus_info, sizeof(media_dev->bus_info),
+		 "platform:%s", dev_name(dev));
+	media_dev->hw_revision = 0;
+
+	media_device_init(media_dev);
+	ret = media_device_register(media_dev);
+	if (ret) {
+		dev_err(dev, "failed to register media device: %d\n", ret);
+		return ret;
+	}
+
+	ret = media_entity_pads_init(&priv->subdev.entity, SENINF_NUM_PADS, pads);
+	if (ret < 0)
+		goto fail_media_unreg;
+
+	for (i = 0; i < SENINF_NUM_INPUTS; i++)
+		pads[i].flags = MEDIA_PAD_FL_SINK;
+	for (i = SENINF_NUM_INPUTS; i < SENINF_NUM_PADS; i++)
+		pads[i].flags = MEDIA_PAD_FL_SOURCE;
+
+	return 0;
+
+fail_media_unreg:
+	media_device_unregister(media_dev);
+	media_device_cleanup(media_dev);
+
+	return ret;
+}
+
+static int mtk_seninf_v4l2_register(struct mtk_seninf *priv)
+{
+	struct v4l2_subdev *sd = &priv->subdev;
 	struct device *dev = priv->dev;
 	unsigned int i;
 	int ret;
+
+	/* Set up media device & pads */
+	ret = mtk_seninf_media_register(priv);
+	if (ret)
+		return ret;
 
 	v4l2_subdev_init(sd, &seninf_subdev_ops);
 
 	ret = seninf_initialize_controls(priv);
 	if (ret) {
 		dev_err(dev, "Failed to initialize controls\n");
-		return -EINVAL;
+		goto fail_media_unreg;
 	}
 
 	sd->flags |= (V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS);
@@ -1096,15 +1140,6 @@ static int mtk_seninf_media_register(struct mtk_seninf *priv)
 
 	sd->entity.function = MEDIA_ENT_F_VID_IF_BRIDGE;
 	sd->entity.ops = &seninf_media_ops;
-
-	for (i = 0; i < SENINF_NUM_INPUTS; i++)
-		pads[i].flags = MEDIA_PAD_FL_SINK;
-	for (i = SENINF_NUM_INPUTS; i < SENINF_NUM_PADS; i++)
-		pads[i].flags = MEDIA_PAD_FL_SOURCE;
-
-	ret = media_entity_pads_init(&sd->entity, SENINF_NUM_PADS, pads);
-	if (ret < 0)
-		goto err_free_handler;
 
 	seninf_init_cfg(sd, NULL);
 
@@ -1140,6 +1175,9 @@ err_clean_entity:
 	media_entity_cleanup(&sd->entity);
 err_free_handler:
 	v4l2_ctrl_handler_free(&priv->ctrl_handler);
+fail_media_unreg:
+	media_device_unregister(&priv->media_dev);
+	media_device_cleanup(&priv->media_dev);
 
 	return ret;
 }
@@ -1209,7 +1247,7 @@ static int seninf_probe(struct platform_device *pdev)
 	 */
 	priv->mux_sel = 0;
 
-	ret = mtk_seninf_media_register(priv);
+	ret = mtk_seninf_v4l2_register(priv);
 	if (!ret)
 		pm_runtime_enable(dev);
 
@@ -1250,6 +1288,8 @@ static int seninf_remove(struct platform_device *pdev)
 	struct mtk_seninf *priv = dev_get_drvdata(&pdev->dev);
 	struct v4l2_subdev *subdev = &priv->subdev;
 
+	media_device_unregister(&priv->media_dev);
+	media_device_cleanup(&priv->media_dev);
 	media_entity_cleanup(&subdev->entity);
 	v4l2_async_unregister_subdev(subdev);
 	v4l2_ctrl_handler_free(&priv->ctrl_handler);
