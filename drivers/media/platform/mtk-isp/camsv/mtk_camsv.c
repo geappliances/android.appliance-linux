@@ -19,12 +19,6 @@ static inline struct mtk_camsv_dev *to_mtk_camsv_dev(struct v4l2_subdev *sd)
 	return container_of(sd, struct mtk_camsv_dev, subdev);
 }
 
-static inline struct mtk_camsv_dev *
-notifier_to_mtk_camsv_dev(struct v4l2_async_notifier *an)
-{
-	return container_of(an, struct mtk_camsv_dev, notifier);
-}
-
 static const u32 mtk_camsv_mbus_formats[] = {
 	MEDIA_BUS_FMT_SBGGR8_1X8,
 	MEDIA_BUS_FMT_SGBRG8_1X8,
@@ -264,130 +258,13 @@ static const struct media_entity_operations mtk_camsv_media_entity_ops = {
 };
 
 /* -----------------------------------------------------------------------------
- * Async Subdev Notifier
- */
-
-static int mtk_camsv_dev_notifier_bound(struct v4l2_async_notifier *notifier,
-					struct v4l2_subdev *sd,
-					struct v4l2_async_subdev *asd)
-{
-	struct mtk_camsv_dev *cam = notifier_to_mtk_camsv_dev(notifier);
-
-	if (!(sd->entity.function & MEDIA_ENT_F_VID_IF_BRIDGE)) {
-		dev_err(cam->dev, "no MEDIA_ENT_F_VID_IF_BRIDGE function\n");
-		return -ENODEV;
-	}
-
-	cam->seninf = sd;
-
-	return 0;
-}
-
-static void mtk_camsv_dev_notifier_unbind(struct v4l2_async_notifier *notifier,
-					  struct v4l2_subdev *sd,
-					  struct v4l2_async_subdev *asd)
-{
-	struct mtk_camsv_dev *cam = notifier_to_mtk_camsv_dev(notifier);
-	cam->seninf = NULL;
-}
-
-static int mtk_camsv_dev_notifier_complete(struct v4l2_async_notifier *notifier)
-{
-	struct mtk_camsv_dev *cam = notifier_to_mtk_camsv_dev(notifier);
-	struct device *dev = cam->dev;
-	int seninf_pad;
-	int ret;
-
-	if (!cam->seninf) {
-		dev_err(dev, "No seninf subdev\n");
-		return -ENODEV;
-	}
-
-	seninf_pad = media_get_pad_index(&cam->seninf->entity, false,
-					 PAD_SIGNAL_DEFAULT);
-	if (seninf_pad < 0)
-		return -ENODEV;
-
-	ret = media_create_pad_link(&cam->seninf->entity, seninf_pad,
-				    &cam->subdev.entity,
-				    MTK_CAMSV_CIO_PAD_SENINF,
-				    MEDIA_LNK_FL_IMMUTABLE |
-				    MEDIA_LNK_FL_ENABLED);
-	if (ret) {
-		dev_err(dev, "failed to create pad link %s %s err:%d\n",
-			cam->seninf->entity.name, cam->subdev.entity.name, ret);
-		return ret;
-	}
-	ret = v4l2_device_register_subdev_nodes(&cam->v4l2_dev);
-	if (ret) {
-		dev_err(dev, "failed to initialize subdev nodes:%d\n", ret);
-		return ret;
-	}
-
-	return ret;
-}
-
-static const struct v4l2_async_notifier_operations mtk_camsv_v4l2_async_ops = {
-	.bound = mtk_camsv_dev_notifier_bound,
-	.unbind = mtk_camsv_dev_notifier_unbind,
-	.complete = mtk_camsv_dev_notifier_complete,
-};
-
-static int mtk_camsv_v4l2_async_register(struct mtk_camsv_dev *cam)
-{
-	struct device *dev = cam->dev;
-	int ret;
-
-	v4l2_async_notifier_init(&cam->notifier);
-
-	ret = v4l2_async_notifier_parse_fwnode_endpoints(dev,
-		&cam->notifier, sizeof(struct v4l2_async_subdev), NULL);
-
-	if (ret) {
-		dev_err(dev, "failed to parse fwnode endpoints:%d\n", ret);
-		return ret;
-	}
-
-	cam->notifier.ops = &mtk_camsv_v4l2_async_ops;
-	ret = v4l2_async_notifier_register(&cam->v4l2_dev, &cam->notifier);
-	if (ret) {
-		dev_err(dev, "failed to register async notifier : %d\n", ret);
-		v4l2_async_notifier_cleanup(&cam->notifier);
-	}
-
-	return ret;
-}
-
-static void mtk_camsv_v4l2_async_unregister(struct mtk_camsv_dev *cam)
-{
-	v4l2_async_notifier_unregister(&cam->notifier);
-	v4l2_async_notifier_cleanup(&cam->notifier);
-}
-
-/* -----------------------------------------------------------------------------
  * Init & Cleanup
  */
 
-static int mtk_camsv_media_register(struct mtk_camsv_dev *cam,
-				    struct media_device *media_dev)
+static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 {
 	struct device *dev = cam->dev;
-	unsigned int i;
-	int ret;
-
-	media_dev->dev = cam->dev;
-	strscpy(media_dev->model, dev_driver_string(dev),
-		sizeof(media_dev->model));
-	snprintf(media_dev->bus_info, sizeof(media_dev->bus_info),
-		 "platform:%s", dev_name(dev));
-	media_dev->hw_revision = 0;
-	media_device_init(media_dev);
-
-	ret = media_device_register(media_dev);
-	if (ret) {
-		dev_err(dev, "failed to register media device:%d\n", ret);
-		return ret;
-	}
+	int registered_nodes, i, ret;
 
 	/* Initialize subdev pads */
 	ret = media_entity_pads_init(&cam->subdev.entity,
@@ -395,41 +272,13 @@ static int mtk_camsv_media_register(struct mtk_camsv_dev *cam,
 				     cam->subdev_pads);
 	if (ret) {
 		dev_err(dev, "failed to initialize media pads:%d\n", ret);
-		goto fail_media_unreg;
+		return ret;
 	}
 
 	cam->subdev_pads[MTK_CAMSV_CIO_PAD_SENINF].flags = MEDIA_PAD_FL_SINK;
 	for (i = 0; i < MTK_CAMSV_TOTAL_NODES; ++i)
 		cam->subdev_pads[MTK_CAMSV_CIO_PAD_NODE(i)].flags =
 			MEDIA_PAD_FL_SOURCE;
-
-	return 0;
-
-fail_media_unreg:
-	media_device_unregister(media_dev);
-	media_device_cleanup(media_dev);
-
-	return ret;
-}
-
-static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
-{
-	struct device *dev = cam->dev;
-	int registered_nodes, i, ret;
-
-	/* Set up media device & pads */
-	ret = mtk_camsv_media_register(cam, &cam->media_dev);
-	if (ret)
-		return ret;
-
-	/* Set up v4l2 device */
-	cam->v4l2_dev.mdev = &cam->media_dev;
-
-	ret = v4l2_device_register(dev, &cam->v4l2_dev);
-	if (ret) {
-		dev_err(dev, "failed to register V4L2 device:%d\n", ret);
-		goto fail_media_unreg;
-	}
 
 	/* Initialize subdev */
 	v4l2_subdev_init(&cam->subdev, &mtk_camsv_subdev_ops);
@@ -444,7 +293,7 @@ static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 
 	mtk_camsv_init_cfg(&cam->subdev, NULL);
 
-	ret = v4l2_device_register_subdev(&cam->v4l2_dev, &cam->subdev);
+	ret = v4l2_async_register_subdev(&cam->subdev);
 	if (ret) {
 		dev_err(dev, "failed to initialize subdev:%d\n", ret);
 		goto fail_clean_media_entiy;
@@ -469,15 +318,11 @@ fail_vdev_unreg:
 		mtk_camsv_video_unregister(&cam->vdev_nodes[i]);
 fail_clean_media_entiy:
 	media_entity_cleanup(&cam->subdev.entity);
-	v4l2_device_unregister(&cam->v4l2_dev);
-fail_media_unreg:
-	media_device_unregister(&cam->media_dev);
-	media_device_cleanup(&cam->media_dev);
 
 	return ret;
 }
 
-static int mtk_camsv_v4l2_unregister(struct mtk_camsv_dev *cam)
+static void mtk_camsv_v4l2_unregister(struct mtk_camsv_dev *cam)
 {
 	int i;
 
@@ -486,13 +331,8 @@ static int mtk_camsv_v4l2_unregister(struct mtk_camsv_dev *cam)
 
 	vb2_dma_contig_clear_max_seg_size(cam->dev);
 
-	v4l2_device_unregister_subdev(&cam->subdev);
-	v4l2_device_unregister(&cam->v4l2_dev);
 	media_entity_cleanup(&cam->subdev.entity);
-	media_device_unregister(&cam->media_dev);
-	media_device_cleanup(&cam->media_dev);
-
-	return 0;
+	v4l2_async_unregister_subdev(&cam->subdev);
 }
 
 int mtk_camsv_dev_init(struct mtk_camsv_dev *camsv_dev)
@@ -510,21 +350,11 @@ int mtk_camsv_dev_init(struct mtk_camsv_dev *camsv_dev)
 		return ret;
 	}
 
-	ret = mtk_camsv_v4l2_async_register(camsv_dev);
-	if (ret)
-		goto fail_v4l2_unreg;
-
-	return 0;
-
-fail_v4l2_unreg:
-	mutex_destroy(&camsv_dev->op_lock);
-	mtk_camsv_v4l2_unregister(camsv_dev);
 	return ret;
 }
 
 void mtk_camsv_dev_cleanup(struct mtk_camsv_dev *cam)
 {
-	mtk_camsv_v4l2_async_unregister(cam);
 	mtk_camsv_v4l2_unregister(cam);
 	mutex_destroy(&cam->op_lock);
 }
