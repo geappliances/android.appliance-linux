@@ -31,15 +31,18 @@
 
 #include "smiapp-pll.h"
 
-#define AR0330_PIXEL_ARRAY_WIDTH		2304U
-#define AR0330_PIXEL_ARRAY_HEIGHT		1536U
+#define AR0330_PIXEL_ARRAY_WIDTH		2316U
+#define AR0330_PIXEL_ARRAY_HEIGHT		1544U
+
+#define AR0330_WINDOW_LEFT_BORDER		6U
+#define AR0330_WINDOW_TOP_BORDER		6U
 
 #define AR0330_WINDOW_WIDTH_MIN			32U
 #define AR0330_WINDOW_WIDTH_DEF			2304U
-#define AR0330_WINDOW_WIDTH_MAX			AR0330_PIXEL_ARRAY_WIDTH
+#define AR0330_WINDOW_WIDTH_MAX			2304U
 #define AR0330_WINDOW_HEIGHT_MIN		32U
 #define AR0330_WINDOW_HEIGHT_DEF		1296U
-#define AR0330_WINDOW_HEIGHT_MAX		AR0330_PIXEL_ARRAY_HEIGHT
+#define AR0330_WINDOW_HEIGHT_MAX		1544U
 
 #define AR0330_HBLANK_DEF			192
 #define AR0330_VBLANK_DEF			60
@@ -708,8 +711,10 @@ static int ar0330_init_cfg(struct v4l2_subdev *subdev,
 	struct v4l2_rect *crop;
 
 	crop = __ar0330_get_pad_crop(ar0330, cfg, 0, which);
-	crop->left = (AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_DEF) / 2;
-	crop->top = (AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_DEF) / 2;
+	crop->left = (AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_DEF) / 2
+		   + AR0330_WINDOW_LEFT_BORDER;
+	crop->top = (AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_DEF) / 2
+		  + AR0330_WINDOW_TOP_BORDER;
 	crop->width = AR0330_WINDOW_WIDTH_DEF;
 	crop->height = AR0330_WINDOW_HEIGHT_DEF;
 
@@ -806,10 +811,30 @@ static int ar0330_get_selection(struct v4l2_subdev *subdev,
 {
 	struct ar0330 *ar0330 = to_ar0330(subdev);
 
-	if (sel->target != V4L2_SEL_TGT_CROP)
-		return -EINVAL;
+	switch (sel->target) {
+	case V4L2_SEL_TGT_CROP:
+		sel->r = *__ar0330_get_pad_crop(ar0330, cfg, sel->pad,
+						sel->which);
+		break;
 
-	sel->r = *__ar0330_get_pad_crop(ar0330, cfg, sel->pad, sel->which);
+	case V4L2_SEL_TGT_CROP_DEFAULT:
+		sel->r.left = AR0330_WINDOW_LEFT_BORDER;
+		sel->r.top = AR0330_WINDOW_TOP_BORDER;
+		sel->r.width = AR0330_WINDOW_WIDTH_MAX;
+		sel->r.height = AR0330_WINDOW_HEIGHT_MAX;
+		break;
+
+	case V4L2_SEL_TGT_CROP_BOUNDS:
+		sel->r.left = 0;
+		sel->r.top = 0;
+		sel->r.width = AR0330_PIXEL_ARRAY_WIDTH;
+		sel->r.height = AR0330_PIXEL_ARRAY_HEIGHT;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
 	return 0;
 }
 
@@ -829,10 +854,14 @@ static int ar0330_set_selection(struct v4l2_subdev *subdev,
 	 * Clamp the crop rectangle boundaries and align them to a multiple of 2
 	 * pixels to ensure a GRBG Bayer pattern.
 	 */
-	rect.left = clamp_t(unsigned int, ALIGN(sel->r.left, 2), 0,
-			    AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_MIN);
-	rect.top = clamp_t(unsigned int, ALIGN(sel->r.top, 2), 0,
-			   AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_MIN);
+	rect.left = clamp_t(unsigned int, ALIGN(sel->r.left, 2),
+			    AR0330_WINDOW_LEFT_BORDER,
+			    AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_MIN +
+			    AR0330_WINDOW_LEFT_BORDER);
+	rect.top = clamp_t(unsigned int, ALIGN(sel->r.top, 2),
+			   AR0330_WINDOW_TOP_BORDER,
+			   AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_MIN +
+			   AR0330_WINDOW_TOP_BORDER);
 	rect.width = clamp(ALIGN(sel->r.width, 2),
 			   AR0330_WINDOW_WIDTH_MIN,
 			   AR0330_WINDOW_WIDTH_MAX);
@@ -840,8 +869,10 @@ static int ar0330_set_selection(struct v4l2_subdev *subdev,
 			    AR0330_WINDOW_HEIGHT_MIN,
 			    AR0330_WINDOW_HEIGHT_MAX);
 
-	rect.width = min(rect.width, AR0330_WINDOW_WIDTH_MAX - rect.left);
-	rect.height = min(rect.height, AR0330_WINDOW_HEIGHT_MAX - rect.top);
+	rect.width = min(rect.width, AR0330_WINDOW_WIDTH_MAX +
+			 AR0330_WINDOW_LEFT_BORDER - rect.left);
+	rect.height = min(rect.height, AR0330_WINDOW_HEIGHT_MAX +
+			  AR0330_WINDOW_TOP_BORDER - rect.top);
 
 	__crop = __ar0330_get_pad_crop(ar0330, cfg, sel->pad, sel->which);
 
