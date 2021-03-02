@@ -28,6 +28,7 @@ FILES="
 arch/arm64/boot/Image
 arch/arm64/boot/dts/mediatek/mt8167-pumpkin.dtb
 arch/arm64/boot/dts/mediatek/mt8167-pumpkin-android.dtb
+arch/arm64/boot/dts/mediatek/mt8167-pumpkin-i2s-header.dtb
 arch/arm64/boot/dts/mediatek/mt8167-pumpkin-android-dsi.dtb
 arch/arm64/boot/dts/mediatek/mt8167-sb30.dtb
 arch/arm64/boot/dts/mediatek/mt8167-sb30-android.dtb
