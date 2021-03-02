@@ -961,6 +961,56 @@ static const struct v4l2_subdev_ops ar0330_subdev_ops = {
 	.pad    = &ar0330_subdev_pad_ops,
 };
 
+static int ar0330_v4l2_init(struct ar0330 *ar0330)
+{
+	int ret;
+
+	/* Create V4L2 controls. */
+	v4l2_ctrl_handler_init(&ar0330->ctrls, 6);
+
+	v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+			  V4L2_CID_EXPOSURE, AR0330_COARSE_INTEGRATION_TIME_MIN,
+			  AR0330_COARSE_INTEGRATION_TIME_MAX, 1,
+			  AR0330_COARSE_INTEGRATION_TIME_DEF);
+	v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+			  V4L2_CID_GAIN, AR0330_GLOBAL_GAIN_MIN,
+			  AR0330_GLOBAL_GAIN_MAX, 1, AR0330_GLOBAL_GAIN_DEF);
+	ar0330->flip[0] = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+					    V4L2_CID_HFLIP, 0, 1, 1, 0);
+	ar0330->flip[1] = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+					    V4L2_CID_VFLIP, 0, 1, 1, 0);
+	ar0330->pixel_rate = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+					       V4L2_CID_PIXEL_RATE,
+					       0, 0, 1, 0);
+	v4l2_ctrl_new_std_menu_items(&ar0330->ctrls, &ar0330_ctrl_ops,
+				     V4L2_CID_TEST_PATTERN,
+				     ARRAY_SIZE(ar0330_test_pattern_menu) - 1,
+				     0, 0, ar0330_test_pattern_menu);
+
+	v4l2_ctrl_cluster(ARRAY_SIZE(ar0330->flip), ar0330->flip);
+
+	if (ar0330->ctrls.error)
+		dev_err(ar0330->dev, "%s: control initialization error %d\n",
+			__func__, ar0330->ctrls.error);
+
+	ar0330->subdev.ctrl_handler = &ar0330->ctrls;
+
+	/* Initialize the media entity and V4L2 subdev. */
+	ar0330->pad.flags = MEDIA_PAD_FL_SOURCE;
+	ret = media_entity_pads_init(&ar0330->subdev.entity, 1, &ar0330->pad);
+	if (ret < 0)
+		return ret;
+
+	v4l2_i2c_subdev_init(&ar0330->subdev, ar0330->client,
+			     &ar0330_subdev_ops);
+	ar0330->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+	ar0330->subdev.entity.function = MEDIA_ENT_F_CAM_SENSOR;
+
+	ar0330_init_cfg(&ar0330->subdev, NULL);
+
+	return 0;
+}
+
 /* -----------------------------------------------------------------------------
  * Power management
  */
@@ -1161,48 +1211,12 @@ static int ar0330_probe(struct i2c_client *client,
 	if (ret < 0)
 		goto error_power;
 
-	/* Create V4L2 controls. */
-	v4l2_ctrl_handler_init(&ar0330->ctrls, 6);
-
-	v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
-			  V4L2_CID_EXPOSURE, AR0330_COARSE_INTEGRATION_TIME_MIN,
-			  AR0330_COARSE_INTEGRATION_TIME_MAX, 1,
-			  AR0330_COARSE_INTEGRATION_TIME_DEF);
-	v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
-			  V4L2_CID_GAIN, AR0330_GLOBAL_GAIN_MIN,
-			  AR0330_GLOBAL_GAIN_MAX, 1, AR0330_GLOBAL_GAIN_DEF);
-	ar0330->flip[0] = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
-					    V4L2_CID_HFLIP, 0, 1, 1, 0);
-	ar0330->flip[1] = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
-					    V4L2_CID_VFLIP, 0, 1, 1, 0);
-	ar0330->pixel_rate = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
-					       V4L2_CID_PIXEL_RATE,
-					       0, 0, 1, 0);
-	v4l2_ctrl_new_std_menu_items(&ar0330->ctrls, &ar0330_ctrl_ops,
-				     V4L2_CID_TEST_PATTERN,
-				     ARRAY_SIZE(ar0330_test_pattern_menu) - 1,
-				     0, 0, ar0330_test_pattern_menu);
-
-	v4l2_ctrl_cluster(ARRAY_SIZE(ar0330->flip), ar0330->flip);
-
-	if (ar0330->ctrls.error)
-		dev_err(ar0330->dev, "%s: control initialization error %d\n",
-			__func__, ar0330->ctrls.error);
-
-	ar0330->subdev.ctrl_handler = &ar0330->ctrls;
-
-	/* Initialize the media entity and V4L2 subdev. */
-	ar0330->pad.flags = MEDIA_PAD_FL_SOURCE;
-	ret = media_entity_pads_init(&ar0330->subdev.entity, 1, &ar0330->pad);
+	/* Init the V4L2 subdev and controls. */
+	ret = ar0330_v4l2_init(ar0330);
 	if (ret < 0)
-		goto error_ctrl;
+		goto error_media;
 
-	v4l2_i2c_subdev_init(&ar0330->subdev, client, &ar0330_subdev_ops);
-	ar0330->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
-	ar0330->subdev.entity.function = MEDIA_ENT_F_CAM_SENSOR;
-
-	ar0330_init_cfg(&ar0330->subdev, NULL);
-
+	/* Initialize the PLL. */
 	ret = ar0330_pll_init(ar0330, rate);
 	if (ret < 0) {
 		dev_err(ar0330->dev, "PLL initialization failed\n");
@@ -1239,7 +1253,6 @@ error_pm:
 	pm_runtime_put_noidle(ar0330->dev);
 error_media:
 	media_entity_cleanup(&ar0330->subdev.entity);
-error_ctrl:
 	v4l2_ctrl_handler_free(&ar0330->ctrls);
 error_power:
 	ar0330_power_off(ar0330);
