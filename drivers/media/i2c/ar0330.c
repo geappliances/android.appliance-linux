@@ -26,6 +26,7 @@
 #include <media/v4l2-async.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
+#include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
 #include "smiapp-pll.h"
@@ -968,11 +969,20 @@ static const struct v4l2_subdev_ops ar0330_subdev_ops = {
 
 static int ar0330_v4l2_init(struct ar0330 *ar0330)
 {
+	struct v4l2_fwnode_device_properties props;
 	struct v4l2_ctrl *ctrl;
 	int ret;
 
+	/* Parse the firmware sensor properties. */
+	ret = v4l2_fwnode_device_parse(ar0330->dev, &props);
+	if (ret) {
+		dev_err(ar0330->dev, "Failed to parse fwnode properties: %d\n",
+			ret);
+		return ret;
+	}
+
 	/* Create V4L2 controls. */
-	v4l2_ctrl_handler_init(&ar0330->ctrls, 8);
+	v4l2_ctrl_handler_init(&ar0330->ctrls, 10);
 
 	v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
 			  V4L2_CID_EXPOSURE, AR0330_COARSE_INTEGRATION_TIME_MIN,
@@ -1006,6 +1016,10 @@ static int ar0330_v4l2_init(struct ar0330 *ar0330)
 		ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
 	v4l2_ctrl_cluster(ARRAY_SIZE(ar0330->flip), ar0330->flip);
+
+
+	v4l2_ctrl_new_fwnode_properties(&ar0330->ctrls, &ar0330_ctrl_ops,
+					&props);
 
 	if (ar0330->ctrls.error) {
 		dev_err(ar0330->dev, "%s: control initialization error %d\n",
