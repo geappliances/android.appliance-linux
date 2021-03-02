@@ -989,9 +989,11 @@ static int ar0330_v4l2_init(struct ar0330 *ar0330)
 
 	v4l2_ctrl_cluster(ARRAY_SIZE(ar0330->flip), ar0330->flip);
 
-	if (ar0330->ctrls.error)
+	if (ar0330->ctrls.error) {
 		dev_err(ar0330->dev, "%s: control initialization error %d\n",
 			__func__, ar0330->ctrls.error);
+		return ar0330->ctrls.error;
+	}
 
 	ar0330->subdev.ctrl_handler = &ar0330->ctrls;
 
