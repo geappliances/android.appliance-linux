@@ -40,6 +40,9 @@
 #define AR0330_WINDOW_HEIGHT_DEF		1296U
 #define AR0330_WINDOW_HEIGHT_MAX		AR0330_PIXEL_ARRAY_HEIGHT
 
+#define AR0330_HBLANK_DEF			192
+#define AR0330_VBLANK_DEF			60
+
 #define AR0330_CHIP_VERSION				0x3000
 #define		AR0330_CHIP_VERSION_VALUE		0x2604
 #define AR0330_Y_ADDR_START				0x3002
@@ -585,9 +588,11 @@ static int ar0330_set_params(struct ar0330 *ar0330)
 	ar0330_write16(ar0330, AR0330_Y_ODD_INC, yskip, &ret);
 
 	/* Blanking - use default values. */
-	ar0330_write16(ar0330, AR0330_LINE_LENGTH_PCK, (crop->width + 192) / 2,
+	ar0330_write16(ar0330, AR0330_LINE_LENGTH_PCK,
+		       (crop->width + AR0330_HBLANK_DEF) / 2,
 		       &ret);
-	ar0330_write16(ar0330, AR0330_FRAME_LENGTH_LINES, crop->height + 60,
+	ar0330_write16(ar0330, AR0330_FRAME_LENGTH_LINES,
+		       crop->height + AR0330_VBLANK_DEF,
 		       &ret);
 
 	return ret;
@@ -963,10 +968,11 @@ static const struct v4l2_subdev_ops ar0330_subdev_ops = {
 
 static int ar0330_v4l2_init(struct ar0330 *ar0330)
 {
+	struct v4l2_ctrl *ctrl;
 	int ret;
 
 	/* Create V4L2 controls. */
-	v4l2_ctrl_handler_init(&ar0330->ctrls, 6);
+	v4l2_ctrl_handler_init(&ar0330->ctrls, 8);
 
 	v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
 			  V4L2_CID_EXPOSURE, AR0330_COARSE_INTEGRATION_TIME_MIN,
@@ -986,6 +992,18 @@ static int ar0330_v4l2_init(struct ar0330 *ar0330)
 				     V4L2_CID_TEST_PATTERN,
 				     ARRAY_SIZE(ar0330_test_pattern_menu) - 1,
 				     0, 0, ar0330_test_pattern_menu);
+
+	ctrl = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+				 V4L2_CID_HBLANK, AR0330_HBLANK_DEF,
+				 AR0330_HBLANK_DEF, 1, AR0330_HBLANK_DEF);
+	if (ctrl)
+		ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+
+	ctrl = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+				 V4L2_CID_VBLANK, AR0330_VBLANK_DEF,
+				 AR0330_VBLANK_DEF, 1, AR0330_VBLANK_DEF);
+	if (ctrl)
+		ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
 	v4l2_ctrl_cluster(ARRAY_SIZE(ar0330->flip), ar0330->flip);
 
