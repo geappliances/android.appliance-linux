@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2021 BayLibre, SAS.
+ * Author: Nicolas Belin <nbelin@baylibre.com>
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "mt8516-pinfunc.h"
+
+&sound {
+	pinctrl-names = "default";
+	pinctrl-0 = <&aud_pins_i2s>;
+};
+
+&i2c0 {
+	tca6416: gpio@20 {
+		sd_sdio_mux_ctrl7 {
+			output-high;
+		};
+	};
+};
+
+&pio {
+	aud_pins_i2s: audioi2s {
+		pins_cmd_dat {
+			pinmux = <MT8516_PIN_2_EINT2__FUNC_I2S2_LRCK>,
+				 <MT8516_PIN_49_SPI_CK__FUNC_I2S2_DI>,
+				 <MT8516_PIN_51_SPI_MO__FUNC_I2S2_MCK>,
+				 <MT8516_PIN_55_I2S_DATA_IN__FUNC_I2S2_BCK>,
+
+				 <MT8516_PIN_25_EINT25__FUNC_I2S_8CH_MCK>,
+				 <MT8516_PIN_68_MSDC2_CMD__FUNC_I2S_8CH_DO4>,
+				 <MT8516_PIN_69_MSDC2_CLK__FUNC_I2S_8CH_DO3>,
+				 <MT8516_PIN_70_MSDC2_DAT0__FUNC_I2S_8CH_DO2>,
+				 <MT8516_PIN_71_MSDC2_DAT1__FUNC_I2S_8CH_DO1>,
+				 <MT8516_PIN_72_MSDC2_DAT2__FUNC_I2S_8CH_LRCK>,
+				 <MT8516_PIN_73_MSDC2_DAT3__FUNC_I2S_8CH_BCK>;
+			 drive-strength = <MTK_DRIVE_4mA>;
+		};
+	};
+};
+
+&mmc2 {
+	status = "disabled";
+};

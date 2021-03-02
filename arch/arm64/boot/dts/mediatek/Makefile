@@ -10,6 +10,7 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt8167-coral.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8167-pumpkin.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8167-pumpkin-android.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8167-pumpkin-android-dsi.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt8167-pumpkin-i2s-header.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8167-sb30.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8167-sb30-android.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8173-evb.dtb
