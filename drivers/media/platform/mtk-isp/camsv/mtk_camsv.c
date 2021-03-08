@@ -213,6 +213,30 @@ static int mtk_camsv_set_fmt(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static int mtk_camsv_subdev_registered(struct v4l2_subdev *sd)
+{
+	struct mtk_camsv_dev *cam = to_mtk_camsv_dev(sd);
+	int i, ret;
+
+	/* Create video nodes and links */
+	for (i = 0; i < MTK_CAMSV_TOTAL_NODES; ++i) {
+		struct mtk_camsv_video_device *node = &cam->vdev_nodes[i];
+
+		node->id = node->desc->id;
+		ret = mtk_camsv_video_register(cam, node);
+		if (ret)
+			goto fail_vdev_unreg;
+	}
+
+	return 0;
+
+fail_vdev_unreg:
+	for (i--; i >= 0; --i)
+		mtk_camsv_video_unregister(&cam->vdev_nodes[i]);
+
+	return ret;
+}
+
 static const struct v4l2_subdev_video_ops mtk_camsv_subdev_video_ops = {
 	.s_stream = mtk_camsv_sd_s_stream,
 };
@@ -228,6 +252,10 @@ static const struct v4l2_subdev_pad_ops mtk_camsv_subdev_pad_ops = {
 static const struct v4l2_subdev_ops mtk_camsv_subdev_ops = {
 	.video = &mtk_camsv_subdev_video_ops,
 	.pad = &mtk_camsv_subdev_pad_ops,
+};
+
+static const struct v4l2_subdev_internal_ops mtk_camsv_internal_ops = {
+	.registered = mtk_camsv_subdev_registered,
 };
 
 /* -----------------------------------------------------------------------------
@@ -264,7 +292,8 @@ static const struct media_entity_operations mtk_camsv_media_entity_ops = {
 static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 {
 	struct device *dev = cam->dev;
-	int registered_nodes, i, ret;
+	int ret;
+	unsigned int i;
 
 	/* Initialize subdev pads */
 	ret = media_entity_pads_init(&cam->subdev.entity,
@@ -286,6 +315,7 @@ static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 	cam->subdev.dev = dev;
 	cam->subdev.entity.function = MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER;
 	cam->subdev.entity.ops = &mtk_camsv_media_entity_ops;
+	cam->subdev.internal_ops = &mtk_camsv_internal_ops;
 	cam->subdev.flags = V4L2_SUBDEV_FL_HAS_DEVNODE;
 	snprintf(cam->subdev.name, sizeof(cam->subdev.name), "%s",
 		 dev_driver_string(dev));
@@ -299,23 +329,8 @@ static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 		goto fail_clean_media_entiy;
 	}
 
-	/* Create video nodes and links */
-	for (i = 0; i < MTK_CAMSV_TOTAL_NODES; i++) {
-		struct mtk_camsv_video_device *node = &cam->vdev_nodes[i];
-
-		node->id = node->desc->id;
-		ret = mtk_camsv_video_register(cam, node);
-		if (ret) {
-			registered_nodes = i - 1;
-			goto fail_vdev_unreg;
-		}
-	}
-
 	return 0;
 
-fail_vdev_unreg:
-	for (i = registered_nodes; i >= 0; i--)
-		mtk_camsv_video_unregister(&cam->vdev_nodes[i]);
 fail_clean_media_entiy:
 	media_entity_cleanup(&cam->subdev.entity);
 
