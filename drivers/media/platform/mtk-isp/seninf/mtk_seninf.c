@@ -129,7 +129,6 @@ struct mtk_seninf {
 	struct v4l2_subdev subdev;
 	struct media_pad pads[SENINF_NUM_PADS];
 	struct v4l2_async_notifier notifier;
-
 	struct v4l2_ctrl_handler ctrl_handler;
 
 	struct v4l2_mbus_framefmt source_format;
@@ -938,37 +937,7 @@ static const struct media_entity_operations seninf_media_ops = {
 struct mtk_seninf_async_subdev {
 	struct v4l2_async_subdev asd;
 	struct mtk_seninf_input *input;
-};
-
-static int mtk_seninf_notifier_bound(
-			struct v4l2_async_notifier *notifier,
-			struct v4l2_subdev *sd,
-			struct v4l2_async_subdev *asd)
-{
-	struct mtk_seninf *priv =
-		container_of(notifier, struct mtk_seninf, notifier);
-	struct mtk_seninf_async_subdev *s_asd =
-		container_of(asd, struct mtk_seninf_async_subdev, asd);
-	struct mtk_seninf_input *input = s_asd->input;
-	int ret;
-
-	dev_dbg(priv->dev, "%s bound to SENINF%u\n", sd->entity.name,
-		input->seninf + 1);
-
-	input->subdev = sd;
-
-	ret = v4l2_create_fwnode_links_to_pad(sd, &priv->pads[input->port]);
-	if (ret) {
-		dev_err(priv->dev, "failed to create link for %s\n",
-			sd->entity.name);
-		return ret;
-	}
-
-	return 0;
-}
-
-static const struct v4l2_async_notifier_operations mtk_seninf_async_ops = {
-	.bound = mtk_seninf_notifier_bound,
+	unsigned int port;
 };
 
 static int mtk_seninf_fwnode_parse(struct device *dev,
@@ -990,14 +959,19 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	const char *phy_name;
 	unsigned int i;
 
-	/* Skip disabled sensors. */
+	/* Skip disabled fwnode. */
 	if (!fwnode_device_is_available(asd->match.fwnode))
 		return -ENOTCONN;
 
-	if (port >= ARRAY_SIZE(priv->inputs)) {
+	if (port >= SENINF_NUM_PADS) {
 		dev_err(dev, "Invalid port %u\n", port);
 		return -EINVAL;
 	}
+
+	s_asd->port = port;
+
+	if (port >= ARRAY_SIZE(priv->inputs))
+		return 0;
 
 	if (vep->bus_type != V4L2_MBUS_CSI2_DPHY) {
 		dev_err(dev, "Only CSI2 bus type is currently supported\n");
@@ -1073,6 +1047,52 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	return 0;
 }
 
+static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
+                                    struct v4l2_subdev *sd,
+                                    struct v4l2_async_subdev *asd)
+{
+	struct mtk_seninf *priv = container_of(notifier, struct mtk_seninf, notifier);
+	struct mtk_seninf_async_subdev *s_asd =
+		container_of(asd, struct mtk_seninf_async_subdev, asd);
+	int ret;
+
+	dev_dbg(priv->dev, "%s bound to SENINF port %u\n", sd->entity.name,
+		s_asd->port);
+
+	if (s_asd->port < ARRAY_SIZE(priv->inputs)) {
+		struct mtk_seninf_input *input = s_asd->input;
+
+		input->subdev = sd;
+		ret = v4l2_create_fwnode_links_to_pad(sd, &priv->pads[input->port], 0);
+	} else
+		ret = v4l2_create_fwnode_links_to_pad(&priv->subdev,
+					&sd->entity.pads[0],
+					MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED);
+
+	if (ret)
+		dev_err(priv->dev, "Failed to create links between SENINF port %u and %s (%d)\n",
+			s_asd->port, sd->entity.name, ret);
+
+	return ret;
+}
+
+static int mtk_seninf_notifier_complete(struct v4l2_async_notifier *notifier)
+{
+	struct mtk_seninf *priv = container_of(notifier, struct mtk_seninf, notifier);
+	int ret;
+
+	ret = v4l2_device_register_subdev_nodes(&priv->v4l2_dev);
+	if (ret)
+		dev_err(priv->dev, "Failed to register subdev nodes: %d\n", ret);
+
+	return ret;
+}
+
+static const struct v4l2_async_notifier_operations mtk_seninf_async_ops = {
+	.bound = mtk_seninf_notifier_bound,
+	.complete = mtk_seninf_notifier_complete,
+};
+
 /* -----------------------------------------------------------------------------
  * Probe & Remove
  */
@@ -1116,11 +1136,38 @@ fail_media_unreg:
 	return ret;
 }
 
+static int mtk_seninf_v4l2_async_register(struct mtk_seninf *priv)
+{
+	struct device *dev = priv->dev;
+	int ret;
+	unsigned int i;
+
+	v4l2_async_notifier_init(&priv->notifier);
+
+	for (i = 0; i < SENINF_NUM_PADS; ++i) {
+		ret = v4l2_async_notifier_parse_fwnode_endpoints_by_port(
+			dev, &priv->notifier,
+			sizeof(struct mtk_seninf_async_subdev), i,
+			mtk_seninf_fwnode_parse);
+
+		if (ret) {
+			dev_err(dev, "Failed to parse endpoint at port %d, err: %d\n", i, ret);
+			return ret;
+		}
+	}
+
+	priv->notifier.ops = &mtk_seninf_async_ops;
+	ret = v4l2_async_notifier_register(&priv->v4l2_dev, &priv->notifier);
+	if (ret)
+		dev_err(dev, "Failed to register async notifier: %d\n", ret);
+
+	return ret;
+}
+
 static int mtk_seninf_v4l2_register(struct mtk_seninf *priv)
 {
 	struct v4l2_subdev *sd = &priv->subdev;
 	struct device *dev = priv->dev;
-	unsigned int i;
 	int ret;
 
 	/* Set up media device & pads */
@@ -1152,30 +1199,16 @@ static int mtk_seninf_v4l2_register(struct mtk_seninf *priv)
 	seninf_init_cfg(sd, NULL);
 	v4l2_set_subdevdata(sd, priv);
 
-	/* Set up async subdev */
-	v4l2_async_notifier_init(&priv->notifier);
-
-	for (i = 0; i < SENINF_NUM_INPUTS; ++i) {
-		ret = v4l2_async_notifier_parse_fwnode_endpoints_by_port(
-			dev, &priv->notifier,
-			sizeof(struct mtk_seninf_async_subdev), i,
-			mtk_seninf_fwnode_parse);
-		if (ret < 0)
-			goto err_clean_entity;
-	}
-
-	sd->subdev_notifier = &priv->notifier;
-	priv->notifier.ops = &mtk_seninf_async_ops;
-	ret = v4l2_async_subdev_notifier_register(sd, &priv->notifier);
-	if (ret < 0) {
-		dev_err(dev, "v4l2 async notifier register failed\n");
-		goto err_clean_notififer;
-	}
-
-	/* Register subdev */
 	ret = v4l2_device_register_subdev(&priv->v4l2_dev, sd);
 	if (ret) {
 		dev_err(dev, "Failed to register subdev: %d\n", ret);
+		goto err_free_handler;
+	}
+
+	/* Set up async device */
+	ret = mtk_seninf_v4l2_async_register(priv);
+	if (ret) {
+		dev_err(dev, "Failed to register v4l2 async notifier: %d\n", ret);
 		goto err_clean_notififer;
 	}
 
@@ -1183,11 +1216,10 @@ static int mtk_seninf_v4l2_register(struct mtk_seninf *priv)
 
 err_clean_notififer:
 	v4l2_async_notifier_cleanup(&priv->notifier);
-err_clean_entity:
-	media_entity_cleanup(&sd->entity);
-	v4l2_device_unregister(&priv->v4l2_dev);
 err_free_handler:
 	v4l2_ctrl_handler_free(&priv->ctrl_handler);
+	media_entity_cleanup(&sd->entity);
+	v4l2_device_unregister(&priv->v4l2_dev);
 fail_media_unreg:
 	media_device_unregister(&priv->media_dev);
 	media_device_cleanup(&priv->media_dev);
@@ -1302,6 +1334,8 @@ static int seninf_remove(struct platform_device *pdev)
 
 	media_device_unregister(&priv->media_dev);
 	media_device_cleanup(&priv->media_dev);
+	v4l2_async_notifier_unregister(&priv->notifier);
+	v4l2_async_notifier_cleanup(&priv->notifier);
 	v4l2_device_unregister_subdev(&priv->subdev);
 	v4l2_ctrl_handler_free(&priv->ctrl_handler);
 	media_entity_cleanup(&priv->subdev.entity);
