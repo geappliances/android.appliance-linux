@@ -6,17 +6,21 @@
 #include <linux/module.h>
 #include <linux/of_graph.h>
 #include <linux/of_irq.h>
+#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <linux/videodev2.h>
 #include <media/v4l2-async.h>
+#include <media/v4l2-common.h>
 #include <media/v4l2-ctrls.h>
+#include <media/v4l2-dev.h>
+#include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-mc.h>
 #include <media/v4l2-subdev.h>
-#include <linux/phy/phy.h>
+
 #include "mtk_seninf_reg.h"
 
 #define SENINF_TIMESTAMP_STEP		0x67
@@ -121,6 +125,7 @@ struct mtk_seninf {
 	void __iomem *base;
 
 	struct media_device media_dev;
+	struct v4l2_device v4l2_dev;
 	struct v4l2_subdev subdev;
 	struct media_pad pads[SENINF_NUM_PADS];
 	struct v4l2_async_notifier notifier;
@@ -1123,26 +1128,31 @@ static int mtk_seninf_v4l2_register(struct mtk_seninf *priv)
 	if (ret)
 		return ret;
 
-	v4l2_subdev_init(sd, &seninf_subdev_ops);
+	/* Set up v4l2 device */
+	priv->v4l2_dev.mdev = &priv->media_dev;
 
-	ret = seninf_initialize_controls(priv);
+	ret = v4l2_device_register(dev, &priv->v4l2_dev);
 	if (ret) {
-		dev_err(dev, "Failed to initialize controls\n");
+		dev_err(dev, "Failed to register V4L2 device: %d\n", ret);
 		goto fail_media_unreg;
 	}
 
-	sd->flags |= (V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS);
-
-	priv->subdev.dev = dev;
-	snprintf(sd->name, V4L2_SUBDEV_NAME_SIZE, "%s",
-		 dev_name(dev));
-	v4l2_set_subdevdata(sd, priv);
-
+	/* Set up subdev */
+	v4l2_subdev_init(sd, &seninf_subdev_ops);
+	sd->dev = dev;
 	sd->entity.function = MEDIA_ENT_F_VID_IF_BRIDGE;
 	sd->entity.ops = &seninf_media_ops;
-
+	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
+	strscpy(sd->name, dev_name(dev), V4L2_SUBDEV_NAME_SIZE);
+	ret = seninf_initialize_controls(priv);
+	if (ret) {
+		dev_err(dev, "Failed to initialize controls: %d\n", ret);
+		goto fail_media_unreg;
+	}
 	seninf_init_cfg(sd, NULL);
+	v4l2_set_subdevdata(sd, priv);
 
+	/* Set up async subdev */
 	v4l2_async_notifier_init(&priv->notifier);
 
 	for (i = 0; i < SENINF_NUM_INPUTS; ++i) {
@@ -1154,7 +1164,7 @@ static int mtk_seninf_v4l2_register(struct mtk_seninf *priv)
 			goto err_clean_entity;
 	}
 
-	priv->subdev.subdev_notifier = &priv->notifier;
+	sd->subdev_notifier = &priv->notifier;
 	priv->notifier.ops = &mtk_seninf_async_ops;
 	ret = v4l2_async_subdev_notifier_register(sd, &priv->notifier);
 	if (ret < 0) {
@@ -1162,17 +1172,20 @@ static int mtk_seninf_v4l2_register(struct mtk_seninf *priv)
 		goto err_clean_notififer;
 	}
 
-	ret = v4l2_async_register_subdev(sd);
-	if (ret < 0) {
-		dev_err(dev, "v4l2 async register subdev failed\n");
+	/* Register subdev */
+	ret = v4l2_device_register_subdev(&priv->v4l2_dev, sd);
+	if (ret) {
+		dev_err(dev, "Failed to register subdev: %d\n", ret);
 		goto err_clean_notififer;
 	}
+
 	return 0;
 
 err_clean_notififer:
 	v4l2_async_notifier_cleanup(&priv->notifier);
 err_clean_entity:
 	media_entity_cleanup(&sd->entity);
+	v4l2_device_unregister(&priv->v4l2_dev);
 err_free_handler:
 	v4l2_ctrl_handler_free(&priv->ctrl_handler);
 fail_media_unreg:
@@ -1286,13 +1299,13 @@ static const struct dev_pm_ops runtime_pm_ops = {
 static int seninf_remove(struct platform_device *pdev)
 {
 	struct mtk_seninf *priv = dev_get_drvdata(&pdev->dev);
-	struct v4l2_subdev *subdev = &priv->subdev;
 
 	media_device_unregister(&priv->media_dev);
 	media_device_cleanup(&priv->media_dev);
-	media_entity_cleanup(&subdev->entity);
-	v4l2_async_unregister_subdev(subdev);
+	v4l2_device_unregister_subdev(&priv->subdev);
 	v4l2_ctrl_handler_free(&priv->ctrl_handler);
+	media_entity_cleanup(&priv->subdev.entity);
+	v4l2_device_unregister(&priv->v4l2_dev);
 
 	pm_runtime_disable(priv->dev);
 
