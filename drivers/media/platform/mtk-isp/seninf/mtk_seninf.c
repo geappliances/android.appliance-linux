@@ -5,12 +5,12 @@
 #include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/of_graph.h>
-#include <linux/of_irq.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
-#include <linux/slab.h>
 #include <linux/videodev2.h>
+#include <media/media-device.h>
+#include <media/media-entity.h>
 #include <media/v4l2-async.h>
 #include <media/v4l2-common.h>
 #include <media/v4l2-ctrls.h>
