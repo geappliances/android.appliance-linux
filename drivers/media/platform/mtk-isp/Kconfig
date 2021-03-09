@@ -16,7 +16,6 @@ config MTK_CAMSV
 	tristate "Mediatek CAMSV driver"
 	depends on VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
 	depends on ARCH_MEDIATEK
-	select V4L2_FWNODE
 	select VIDEOBUF2_VMALLOC
 	select VIDEOBUF2_DMA_CONTIG
 	select MTK_SENINF
