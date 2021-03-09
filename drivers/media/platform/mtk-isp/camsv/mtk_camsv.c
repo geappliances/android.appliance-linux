@@ -45,11 +45,17 @@ static const u32 mtk_camsv_mbus_formats[] = {
 static int mtk_camsv_cio_stream_on(struct mtk_camsv_dev *cam)
 {
 	struct device *dev = cam->dev;
+	struct media_pad *seninf_pad;
 	int ret;
 
 	if (!cam->seninf) {
-		dev_err(dev, "no seninf connected\n");
-		return -ENODEV;
+		seninf_pad = media_entity_remote_pad(
+				&cam->subdev_pads[MTK_CAMSV_CIO_PAD_SENINF]);
+		if (!seninf_pad) {
+			dev_err(dev, "%s: No SENINF connected\n", __func__);
+			return -ENOLINK;
+		}
+		cam->seninf = media_entity_to_v4l2_subdev(seninf_pad->entity);
 	}
 
 	/* Seninf must stream on first */
