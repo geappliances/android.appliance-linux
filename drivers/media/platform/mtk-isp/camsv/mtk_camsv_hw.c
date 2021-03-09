@@ -3,7 +3,14 @@
  * Copyright (c) 2020 BayLibre
  */
 
+#include <linux/device.h>
+#include <linux/interrupt.h>
+#include <linux/iommu.h>
 #include <linux/ktime.h>
+#include <linux/module.h>
+#include <linux/of.h>
+#include <linux/of_platform.h>
+#include <linux/platform_device.h>
 
 #include "mtk_camsv.h"
 

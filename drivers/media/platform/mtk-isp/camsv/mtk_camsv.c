@@ -3,14 +3,8 @@
  * Copyright (c) 2020 BayLibre
  */
 
-#include <linux/platform_device.h>
-
-#include <media/media-device.h>
-#include <media/media-entity.h>
 #include <media/v4l2-async.h>
 #include <media/v4l2-device.h>
-#include <media/v4l2-fwnode.h>
-#include <media/v4l2-subdev.h>
 
 #include "mtk_camsv.h"
 

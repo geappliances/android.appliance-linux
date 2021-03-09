@@ -5,20 +5,11 @@
  * Copyright (c) 2020 BayLibre
  */
 
-#include <linux/io.h>
-#include <linux/platform_device.h>
-#include <linux/pm_runtime.h>
 #include <linux/version.h>
-
-#include <media/media-entity.h>
 #include <media/v4l2-ctrls.h>
-#include <media/v4l2-dev.h>
 #include <media/v4l2-event.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-mediabus.h>
-#include <media/v4l2-subdev.h>
-#include <media/videobuf2-dma-contig.h>
-#include <media/videobuf2-v4l2.h>
 
 #include "mtk_camsv.h"
 
