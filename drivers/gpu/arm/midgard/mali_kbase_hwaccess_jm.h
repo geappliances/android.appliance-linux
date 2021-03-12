@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2014-2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -18,8 +18,26 @@
  *
  * SPDX-License-Identifier: GPL-2.0
  *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
+ *
  */
-
 
 /*
  * HW access job manager common APIs
@@ -154,6 +172,7 @@ void kbase_backend_cache_clean(struct kbase_device *kbdev,
 void kbase_backend_complete_wq(struct kbase_device *kbdev,
 				struct kbase_jd_atom *katom);
 
+#if !MALI_USE_CSF
 /**
  * kbase_backend_complete_wq_post_sched - Perform backend-specific actions
  *                                        required on completing an atom, after
@@ -166,6 +185,7 @@ void kbase_backend_complete_wq(struct kbase_device *kbdev,
  */
 void kbase_backend_complete_wq_post_sched(struct kbase_device *kbdev,
 		base_jd_core_req core_req);
+#endif /* !MALI_USE_CSF */
 
 /**
  * kbase_backend_reset() - The GPU is being reset. Cancel all jobs on the GPU
@@ -290,9 +310,13 @@ u32 kbase_backend_get_current_flush_id(struct kbase_device *kbdev);
 void kbase_job_slot_hardstop(struct kbase_context *kctx, int js,
 				struct kbase_jd_atom *target_katom);
 
-/* Object containing callbacks for enabling/disabling protected mode, used
- * on GPU which supports protected mode switching natively.
+/**
+ * kbase_gpu_atoms_submitted_any() - Inspect whether there are any atoms
+ * currently on the GPU
+ * @kbdev:  Device pointer
+ *
+ * Return: true if there are any atoms on the GPU, false otherwise
  */
-extern struct protected_mode_ops kbase_native_protected_ops;
+bool kbase_gpu_atoms_submitted_any(struct kbase_device *kbdev);
 
 #endif /* _KBASE_HWACCESS_JM_H_ */

@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2014-2015, 2018-2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -18,8 +18,26 @@
  *
  * SPDX-License-Identifier: GPL-2.0
  *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2014-2015, 2018-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
+ *
  */
-
 
 /**
  * @file mali_kbase_hwaccess_pm.h
@@ -29,7 +47,7 @@
 #ifndef _KBASE_HWACCESS_PM_H_
 #define _KBASE_HWACCESS_PM_H_
 
-#include <mali_midg_regmap.h>
+#include <gpu/mali_kbase_gpu_regmap.h>
 #include <linux/atomic.h>
 
 #include <mali_kbase_pm_defs.h>
@@ -119,7 +137,19 @@ void kbase_hwaccess_pm_gpu_active(struct kbase_device *kbdev);
  */
 void kbase_hwaccess_pm_gpu_idle(struct kbase_device *kbdev);
 
-
+#if MALI_USE_CSF
+/**
+ * Set the debug core mask.
+ *
+ * This determines which cores the power manager is allowed to use.
+ *
+ * @param kbdev         The kbase device structure for the device (must be a
+ *                      valid pointer)
+ * @param new_core_mask The core mask to use
+ */
+void kbase_pm_set_debug_core_mask(struct kbase_device *kbdev,
+				  u64 new_core_mask);
+#else
 /**
  * Set the debug core mask.
  *
@@ -134,7 +164,7 @@ void kbase_hwaccess_pm_gpu_idle(struct kbase_device *kbdev);
 void kbase_pm_set_debug_core_mask(struct kbase_device *kbdev,
 		u64 new_core_mask_js0, u64 new_core_mask_js1,
 		u64 new_core_mask_js2);
-
+#endif /* MALI_USE_CSF */
 
 /**
  * Get the current policy.
@@ -207,5 +237,23 @@ void kbase_pm_set_policy(struct kbase_device *kbdev,
  */
 int kbase_pm_list_policies(struct kbase_device *kbdev,
 	const struct kbase_pm_policy * const **list);
+
+/**
+ * kbase_protected_most_enable - Enable protected mode
+ *
+ * @kbdev: Address of the instance of a GPU platform device.
+ *
+ * Return: Zero on success or an error code
+ */
+int kbase_pm_protected_mode_enable(struct kbase_device *kbdev);
+
+/**
+ * kbase_protected_mode_disable - Disable protected mode
+ *
+ * @kbdev: Address of the instance of a GPU platform device.
+ *
+ * Return: Zero on success or an error code
+ */
+int kbase_pm_protected_mode_disable(struct kbase_device *kbdev);
 
 #endif /* _KBASE_HWACCESS_PM_H_ */

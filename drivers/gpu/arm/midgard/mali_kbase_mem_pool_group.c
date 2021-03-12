@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -24,7 +25,7 @@
 #include <mali_kbase_mem.h>
 #include <mali_kbase_mem_pool_group.h>
 
-#include "memory_group_manager.h"
+#include <linux/memory_group_manager.h>
 
 void kbase_mem_pool_group_config_set_max_size(
 	struct kbase_mem_pool_group_config *const configs,

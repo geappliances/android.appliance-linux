@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2010-2015,2018 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2015, 2018-2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -19,8 +20,6 @@
  * SPDX-License-Identifier: GPL-2.0
  *
  */
-
-
 
 /*
  * "Always on" power management policy
@@ -61,8 +60,10 @@ const struct kbase_pm_policy kbase_pm_always_on_policy_ops = {
 	always_on_term,			/* term */
 	always_on_shaders_needed,	/* shaders_needed */
 	always_on_get_core_active,	/* get_core_active */
-	0u,				/* flags */
 	KBASE_PM_POLICY_ID_ALWAYS_ON,	/* id */
+#if MALI_USE_CSF
+	ALWAYS_ON_PM_SCHED_FLAGS,	/* pm_sched_flags */
+#endif
 };
 
 KBASE_EXPORT_TEST_API(kbase_pm_always_on_policy_ops);

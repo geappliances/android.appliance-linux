@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2014-2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -20,29 +21,31 @@
  *
  */
 
-
 /*
  * Register-based HW access backend specific APIs
  */
 
 #include <mali_kbase.h>
+#include <gpu/mali_kbase_gpu_fault.h>
 #include <mali_kbase_hwaccess_jm.h>
 #include <mali_kbase_jm.h>
 #include <mali_kbase_js.h>
-#include <mali_kbase_tracepoints.h>
+#include <tl/mali_kbase_tracepoints.h>
 #include <mali_kbase_hwcnt_context.h>
-#include <mali_kbase_10969_workaround.h>
 #include <mali_kbase_reset_gpu.h>
+#include <mali_kbase_kinstr_jm.h>
 #include <backend/gpu/mali_kbase_cache_policy_backend.h>
-#include <backend/gpu/mali_kbase_device_internal.h>
+#include <device/mali_kbase_device.h>
 #include <backend/gpu/mali_kbase_jm_internal.h>
 #include <backend/gpu/mali_kbase_pm_internal.h>
 
 /* Return whether the specified ringbuffer is empty. HW access lock must be
- * held */
+ * held
+ */
 #define SLOT_RB_EMPTY(rb)   (rb->write_idx == rb->read_idx)
 /* Return number of atoms currently in the specified ringbuffer. HW access lock
- * must be held */
+ * must be held
+ */
 #define SLOT_RB_ENTRIES(rb) (int)(s8)(rb->write_idx - rb->read_idx)
 
 static void kbase_gpu_release_atom(struct kbase_device *kbdev,
@@ -132,42 +135,7 @@ struct kbase_jd_atom *kbase_backend_inspect_tail(struct kbase_device *kbdev,
 	return rb->entries[(rb->write_idx - 1) & SLOT_RB_MASK].katom;
 }
 
-/**
- * kbase_gpu_atoms_submitted - Inspect whether a slot has any atoms currently
- * on the GPU
- * @kbdev:  Device pointer
- * @js:     Job slot to inspect
- *
- * Return: true if there are atoms on the GPU for slot js,
- *         false otherwise
- */
-static bool kbase_gpu_atoms_submitted(struct kbase_device *kbdev, int js)
-{
-	int i;
-
-	lockdep_assert_held(&kbdev->hwaccess_lock);
-
-	for (i = 0; i < SLOT_RB_SIZE; i++) {
-		struct kbase_jd_atom *katom = kbase_gpu_inspect(kbdev, js, i);
-
-		if (!katom)
-			return false;
-		if (katom->gpu_rb_state == KBASE_ATOM_GPU_RB_SUBMITTED ||
-				katom->gpu_rb_state == KBASE_ATOM_GPU_RB_READY)
-			return true;
-	}
-
-	return false;
-}
-
-/**
- * kbase_gpu_atoms_submitted_any() - Inspect whether there are any atoms
- * currently on the GPU
- * @kbdev:  Device pointer
- *
- * Return: true if there are any atoms on the GPU, false otherwise
- */
-static bool kbase_gpu_atoms_submitted_any(struct kbase_device *kbdev)
+bool kbase_gpu_atoms_submitted_any(struct kbase_device *kbdev)
 {
 	int js;
 	int i;
@@ -288,6 +256,8 @@ static bool kbase_gpu_check_secure_atoms(struct kbase_device *kbdev,
 
 int kbase_backend_slot_free(struct kbase_device *kbdev, int js)
 {
+	lockdep_assert_held(&kbdev->hwaccess_lock);
+
 	if (atomic_read(&kbdev->hwaccess.backend.reset_gpu) !=
 						KBASE_RESET_GPU_NOT_PENDING) {
 		/* The GPU is being reset - so prevent submission */
@@ -313,9 +283,11 @@ static void kbase_gpu_release_atom(struct kbase_device *kbdev,
 		break;
 
 	case KBASE_ATOM_GPU_RB_SUBMITTED:
+		kbase_kinstr_jm_atom_hw_release(katom);
 		/* Inform power management at start/finish of atom so it can
 		 * update its GPU utilisation metrics. Mark atom as not
-		 * submitted beforehand. */
+		 * submitted beforehand.
+		 */
 		katom->gpu_rb_state = KBASE_ATOM_GPU_RB_READY;
 		kbase_pm_metrics_update(kbdev, end_timestamp);
 
@@ -332,9 +304,6 @@ static void kbase_gpu_release_atom(struct kbase_device *kbdev,
 				[katom->slot_nr]);
 
 	case KBASE_ATOM_GPU_RB_READY:
-		/* ***FALLTHROUGH: TRANSITION TO LOWER STATE*** */
-
-	case KBASE_ATOM_GPU_RB_WAITING_AFFINITY:
 		/* ***FALLTHROUGH: TRANSITION TO LOWER STATE*** */
 
 	case KBASE_ATOM_GPU_RB_WAITING_FOR_CORE_AVAILABLE:
@@ -418,40 +387,6 @@ static void kbase_gpu_mark_atom_for_return(struct kbase_device *kbdev,
 
 	kbase_gpu_release_atom(kbdev, katom, NULL);
 	katom->gpu_rb_state = KBASE_ATOM_GPU_RB_RETURN_TO_JS;
-}
-
-static inline bool kbase_gpu_rmu_workaround(struct kbase_device *kbdev, int js)
-{
-	struct kbase_backend_data *backend = &kbdev->hwaccess.backend;
-	bool slot_busy[3];
-
-	if (!kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_8987))
-		return true;
-	slot_busy[0] = kbase_gpu_nr_atoms_on_slot_min(kbdev, 0,
-					KBASE_ATOM_GPU_RB_WAITING_AFFINITY);
-	slot_busy[1] = kbase_gpu_nr_atoms_on_slot_min(kbdev, 1,
-					KBASE_ATOM_GPU_RB_WAITING_AFFINITY);
-	slot_busy[2] = kbase_gpu_nr_atoms_on_slot_min(kbdev, 2,
-					KBASE_ATOM_GPU_RB_WAITING_AFFINITY);
-
-	if ((js == 2 && !(slot_busy[0] || slot_busy[1])) ||
-		(js != 2 && !slot_busy[2]))
-		return true;
-
-	/* Don't submit slot 2 atom while GPU has jobs on slots 0/1 */
-	if (js == 2 && (kbase_gpu_atoms_submitted(kbdev, 0) ||
-			kbase_gpu_atoms_submitted(kbdev, 1) ||
-			backend->rmu_workaround_flag))
-		return false;
-
-	/* Don't submit slot 0/1 atom while GPU has jobs on slot 2 */
-	if (js != 2 && (kbase_gpu_atoms_submitted(kbdev, 2) ||
-			!backend->rmu_workaround_flag))
-		return false;
-
-	backend->rmu_workaround_flag = !backend->rmu_workaround_flag;
-
-	return true;
 }
 
 /**
@@ -612,7 +547,8 @@ static int kbase_jm_enter_protected_mode(struct kbase_device *kbdev,
 		KBASE_TLSTREAM_AUX_PROTECTED_ENTER_START(kbdev, kbdev);
 		/* The checks in KBASE_ATOM_GPU_RB_WAITING_PROTECTED_MODE_PREV
 		 * should ensure that we are not already transitiong, and that
-		 * there are no atoms currently on the GPU. */
+		 * there are no atoms currently on the GPU.
+		 */
 		WARN_ON(kbdev->protected_mode_transition);
 		WARN_ON(kbase_gpu_atoms_submitted_any(kbdev));
 		/* If hwcnt is disabled, it means we didn't clean up correctly
@@ -625,8 +561,8 @@ static int kbase_jm_enter_protected_mode(struct kbase_device *kbdev,
 
 		kbdev->protected_mode_transition = true;
 
-		/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
+		/* ***TRANSITION TO HIGHER STATE*** */
+		/* fallthrough */
 	case KBASE_ATOM_ENTER_PROTECTED_HWCNT:
 		/* See if we can get away with disabling hwcnt atomically */
 		kbdev->protected_mode_hwcnt_desired = false;
@@ -638,19 +574,15 @@ static int kbase_jm_enter_protected_mode(struct kbase_device *kbdev,
 
 		/* We couldn't disable atomically, so kick off a worker */
 		if (!kbdev->protected_mode_hwcnt_disabled) {
-#if KERNEL_VERSION(3, 16, 0) > LINUX_VERSION_CODE
-			queue_work(system_wq,
+			kbase_hwcnt_context_queue_work(
+				kbdev->hwcnt_gpu_ctx,
 				&kbdev->protected_mode_hwcnt_disable_work);
-#else
-			queue_work(system_highpri_wq,
-				&kbdev->protected_mode_hwcnt_disable_work);
-#endif
 			return -EAGAIN;
 		}
 
-		/* Once reaching this point GPU must be
-		 * switched to protected mode or hwcnt
-		 * re-enabled. */
+		/* Once reaching this point GPU must be switched to protected
+		 * mode or hwcnt re-enabled.
+		 */
 
 		if (kbase_pm_protected_entry_override_enable(kbdev))
 			return -EAGAIN;
@@ -672,8 +604,8 @@ static int kbase_jm_enter_protected_mode(struct kbase_device *kbdev,
 		if (!kbdev->pm.backend.protected_entry_transition_override)
 			kbase_pm_update_cores_state_nolock(kbdev);
 
-		/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
+		/* ***TRANSITION TO HIGHER STATE*** */
+		/* fallthrough */
 	case KBASE_ATOM_ENTER_PROTECTED_IDLE_L2:
 		/* Avoid unnecessary waiting on non-ACE platforms. */
 		if (kbdev->system_coherency == COHERENCY_ACE) {
@@ -686,11 +618,15 @@ static int kbase_jm_enter_protected_mode(struct kbase_device *kbdev,
 					return -EAGAIN;
 			}
 
-			if (kbase_pm_get_ready_cores(kbdev, KBASE_PM_CORE_L2) ||
-				kbase_pm_get_trans_cores(kbdev, KBASE_PM_CORE_L2)) {
+			if (kbase_pm_get_ready_cores(kbdev,
+						KBASE_PM_CORE_L2) ||
+				kbase_pm_get_trans_cores(kbdev,
+						KBASE_PM_CORE_L2) ||
+				kbase_is_gpu_removed(kbdev)) {
 				/*
-				 * The L2 is still powered, wait for all the users to
-				 * finish with it before doing the actual reset.
+				 * The L2 is still powered, wait for all
+				 * the users to finish with it before doing
+				 * the actual reset.
 				 */
 				return -EAGAIN;
 			}
@@ -699,8 +635,8 @@ static int kbase_jm_enter_protected_mode(struct kbase_device *kbdev,
 		katom[idx]->protected_state.enter =
 			KBASE_ATOM_ENTER_PROTECTED_SET_COHERENCY;
 
-		/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
+		/* ***TRANSITION TO HIGHER STATE*** */
+		/* fallthrough */
 	case KBASE_ATOM_ENTER_PROTECTED_SET_COHERENCY:
 		/*
 		 * When entering into protected mode, we must ensure that the
@@ -732,8 +668,8 @@ static int kbase_jm_enter_protected_mode(struct kbase_device *kbdev,
 		if (kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_TGOX_R1_1234))
 			return -EAGAIN;
 
-		/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
+		/* ***TRANSITION TO HIGHER STATE*** */
+		/* fallthrough */
 	case KBASE_ATOM_ENTER_PROTECTED_FINISHED:
 		if (kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_TGOX_R1_1234)) {
 			/*
@@ -786,7 +722,8 @@ static int kbase_jm_exit_protected_mode(struct kbase_device *kbdev,
 		KBASE_TLSTREAM_AUX_PROTECTED_LEAVE_START(kbdev, kbdev);
 		/* The checks in KBASE_ATOM_GPU_RB_WAITING_PROTECTED_MODE_PREV
 		 * should ensure that we are not already transitiong, and that
-		 * there are no atoms currently on the GPU. */
+		 * there are no atoms currently on the GPU.
+		 */
 		WARN_ON(kbdev->protected_mode_transition);
 		WARN_ON(kbase_gpu_atoms_submitted_any(kbdev));
 
@@ -802,7 +739,8 @@ static int kbase_jm_exit_protected_mode(struct kbase_device *kbdev,
 		kbase_pm_protected_override_enable(kbdev);
 		kbase_pm_update_cores_state_nolock(kbdev);
 
-		/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
+		/* ***TRANSITION TO HIGHER STATE*** */
+		/* fallthrough */
 	case KBASE_ATOM_EXIT_PROTECTED_IDLE_L2:
 		if (kbdev->pm.backend.l2_state != KBASE_L2_OFF) {
 			/*
@@ -814,8 +752,8 @@ static int kbase_jm_exit_protected_mode(struct kbase_device *kbdev,
 		katom[idx]->protected_state.exit =
 				KBASE_ATOM_EXIT_PROTECTED_RESET;
 
-		/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
+		/* ***TRANSITION TO HIGHER STATE*** */
+		/* fallthrough */
 	case KBASE_ATOM_EXIT_PROTECTED_RESET:
 		/* Issue the reset to the GPU */
 		err = kbase_gpu_protected_mode_reset(kbdev);
@@ -831,8 +769,8 @@ static int kbase_jm_exit_protected_mode(struct kbase_device *kbdev,
 			katom[idx]->event_code = BASE_JD_EVENT_JOB_INVALID;
 			kbase_gpu_mark_atom_for_return(kbdev, katom[idx]);
 			/* Only return if head atom or previous atom
-			 * already removed - as atoms must be returned
-			 * in order */
+			 * already removed - as atoms must be returned in order
+			 */
 			if (idx == 0 || katom[0]->gpu_rb_state ==
 					KBASE_ATOM_GPU_RB_NOT_IN_SLOT_RB) {
 				kbase_gpu_dequeue_atom(kbdev, js, NULL);
@@ -856,8 +794,8 @@ static int kbase_jm_exit_protected_mode(struct kbase_device *kbdev,
 		katom[idx]->protected_state.exit =
 				KBASE_ATOM_EXIT_PROTECTED_RESET_WAIT;
 
-		/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
+		/* ***TRANSITION TO HIGHER STATE*** */
+		/* fallthrough */
 	case KBASE_ATOM_EXIT_PROTECTED_RESET_WAIT:
 		/* A GPU reset is issued when exiting protected mode. Once the
 		 * reset is done all atoms' state will also be reset. For this
@@ -877,7 +815,12 @@ void kbase_backend_slot_update(struct kbase_device *kbdev)
 
 	lockdep_assert_held(&kbdev->hwaccess_lock);
 
+#ifdef CONFIG_MALI_ARBITER_SUPPORT
+	if (kbase_reset_gpu_is_active(kbdev) ||
+			kbase_is_gpu_removed(kbdev))
+#else
 	if (kbase_reset_gpu_is_active(kbdev))
+#endif
 		return;
 
 	for (js = 0; js < kbdev->gpu_props.num_job_slots; js++) {
@@ -902,15 +845,14 @@ void kbase_backend_slot_update(struct kbase_device *kbdev)
 				break;
 
 			case KBASE_ATOM_GPU_RB_WAITING_BLOCKED:
-				if (katom[idx]->atom_flags &
-						KBASE_KATOM_FLAG_X_DEP_BLOCKED)
+				if (kbase_js_atom_blocked_on_x_dep(katom[idx]))
 					break;
 
 				katom[idx]->gpu_rb_state =
 				KBASE_ATOM_GPU_RB_WAITING_PROTECTED_MODE_PREV;
 
-			/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
+				/* ***TRANSITION TO HIGHER STATE*** */
+				/* fallthrough */
 			case KBASE_ATOM_GPU_RB_WAITING_PROTECTED_MODE_PREV:
 				if (kbase_gpu_check_secure_atoms(kbdev,
 						!kbase_jd_katom_is_protected(
@@ -929,8 +871,8 @@ void kbase_backend_slot_update(struct kbase_device *kbdev)
 				katom[idx]->gpu_rb_state =
 					KBASE_ATOM_GPU_RB_WAITING_PROTECTED_MODE_TRANSITION;
 
-			/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
+				/* ***TRANSITION TO HIGHER STATE*** */
+				/* fallthrough */
 			case KBASE_ATOM_GPU_RB_WAITING_PROTECTED_MODE_TRANSITION:
 
 				/*
@@ -964,19 +906,21 @@ void kbase_backend_slot_update(struct kbase_device *kbdev)
 				katom[idx]->gpu_rb_state =
 					KBASE_ATOM_GPU_RB_WAITING_FOR_CORE_AVAILABLE;
 
-			/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
+				/* ***TRANSITION TO HIGHER STATE*** */
+				/* fallthrough */
 			case KBASE_ATOM_GPU_RB_WAITING_FOR_CORE_AVAILABLE:
 				if (katom[idx]->will_fail_event_code) {
 					kbase_gpu_mark_atom_for_return(kbdev,
 							katom[idx]);
 					/* Set EVENT_DONE so this atom will be
-					   completed, not unpulled. */
+					 * completed, not unpulled.
+					 */
 					katom[idx]->event_code =
 						BASE_JD_EVENT_DONE;
 					/* Only return if head atom or previous
 					 * atom already removed - as atoms must
-					 * be returned in order. */
+					 * be returned in order.
+					 */
 					if (idx == 0 ||	katom[0]->gpu_rb_state ==
 							KBASE_ATOM_GPU_RB_NOT_IN_SLOT_RB) {
 						kbase_gpu_dequeue_atom(kbdev, js, NULL);
@@ -999,24 +943,16 @@ void kbase_backend_slot_update(struct kbase_device *kbdev)
 					break;
 
 				katom[idx]->gpu_rb_state =
-					KBASE_ATOM_GPU_RB_WAITING_AFFINITY;
-
-			/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
-			case KBASE_ATOM_GPU_RB_WAITING_AFFINITY:
-				if (!kbase_gpu_rmu_workaround(kbdev, js))
-					break;
-
-				katom[idx]->gpu_rb_state =
 					KBASE_ATOM_GPU_RB_READY;
 
-			/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
+				/* ***TRANSITION TO HIGHER STATE*** */
+				/* fallthrough */
 			case KBASE_ATOM_GPU_RB_READY:
 
 				if (idx == 1) {
 					/* Only submit if head atom or previous
-					 * atom already submitted */
+					 * atom already submitted
+					 */
 					if ((katom[0]->gpu_rb_state !=
 						KBASE_ATOM_GPU_RB_SUBMITTED &&
 						katom[0]->gpu_rb_state !=
@@ -1032,19 +968,21 @@ void kbase_backend_slot_update(struct kbase_device *kbdev)
 				}
 
 				/* If inter-slot serialization in use then don't
-				 * submit atom if any other slots are in use */
+				 * submit atom if any other slots are in use
+				 */
 				if ((kbdev->serialize_jobs &
 						KBASE_SERIALIZE_INTER_SLOT) &&
 						other_slots_busy(kbdev, js))
 					break;
 
-				if ((kbdev->serialize_jobs &
-						KBASE_SERIALIZE_RESET) &&
-						kbase_reset_gpu_is_active(kbdev))
+#ifdef CONFIG_MALI_GEM5_BUILD
+				if (!kbasep_jm_is_js_free(kbdev, js,
+						katom[idx]->kctx))
 					break;
-
+#endif
 				/* Check if this job needs the cycle counter
-				 * enabled before submission */
+				 * enabled before submission
+				 */
 				if (katom[idx]->core_req & BASE_JD_REQ_PERMON)
 					kbase_pm_request_gpu_cycle_counter_l2_is_on(
 									kbdev);
@@ -1055,12 +993,13 @@ void kbase_backend_slot_update(struct kbase_device *kbdev)
 
 				/* Inform power management at start/finish of
 				 * atom so it can update its GPU utilisation
-				 * metrics. */
+				 * metrics.
+				 */
 				kbase_pm_metrics_update(kbdev,
 						&katom[idx]->start_timestamp);
 
-			/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
-
+				/* ***TRANSITION TO HIGHER STATE*** */
+				/* fallthrough */
 			case KBASE_ATOM_GPU_RB_SUBMITTED:
 				/* Atom submitted to HW, nothing else to do */
 				break;
@@ -1068,7 +1007,8 @@ void kbase_backend_slot_update(struct kbase_device *kbdev)
 			case KBASE_ATOM_GPU_RB_RETURN_TO_JS:
 				/* Only return if head atom or previous atom
 				 * already removed - as atoms must be returned
-				 * in order */
+				 * in order
+				 */
 				if (idx == 0 || katom[0]->gpu_rb_state ==
 					KBASE_ATOM_GPU_RB_NOT_IN_SLOT_RB) {
 					kbase_gpu_dequeue_atom(kbdev, js, NULL);
@@ -1079,12 +1019,6 @@ void kbase_backend_slot_update(struct kbase_device *kbdev)
 			}
 		}
 	}
-
-	/* Warn if PRLAM-8987 affinity restrictions are violated */
-	if (kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_8987))
-		WARN_ON((kbase_gpu_atoms_submitted(kbdev, 0) ||
-			kbase_gpu_atoms_submitted(kbdev, 1)) &&
-			kbase_gpu_atoms_submitted(kbdev, 2));
 }
 
 
@@ -1092,6 +1026,8 @@ void kbase_backend_run_atom(struct kbase_device *kbdev,
 				struct kbase_jd_atom *katom)
 {
 	lockdep_assert_held(&kbdev->hwaccess_lock);
+	dev_dbg(kbdev->dev, "Backend running atom %p\n", (void *)katom);
+
 	kbase_gpu_enqueue_atom(kbdev, katom);
 	kbase_backend_slot_update(kbdev);
 }
@@ -1150,6 +1086,10 @@ void kbase_gpu_complete_hw(struct kbase_device *kbdev, int js,
 	struct kbase_jd_atom *katom = kbase_gpu_inspect(kbdev, js, 0);
 	struct kbase_context *kctx = katom->kctx;
 
+	dev_dbg(kbdev->dev,
+		"Atom %p completed on hw with code 0x%x and job_tail 0x%llx (s:%d)\n",
+		(void *)katom, completion_code, job_tail, js);
+
 	lockdep_assert_held(&kbdev->hwaccess_lock);
 
 	/*
@@ -1164,22 +1104,16 @@ void kbase_gpu_complete_hw(struct kbase_device *kbdev, int js,
 		}
 	}
 
-	if ((kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_6787) || (katom->core_req &
-					BASE_JD_REQ_SKIP_CACHE_END)) &&
+	if ((katom->core_req & BASE_JD_REQ_SKIP_CACHE_END) &&
 			completion_code != BASE_JD_EVENT_DONE &&
 			!(completion_code & BASE_JD_SW_EVENT)) {
 		/* When a job chain fails, on a T60x or when
 		 * BASE_JD_REQ_SKIP_CACHE_END is set, the GPU cache is not
 		 * flushed. To prevent future evictions causing possible memory
 		 * corruption we need to flush the cache manually before any
-		 * affected memory gets reused. */
+		 * affected memory gets reused.
+		 */
 		katom->need_cache_flush_cores_retained = true;
-	} else if (kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_10676)) {
-		if (kbdev->gpu_props.num_core_groups > 1 &&
-				katom->device_nr >= 1) {
-			dev_info(kbdev->dev, "JD: Flushing cache due to PRLAM-10676\n");
-			katom->need_cache_flush_cores_retained = true;
-		}
 	}
 
 	katom = kbase_gpu_dequeue_atom(kbdev, js, end_timestamp);
@@ -1209,12 +1143,11 @@ void kbase_gpu_complete_hw(struct kbase_device *kbdev, int js,
 		if (!kbase_ctx_flag(katom->kctx, KCTX_DYING))
 			dev_warn(kbdev->dev, "error detected from slot %d, job status 0x%08x (%s)",
 					js, completion_code,
-					kbase_exception_name
-					(kbdev,
+					kbase_gpu_exception_name(
 					completion_code));
 
-#if KBASE_TRACE_DUMP_ON_JOB_SLOT_ERROR != 0
-		KBASE_TRACE_DUMP(kbdev);
+#if KBASE_KTRACE_DUMP_ON_JOB_SLOT_ERROR != 0
+		KBASE_KTRACE_DUMP(kbdev);
 #endif
 		kbasep_js_clear_submit_allowed(js_devdata, katom->kctx);
 
@@ -1260,7 +1193,8 @@ void kbase_gpu_complete_hw(struct kbase_device *kbdev, int js,
 					katom_idx1->gpu_rb_state !=
 					KBASE_ATOM_GPU_RB_SUBMITTED) {
 				/* Can not dequeue this atom yet - will be
-				 * dequeued when atom at idx0 completes */
+				 * dequeued when atom at idx0 completes
+				 */
 				katom_idx1->event_code = BASE_JD_EVENT_STOPPED;
 				kbase_gpu_mark_atom_for_return(kbdev,
 								katom_idx1);
@@ -1268,23 +1202,22 @@ void kbase_gpu_complete_hw(struct kbase_device *kbdev, int js,
 		}
 	}
 
-	KBASE_TRACE_ADD_SLOT_INFO(kbdev, JM_JOB_DONE, kctx, katom, katom->jc,
-					js, completion_code);
+	KBASE_KTRACE_ADD_JM_SLOT_INFO(kbdev, JM_JOB_DONE, kctx, katom, katom->jc, js, completion_code);
 
 	if (job_tail != 0 && job_tail != katom->jc) {
-		bool was_updated = (job_tail != katom->jc);
+		/* Some of the job has been executed */
+		dev_dbg(kbdev->dev,
+			"Update job chain address of atom %p to resume from 0x%llx\n",
+			(void *)katom, job_tail);
 
-		/* Some of the job has been executed, so we update the job chain
-		 * address to where we should resume from */
 		katom->jc = job_tail;
-		if (was_updated)
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_UPDATE_HEAD, katom->kctx,
-						katom, job_tail, js);
+		KBASE_KTRACE_ADD_JM_SLOT(kbdev, JM_UPDATE_HEAD, katom->kctx,
+					katom, job_tail, js);
 	}
 
 	/* Only update the event code for jobs that weren't cancelled */
 	if (katom->event_code != BASE_JD_EVENT_JOB_CANCELLED)
-		katom->event_code = (base_jd_event_code)completion_code;
+		katom->event_code = (enum base_jd_event_code)completion_code;
 
 	/* Complete the job, and start new ones
 	 *
@@ -1334,8 +1267,9 @@ void kbase_gpu_complete_hw(struct kbase_device *kbdev, int js,
 		katom = kbase_jm_complete(kbdev, katom, end_timestamp);
 
 	if (katom) {
-		/* Cross-slot dependency has now become runnable. Try to submit
-		 * it. */
+		dev_dbg(kbdev->dev,
+			"Cross-slot dependency %p has become runnable.\n",
+			(void *)katom);
 
 		/* Check if there are lower priority jobs to soft stop */
 		kbase_job_slot_ctx_priority_check_locked(kctx, katom);
@@ -1343,8 +1277,12 @@ void kbase_gpu_complete_hw(struct kbase_device *kbdev, int js,
 		kbase_jm_try_kick(kbdev, 1 << katom->slot_nr);
 	}
 
+	/* For partial shader core off L2 cache flush */
+	kbase_pm_update_state(kbdev);
+
 	/* Job completion may have unblocked other atoms. Try to update all job
-	 * slots */
+	 * slots
+	 */
 	kbase_backend_slot_update(kbdev);
 }
 
@@ -1395,7 +1333,8 @@ void kbase_backend_reset(struct kbase_device *kbdev, ktime_t *end_timestamp)
 				katom->protected_state.exit = KBASE_ATOM_EXIT_PROTECTED_CHECK;
 				/* As the atom was not removed, increment the
 				 * index so that we read the correct atom in the
-				 * next iteration. */
+				 * next iteration.
+				 */
 				atom_idx++;
 				continue;
 			}
@@ -1498,7 +1437,8 @@ bool kbase_backend_soft_hard_stop_slot(struct kbase_device *kbdev,
 		katom_idx0_valid = (katom_idx0 == katom);
 		/* If idx0 is to be removed and idx1 is on the same context,
 		 * then idx1 must also be removed otherwise the atoms might be
-		 * returned out of order */
+		 * returned out of order
+		 */
 		if (katom_idx1)
 			katom_idx1_valid = (katom_idx1 == katom) ||
 						(katom_idx0_valid &&
@@ -1545,7 +1485,8 @@ bool kbase_backend_soft_hard_stop_slot(struct kbase_device *kbdev,
 				if (kbase_reg_read(kbdev, JOB_SLOT_REG(js,
 						JS_COMMAND_NEXT)) == 0) {
 					/* idx0 has already completed - stop
-					 * idx1 if needed*/
+					 * idx1 if needed
+					 */
 					if (katom_idx1_valid) {
 						kbase_gpu_stop_atom(kbdev, js,
 								katom_idx1,
@@ -1554,7 +1495,8 @@ bool kbase_backend_soft_hard_stop_slot(struct kbase_device *kbdev,
 					}
 				} else {
 					/* idx1 is in NEXT registers - attempt
-					 * to remove */
+					 * to remove
+					 */
 					kbase_reg_write(kbdev,
 							JOB_SLOT_REG(js,
 							JS_COMMAND_NEXT),
@@ -1569,7 +1511,8 @@ bool kbase_backend_soft_hard_stop_slot(struct kbase_device *kbdev,
 							JS_HEAD_NEXT_HI))
 									!= 0) {
 						/* idx1 removed successfully,
-						 * will be handled in IRQ */
+						 * will be handled in IRQ
+						 */
 						kbase_gpu_remove_atom(kbdev,
 								katom_idx1,
 								action, true);
@@ -1583,7 +1526,8 @@ bool kbase_backend_soft_hard_stop_slot(struct kbase_device *kbdev,
 						ret = true;
 					} else if (katom_idx1_valid) {
 						/* idx0 has already completed,
-						 * stop idx1 if needed */
+						 * stop idx1 if needed
+						 */
 						kbase_gpu_stop_atom(kbdev, js,
 								katom_idx1,
 								action);
@@ -1602,7 +1546,8 @@ bool kbase_backend_soft_hard_stop_slot(struct kbase_device *kbdev,
 				 * flow was also interrupted, and this function
 				 * might not enter disjoint state e.g. if we
 				 * don't actually do a hard stop on the head
-				 * atom */
+				 * atom
+				 */
 				kbase_gpu_stop_atom(kbdev, js, katom_idx0,
 									action);
 				ret = true;
@@ -1630,7 +1575,8 @@ bool kbase_backend_soft_hard_stop_slot(struct kbase_device *kbdev,
 				ret = true;
 			} else {
 				/* idx1 is in NEXT registers - attempt to
-				 * remove */
+				 * remove
+				 */
 				kbase_reg_write(kbdev, JOB_SLOT_REG(js,
 							JS_COMMAND_NEXT),
 							JS_COMMAND_NOP);
@@ -1640,13 +1586,15 @@ bool kbase_backend_soft_hard_stop_slot(struct kbase_device *kbdev,
 				    kbase_reg_read(kbdev, JOB_SLOT_REG(js,
 						JS_HEAD_NEXT_HI)) != 0) {
 					/* idx1 removed successfully, will be
-					 * handled in IRQ once idx0 completes */
+					 * handled in IRQ once idx0 completes
+					 */
 					kbase_gpu_remove_atom(kbdev, katom_idx1,
 									action,
 									false);
 				} else {
 					/* idx0 has already completed - stop
-					 * idx1 */
+					 * idx1
+					 */
 					kbase_gpu_stop_atom(kbdev, js,
 								katom_idx1,
 								action);
@@ -1687,24 +1635,6 @@ void kbase_backend_complete_wq(struct kbase_device *kbdev,
 	 * now
 	 */
 	kbase_backend_cache_clean(kbdev, katom);
-
-	if (kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_10969)            &&
-	    (katom->core_req & BASE_JD_REQ_FS)                        &&
-	    katom->event_code == BASE_JD_EVENT_TILE_RANGE_FAULT       &&
-	    (katom->atom_flags & KBASE_KATOM_FLAG_BEEN_SOFT_STOPPPED) &&
-	    !(katom->atom_flags & KBASE_KATOM_FLAGS_RERUN)) {
-		dev_dbg(kbdev->dev, "Soft-stopped fragment shader job got a TILE_RANGE_FAULT. Possible HW issue, trying SW workaround\n");
-		if (kbasep_10969_workaround_clamp_coordinates(katom)) {
-			/* The job had a TILE_RANGE_FAULT after was soft-stopped
-			 * Due to an HW issue we try to execute the job again.
-			 */
-			dev_dbg(kbdev->dev,
-				"Clamping has been executed, try to rerun the job\n"
-			);
-			katom->event_code = BASE_JD_EVENT_STOPPED;
-			katom->atom_flags |= KBASE_KATOM_FLAGS_RERUN;
-		}
-	}
 }
 
 void kbase_backend_complete_wq_post_sched(struct kbase_device *kbdev,

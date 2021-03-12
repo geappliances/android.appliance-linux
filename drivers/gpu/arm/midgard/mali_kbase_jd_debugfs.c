@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2014-2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -46,18 +47,16 @@ static void kbase_jd_debugfs_fence_info(struct kbase_jd_atom *atom,
 	switch (atom->core_req & BASE_JD_REQ_SOFT_JOB_TYPE) {
 	case BASE_JD_REQ_SOFT_FENCE_TRIGGER:
 		res = kbase_sync_fence_out_info_get(atom, &info);
-		if (0 == res) {
+		if (res == 0)
 			seq_printf(sfile, "Sa([%p]%d) ",
 				   info.fence, info.status);
-			break;
-		}
+		break;
 	case BASE_JD_REQ_SOFT_FENCE_WAIT:
 		res = kbase_sync_fence_in_info_get(atom, &info);
-		if (0 == res) {
+		if (res == 0)
 			seq_printf(sfile, "Wa([%p]%d) ",
 				   info.fence, info.status);
-			break;
-		}
+		break;
 	default:
 		break;
 	}
@@ -68,42 +67,40 @@ static void kbase_jd_debugfs_fence_info(struct kbase_jd_atom *atom,
 		struct kbase_fence_cb *cb;
 
 		if (atom->dma_fence.fence) {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0))
+#if (KERNEL_VERSION(4, 10, 0) > LINUX_VERSION_CODE)
 			struct fence *fence = atom->dma_fence.fence;
 #else
 			struct dma_fence *fence = atom->dma_fence.fence;
 #endif
 
 			seq_printf(sfile,
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0))
-					"Sd(%u#%u: %s) ",
+#if (KERNEL_VERSION(4, 8, 0) > LINUX_VERSION_CODE)
+				   "Sd(%u#%u: %s) ",
 #else
-					"Sd(%llu#%llu: %s) ",
+				   "Sd(%llu#%u: %s) ",
 #endif
-					fence->context,
-					fence->seqno,
-					dma_fence_is_signaled(fence) ?
-						"signaled" : "active");
+				   fence->context, fence->seqno,
+				   dma_fence_is_signaled(fence) ? "signaled" :
+								  "active");
 		}
 
 		list_for_each_entry(cb, &atom->dma_fence.callbacks,
 				    node) {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0))
+#if (KERNEL_VERSION(4, 10, 0) > LINUX_VERSION_CODE)
 			struct fence *fence = cb->fence;
 #else
 			struct dma_fence *fence = cb->fence;
 #endif
 
 			seq_printf(sfile,
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0))
-					"Wd(%u#%u: %s) ",
+#if (KERNEL_VERSION(4, 8, 0) > LINUX_VERSION_CODE)
+				   "Wd(%u#%u: %s) ",
 #else
-					"Wd(%llu#%llu: %s) ",
+				   "Wd(%llu#%u: %s) ",
 #endif
-					fence->context,
-					fence->seqno,
-					dma_fence_is_signaled(fence) ?
-						"signaled" : "active");
+				   fence->context, fence->seqno,
+				   dma_fence_is_signaled(fence) ? "signaled" :
+								  "active");
 		}
 	}
 #endif /* CONFIG_MALI_DMA_FENCE */
@@ -182,7 +179,8 @@ static int kbasep_jd_debugfs_atoms_show(struct seq_file *sfile, void *data)
 
 		/* start_timestamp is cleared as soon as the atom leaves UNUSED state
 		 * and set before a job is submitted to the h/w, a non-zero value means
-		 * it is valid */
+		 * it is valid
+		 */
 		if (ktime_to_ns(atom->start_timestamp))
 			start_timestamp = ktime_to_ns(
 					ktime_sub(ktime_get(), atom->start_timestamp));
@@ -230,6 +228,12 @@ static const struct file_operations kbasep_jd_debugfs_atoms_fops = {
 
 void kbasep_jd_debugfs_ctx_init(struct kbase_context *kctx)
 {
+#if (KERNEL_VERSION(4, 7, 0) <= LINUX_VERSION_CODE)
+	const mode_t mode = S_IRUGO;
+#else
+	const mode_t mode = S_IRUSR;
+#endif
+
 	/* Caller already ensures this, but we keep the pattern for
 	 * maintenance safety.
 	 */
@@ -238,7 +242,7 @@ void kbasep_jd_debugfs_ctx_init(struct kbase_context *kctx)
 		return;
 
 	/* Expose all atoms */
-	debugfs_create_file("atoms", S_IRUGO, kctx->kctx_dentry, kctx,
+	debugfs_create_file("atoms", mode, kctx->kctx_dentry, kctx,
 			&kbasep_jd_debugfs_atoms_fops);
 
 }
