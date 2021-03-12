@@ -6,6 +6,7 @@
 #include <linux/module.h>
 #include <linux/of_graph.h>
 #include <linux/phy/phy.h>
+#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/videodev2.h>
@@ -92,6 +93,12 @@ enum mtk_seninf_format_flag {
 	MTK_SENINF_FORMAT_INPUT_ONLY = BIT(3),
 };
 
+struct mtk_seninf_conf {
+};
+
+static const struct mtk_seninf_conf seninf_8183_conf = {
+};
+
 struct mtk_seninf_format_info {
 	u32 code;
 	u32 flags;
@@ -131,6 +138,8 @@ struct mtk_seninf {
 
 	struct mtk_seninf_input inputs[SENINF_NUM_INPUTS];
 	struct mtk_seninf_input *active_input;
+
+	const struct mtk_seninf_conf *conf;
 
 	bool is_testmode;
 };
@@ -1382,6 +1391,8 @@ static int seninf_probe(struct platform_device *pdev)
 	if (!priv)
 		return -ENOMEM;
 
+	priv->conf = of_device_get_match_data(dev);
+
 	dev_set_drvdata(dev, priv);
 	priv->dev = dev;
 
@@ -1472,7 +1483,10 @@ static int seninf_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id mtk_seninf_of_match[] = {
-	{.compatible = "mediatek,mt8183-seninf"},
+	{
+		.compatible = "mediatek,mt8183-seninf",
+		.data = &seninf_8183_conf,
+	},
 	{},
 };
 MODULE_DEVICE_TABLE(of, mtk_seninf_of_match);
