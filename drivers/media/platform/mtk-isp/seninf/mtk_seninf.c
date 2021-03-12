@@ -96,9 +96,15 @@ enum mtk_seninf_version {
 	SENINF_50,
 };
 
+enum mtk_seninf_csi2_rx_type {
+	MTK_SENINF_CSI2_RX_NCSI2,
+	MTK_SENINF_CSI2_RX_CSI2,
+};
+
 struct mtk_seninf_conf {
 	enum mtk_seninf_version seninf_version;
 	char *model;
+	enum mtk_seninf_csi2_rx_type csi2_rx_type;
 	u8 nb_inputs;
 	u8 nb_outputs;
 	u8 nb_phy;
@@ -107,6 +113,7 @@ struct mtk_seninf_conf {
 static const struct mtk_seninf_conf seninf_8183_conf = {
 	.seninf_version = SENINF_50,
 	.model = "mtk-camsys-5.0",
+	.csi2_rx_type = MTK_SENINF_CSI2_RX_CSI2,
 	.nb_inputs = 4,
 	.nb_outputs = 4,
 	.nb_phy = 5,
@@ -397,7 +404,7 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	}
 }
 
-static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
+static void mtk_seninf_csi2_setup_phy(struct mtk_seninf *priv)
 {
 	/* CSI0(A) and CSI0B */
 	if (priv->inputs[CSI_PORT_0].phy_mode ||
@@ -456,7 +463,7 @@ static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
 	}
 }
 
-static void mtk_seninf_rx_config(struct mtk_seninf *priv,
+static void mtk_seninf_csi2_rx_config(struct mtk_seninf *priv,
 				 struct mtk_seninf_input *input)
 {
 	unsigned int lanes[4] = { };
@@ -490,8 +497,8 @@ static void mtk_seninf_rx_config(struct mtk_seninf *priv,
 				CSI0_BIST_LN3_MUX, lanes[3]);
 }
 
-static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
-				    struct mtk_seninf_input *input)
+static void mtk_seninf_csi2_set_mipi(struct mtk_seninf *priv,
+				     struct mtk_seninf_input *input)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
 	unsigned int dpcm;
@@ -565,6 +572,56 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	mtk_seninf_input_update(input, SENINF_CTRL, CSI2_SW_RST, 1);
 	udelay(1);
 	mtk_seninf_input_update(input, SENINF_CTRL, CSI2_SW_RST, 0);
+}
+
+static void mtk_seninf_ncsi2_set_mipi(struct mtk_seninf *priv,
+				      struct mtk_seninf_input *input)
+{
+	const struct mtk_seninf_format_info *fmtinfo;
+	unsigned int val;
+
+	fmtinfo = mtk_seninf_format_info(input->format.code);
+
+	/* HQ */
+	mtk_seninf_input_write(input, SENINF_TG1_PH_CNT, 0x0);
+	mtk_seninf_input_write(input, SENINF_TG1_SEN_CK, 0x10001);
+
+	/* First Enable Sensor interface and select pad (0x1a04_0200) */
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CTRL, PAD2CAM_DATA_SEL,
+		    SENINF_PAD_10BIT);
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_SRC_SEL, 8);
+
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 1U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_3C, 0x00051545U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 5U);
+	mdelay(1);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 4U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_3C, 0U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, 0x11U);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, ED_SEL, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_LANE, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE3, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE2, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE1, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE0, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_HS_OPTION, 0);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_HS_OPTION, 1);
+	mtk_seninf_input_write(input, SENINF_NCSI2_LNRD_TIMING, 0x2800U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_INT_STATUS,
+			       SENINF_NCSI2_INT_STATUS_ALL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_INT_EN,
+			       SENINF_NCSI2_INT_EN_ALL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_24, 0xE4000000U);
+	val = 0xFFFFFF00U & mtk_seninf_input_read(input, SENINF_NCSI2_DBG_SEL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, val);
+	val = 0xFFFFFF45U | mtk_seninf_input_read(input, SENINF_NCSI2_DBG_SEL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, val);
+	val = 0xFFFFFFEFU & mtk_seninf_input_read(input, SENINF_NCSI2_HSRX_DBG);
+	mtk_seninf_input_write(input, SENINF_NCSI2_HSRX_DBG, val);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DI_CTRL, 0x01010101U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DI, 0x03020100U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, 0x10);
 }
 
 static int seninf_enable_test_pattern(struct mtk_seninf *priv)
@@ -694,6 +751,7 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 static int mtk_seninf_power_on(struct mtk_seninf *priv)
 {
 	struct mtk_seninf_input *input = priv->active_input;
+	const struct mtk_seninf_conf *conf = priv->conf;
 	int ret;
 
 	ret = pm_runtime_get_sync(priv->dev);
@@ -703,12 +761,18 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 		return ret;
 	}
 
-	mtk_seninf_setup_phy(priv);
+	if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2)
+		mtk_seninf_csi2_setup_phy(priv);
 
 	phy_power_on(input->phy);
 
-	mtk_seninf_rx_config(priv, input);
-	mtk_seninf_set_csi_mipi(priv, input);
+	if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2) {
+		mtk_seninf_csi2_rx_config(priv, input);
+		mtk_seninf_csi2_set_mipi(priv, input);
+	} else if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_NCSI2) {
+		mtk_seninf_ncsi2_set_mipi(priv, input);
+	}
+
 	mtk_seninf_set_mux(priv, input);
 
 	return 0;
@@ -716,12 +780,22 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 
 static void mtk_seninf_power_off(struct mtk_seninf *priv)
 {
+	const struct mtk_seninf_conf *conf = priv->conf;
+	unsigned int val;
+
 	if (priv->active_input) {
 		struct mtk_seninf_input *input = priv->active_input;
 
-		/* Disable CSI2(2.5G) first */
-		mtk_seninf_input_write(input, SENINF_CSI2_CTL,
-				       mtk_seninf_input_read(input, SENINF_CSI2_CTL) & 0xffffffe0);
+		if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2) {
+			/* Disable CSI2(2.5G) first */
+			val = mtk_seninf_input_read(input, SENINF_CSI2_CTL);
+			mtk_seninf_input_write(
+				input, SENINF_CSI2_CTL, val & 0xffffffe0);
+		} else if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_NCSI2) {
+			val = mtk_seninf_input_read(input, SENINF_NCSI2_CTL);
+			mtk_seninf_input_write(
+				input, SENINF_NCSI2_CTL, val & 0xffffffe0);
+		}
 
 		if (!priv->is_testmode)
 			phy_power_off(input->phy);
