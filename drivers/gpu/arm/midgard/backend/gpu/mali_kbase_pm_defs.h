@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2014-2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -36,11 +55,6 @@
 /* Forward definition - see mali_kbase.h */
 struct kbase_device;
 struct kbase_jd_atom;
-
-/**
- * Maximum number of PM policies that may be active on a device.
- */
-#define KBASE_PM_MAX_NUM_POLICIES (10)
 
 /**
  * enum kbase_pm_core_type - The types of core in a GPU.
@@ -92,6 +106,35 @@ enum kbase_l2_core_state {
 #undef KBASEP_L2_STATE
 };
 
+#if MALI_USE_CSF
+/**
+ * enum kbase_mcu_state - The states used for the MCU state machine.
+ *
+ * @KBASE_MCU_OFF:            The MCU is powered off.
+ * @KBASE_MCU_PEND_ON_RELOAD: The warm boot of MCU or cold boot of MCU (with
+ *                            firmware reloading) is in progress.
+ * @KBASE_MCU_ON_GLB_REINIT_PEND: The MCU is enabled and Global configuration
+ *                                requests have been sent to the firmware.
+ * @KBASE_MCU_ON_HWCNT_ENABLE: The Global requests have completed and MCU is
+ *                             now ready for use and hwcnt is being enabled.
+ * @KBASE_MCU_ON:             The MCU is active and hwcnt has been enabled.
+ * @KBASE_MCU_ON_CORE_MASK_UPDATE_PEND: The MCU is active and mask of enabled
+ *                                      shader cores is being updated.
+ * @KBASE_MCU_ON_HWCNT_DISABLE: The MCU is on and hwcnt is being disabled.
+ * @KBASE_MCU_ON_HALT:        The MCU is on and hwcnt has been disabled,
+ *                            MCU halt would be triggered.
+ * @KBASE_MCU_ON_PEND_HALT:   MCU halt in progress, confirmation pending.
+ * @KBASE_MCU_POWER_DOWN:     MCU halted operations, pending being disabled.
+ * @KBASE_MCU_PEND_OFF:       MCU is being disabled, pending on powering off.
+ * @KBASE_MCU_RESET_WAIT:     The GPU is resetting, MCU state is unknown.
+ */
+enum kbase_mcu_state {
+#define KBASEP_MCU_STATE(n) KBASE_MCU_ ## n,
+#include "mali_kbase_pm_mcu_states.h"
+#undef KBASEP_MCU_STATE
+};
+#endif
+
 /**
  * enum kbase_shader_core_state - The states used for the shaders' state machine.
  *
@@ -100,7 +143,9 @@ enum kbase_l2_core_state {
  *                                       been requested to power on and hwcnt
  *                                       is being disabled
  * @KBASE_SHADERS_PEND_ON_CORESTACK_ON: Core stacks are on, shaders have been
- *                                      requested to power on.
+ *                                      requested to power on. Or after doing
+ *                                      partial shader on/off, checking whether
+ *                                      it's the desired state.
  * @KBASE_SHADERS_ON_CORESTACK_ON: The shaders and core stacks are on, and hwcnt
  *					already enabled.
  * @KBASE_SHADERS_ON_CORESTACK_ON_RECHECK: The shaders and core stacks
@@ -110,6 +155,10 @@ enum kbase_l2_core_state {
  * @KBASE_SHADERS_WAIT_OFF_CORESTACK_ON: The shaders have been requested to
  *                                       power off, but they remain on for the
  *                                       duration of the hysteresis timer
+ * @KBASE_SHADERS_WAIT_GPU_IDLE: The shaders partial poweroff needs to reach
+ *                               a state where jobs on the GPU are finished
+ *                               including jobs currently running and in the
+ *                               GPU queue because of GPU2017-861
  * @KBASE_SHADERS_WAIT_FINISHED_CORESTACK_ON: The hysteresis timer has expired
  * @KBASE_SHADERS_L2_FLUSHING_CORESTACK_ON: The core stacks are on and the
  *                                          level 2 cache is being flushed.
@@ -136,22 +185,32 @@ enum kbase_shader_core_state {
  * struct kbasep_pm_metrics - Metrics data collected for use by the power
  *                            management framework.
  *
- *  @time_busy: number of ns the GPU was busy executing jobs since the
- *          @time_period_start timestamp.
- *  @time_idle: number of ns since time_period_start the GPU was not executing
- *          jobs since the @time_period_start timestamp.
- *  @busy_cl: number of ns the GPU was busy executing CL jobs. Note that
- *           if two CL jobs were active for 400ns, this value would be updated
- *           with 800.
- *  @busy_gl: number of ns the GPU was busy executing GL jobs. Note that
- *           if two GL jobs were active for 400ns, this value would be updated
- *           with 800.
+ *  @time_busy: the amount of time the GPU was busy executing jobs since the
+ *          @time_period_start timestamp, in units of 256ns. This also includes
+ *          time_in_protm, the time spent in protected mode, since it's assumed
+ *          the GPU was busy 100% during this period.
+ *  @time_idle: the amount of time the GPU was not executing jobs since the
+ *              time_period_start timestamp, measured in units of 256ns.
+ *  @busy_cl: the amount of time the GPU was busy executing CL jobs. Note that
+ *           if two CL jobs were active for 256ns, this value would be updated
+ *           with 2 (2x256ns).
+ *  @busy_gl: the amount of time the GPU was busy executing GL jobs. Note that
+ *           if two GL jobs were active for 256ns, this value would be updated
+ *           with 2 (2x256ns).
  */
 struct kbasep_pm_metrics {
 	u32 time_busy;
 	u32 time_idle;
+#if MALI_USE_CSF
+	/*
+	 *  The amount of time the GPU has spent in protected mode since
+	 *  the time_period_start timestamp, measured in units of 256ns.
+	 */
+	u32 time_in_protm;
+#else
 	u32 busy_cl[2];
 	u32 busy_gl;
+#endif
 };
 
 /**
@@ -169,6 +228,7 @@ struct kbasep_pm_metrics {
  *  @values: The current values of the power management metrics. The
  *           kbase_pm_get_dvfs_metrics() function is used to compare these
  *           current values with the saved values from a previous invocation.
+ *  @initialized: tracks whether metrics_state has been initialized or not.
  *  @timer: timer to regularly make DVFS decisions based on the power
  *           management metrics.
  *  @timer_active: boolean indicating @timer is running
@@ -177,9 +237,18 @@ struct kbasep_pm_metrics {
  */
 struct kbasep_pm_metrics_state {
 	ktime_t time_period_start;
+#if MALI_USE_CSF
+	/* Handle returned on registering DVFS as a kbase_ipa_control client */
+	void *ipa_control_client;
+	/* Decide whether to skip GPU_ACTIVE sanity check in DVFS utilisation
+	 * calculation
+	 */
+	bool skip_gpu_active_sanity_check;
+#else
 	bool gpu_active;
 	u32 active_cl_ctx[2];
 	u32 active_gl_ctx[3];
+#endif
 	spinlock_t lock;
 
 	void *platform_data;
@@ -188,6 +257,7 @@ struct kbasep_pm_metrics_state {
 	struct kbasep_pm_metrics values;
 
 #ifdef CONFIG_MALI_MIDGARD_DVFS
+	bool initialized;
 	struct hrtimer timer;
 	bool timer_active;
 	struct kbasep_pm_metrics dvfs_last;
@@ -253,6 +323,11 @@ union kbase_pm_policy_data {
  *                     variable should be protected by: both the hwaccess_lock
  *                     spinlock and the pm.lock mutex for writes; or at least
  *                     one of either lock for reads.
+ * @gpu_ready:         Indicates whether the GPU is in a state in which it is
+ *                     safe to perform PM changes. When false, the PM state
+ *                     machine needs to wait before making changes to the GPU
+ *                     power policy, DevFreq or core_mask, so as to avoid these
+ *                     changing while implicit GPU resets are ongoing.
  * @pm_shaders_core_mask: Shader PM state synchronised shaders core mask. It
  *                     holds the cores enabled in a hardware counters dump,
  *                     and may differ from @shaders_avail when under different
@@ -273,8 +348,6 @@ union kbase_pm_policy_data {
  *                    when poweroff_wait_in_progress is true, and therefore the
  *                    GPU can not immediately be powered on. pm.lock must be
  *                    held when accessing
- * @poweroff_is_suspend: true if the GPU is being powered off due to a suspend
- *                       request. pm.lock must be held when accessing
  * @gpu_poweroff_wait_wq: workqueue for waiting for GPU to power off
  * @gpu_poweroff_wait_work: work item for use with @gpu_poweroff_wait_wq
  * @poweroff_wait: waitqueue for waiting for @gpu_poweroff_wait_work to complete
@@ -292,6 +365,8 @@ union kbase_pm_policy_data {
  *                              &struct kbase_pm_callback_conf
  * @callback_power_runtime_idle: Optional callback when the GPU may be idle. See
  *                              &struct kbase_pm_callback_conf
+ * @callback_soft_reset: Optional callback to software reset the GPU. See
+ *                       &struct kbase_pm_callback_conf
  * @ca_cores_enabled: Cores that are currently available
  * @l2_state:     The current state of the L2 cache state machine. See
  *                &enum kbase_l2_core_state
@@ -300,9 +375,17 @@ union kbase_pm_policy_data {
  * @l2_always_on: If true, disable powering down of l2 cache.
  * @shaders_state: The current state of the shader state machine.
  * @shaders_avail: This is updated by the state machine when it is in a state
- *                 where it can handle changes to the core availability. This
- *                 is internal to the shader state machine and should *not* be
- *                 modified elsewhere.
+ *                 where it can write to the SHADER_PWRON or PWROFF registers
+ *                 to have the same set of available cores as specified by
+ *                 @shaders_desired_mask. So would precisely indicate the cores
+ *                 that are currently available. This is internal to shader
+ *                 state machine of JM GPUs and should *not* be modified
+ *                 elsewhere.
+ * @shaders_desired_mask: This is updated by the state machine when it is in
+ *                        a state where it can handle changes to the core
+ *                        availability (either by DVFS or sysfs). This is
+ *                        internal to the shader state machine and should
+ *                        *not* be modified elsewhere.
  * @shaders_desired: True if the PM active count or power policy requires the
  *                   shader cores to be on. This is used as an input to the
  *                   shader power state machine.  The current state of the
@@ -311,6 +394,10 @@ union kbase_pm_policy_data {
  *                   that the policy doesn't change its mind in the mean time).
  * @in_reset: True if a GPU is resetting and normal power manager operation is
  *            suspended
+ * @partial_shaderoff: True if we want to partial power off shader cores,
+ *                     it indicates a partial shader core off case,
+ *                     do some special operation for such case like flush
+ *                     L2 cache because of GPU2017-861
  * @protected_entry_transition_override : True if GPU reset is being used
  *                                  before entering the protected mode and so
  *                                  the reset handling behaviour is being
@@ -360,6 +447,7 @@ struct kbase_pm_backend_data {
 	wait_queue_head_t gpu_in_desired_state_wait;
 
 	bool gpu_powered;
+	bool gpu_ready;
 
 	u64 pm_shaders_core_mask;
 
@@ -376,7 +464,6 @@ struct kbase_pm_backend_data {
 	bool poweroff_wait_in_progress;
 	bool invoke_poweroff_wait_wq_when_l2_off;
 	bool poweron_required;
-	bool poweroff_is_suspend;
 
 	struct workqueue_struct *gpu_poweroff_wait_wq;
 	struct work_struct gpu_poweroff_wait_work;
@@ -390,17 +477,46 @@ struct kbase_pm_backend_data {
 	int (*callback_power_runtime_on)(struct kbase_device *kbdev);
 	void (*callback_power_runtime_off)(struct kbase_device *kbdev);
 	int (*callback_power_runtime_idle)(struct kbase_device *kbdev);
+	int (*callback_soft_reset)(struct kbase_device *kbdev);
 
 	u64 ca_cores_enabled;
 
+#if MALI_USE_CSF
+	/* The current state of the micro-control unit, only applicable
+	 * to GPUs that has such a component
+	 */
+	enum kbase_mcu_state mcu_state;
+#endif
 	enum kbase_l2_core_state l2_state;
 	enum kbase_shader_core_state shaders_state;
 	u64 shaders_avail;
+	u64 shaders_desired_mask;
+#if MALI_USE_CSF
+	/* True if the micro-control unit should be powered on */
+	bool mcu_desired;
+	/* Signaling the backend is in PM policy change transition, needs the
+	 * mcu/L2 to be brought back to the off state and remain in that state
+	 * until the flag is cleared.
+	 */
+	bool policy_change_clamp_state_to_off;
+	/* CSF Dynamic PM control flags in accordance to the current active PM
+	 * policy. This field is updated whenever a new policy is activated.
+	 */
+	unsigned int csf_pm_sched_flags;
+	/* Used to serialize the policy change calls. In CSF case, the change
+	 * of policy may involve the scheduler to suspend running CSGs and
+	 * then reconfigure the MCU. This mutex lock is to serialize such
+	 * sequence.
+	 */
+	struct mutex policy_change_lock;
+#endif
 	bool l2_desired;
 	bool l2_always_on;
 	bool shaders_desired;
 
 	bool in_reset;
+
+	bool partial_shaderoff;
 
 	bool protected_entry_transition_override;
 	bool protected_transition_override;
@@ -417,6 +533,23 @@ struct kbase_pm_backend_data {
 	struct work_struct gpu_clock_control_work;
 };
 
+#if MALI_USE_CSF
+/* CSF PM flag, signaling that the MCU CORE should be kept on */
+#define  CSF_DYNAMIC_PM_CORE_KEEP_ON (1 << 0)
+/* CSF PM flag, signaling no scheduler suspension on idle groups */
+#define CSF_DYNAMIC_PM_SCHED_IGNORE_IDLE (1 << 1)
+/* CSF PM flag, signaling no scheduler suspension on no runnable groups */
+#define CSF_DYNAMIC_PM_SCHED_NO_SUSPEND (1 << 2)
+
+/* The following flags corresponds to existing defined PM policies */
+#define ALWAYS_ON_PM_SCHED_FLAGS (CSF_DYNAMIC_PM_CORE_KEEP_ON | \
+				  CSF_DYNAMIC_PM_SCHED_IGNORE_IDLE | \
+				  CSF_DYNAMIC_PM_SCHED_NO_SUSPEND)
+#define COARSE_ON_DEMAND_PM_SCHED_FLAGS (0)
+#if !MALI_CUSTOMER_RELEASE
+#define ALWAYS_ON_DEMAND_PM_SCHED_FLAGS (CSF_DYNAMIC_PM_SCHED_IGNORE_IDLE)
+#endif
+#endif
 
 /* List of policy IDs */
 enum kbase_pm_policy_id {
@@ -426,10 +559,6 @@ enum kbase_pm_policy_id {
 #endif
 	KBASE_PM_POLICY_ID_ALWAYS_ON
 };
-
-typedef u32 kbase_pm_policy_flags;
-
-#define KBASE_PM_POLICY_FLAG_DISABLED_WITH_POWER_DOWN_ONLY (1u)
 
 /**
  * struct kbase_pm_policy - Power policy structure.
@@ -443,7 +572,6 @@ typedef u32 kbase_pm_policy_flags;
  * @shaders_needed:     Function called to find out if shader cores are needed
  * @get_core_active:    Function called to get the current overall GPU power
  *                      state
- * @flags:              Field indicating flags for this policy
  * @id:                 Field indicating an ID for this policy. This is not
  *                      necessarily the same as its index in the list returned
  *                      by kbase_pm_list_policies().
@@ -500,8 +628,16 @@ struct kbase_pm_policy {
 	 */
 	bool (*get_core_active)(struct kbase_device *kbdev);
 
-	kbase_pm_policy_flags flags;
 	enum kbase_pm_policy_id id;
+
+#if MALI_USE_CSF
+	/* Policy associated with CSF PM scheduling operational flags.
+	 * There are pre-defined required flags exist for each of the
+	 * ARM released policies, such as 'always_on', 'coarse_demand'
+	 * and etc.
+	 */
+	unsigned int pm_sched_flags;
+#endif
 };
 
 #endif /* _KBASE_PM_HWACCESS_DEFS_H_ */

@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2017-2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -18,6 +18,25 @@
  *
  * SPDX-License-Identifier: GPL-2.0
  *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2017-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
+ *
  */
 
 #ifndef _KBASE_IOCTL_H_
@@ -30,77 +49,13 @@ extern "C" {
 #include <asm-generic/ioctl.h>
 #include <linux/types.h>
 
+#if MALI_USE_CSF
+#include "csf/mali_kbase_csf_ioctl.h"
+#else
+#include "jm/mali_kbase_jm_ioctl.h"
+#endif /* MALI_USE_CSF */
+
 #define KBASE_IOCTL_TYPE 0x80
-
-/*
- * 11.1:
- * - Add BASE_MEM_TILER_ALIGN_TOP under base_mem_alloc_flags
- * 11.2:
- * - KBASE_MEM_QUERY_FLAGS can return KBASE_REG_PF_GROW and KBASE_REG_PROTECTED,
- *   which some user-side clients prior to 11.2 might fault if they received
- *   them
- * 11.3:
- * - New ioctls KBASE_IOCTL_STICKY_RESOURCE_MAP and
- *   KBASE_IOCTL_STICKY_RESOURCE_UNMAP
- * 11.4:
- * - New ioctl KBASE_IOCTL_MEM_FIND_GPU_START_AND_OFFSET
- * 11.5:
- * - New ioctl: KBASE_IOCTL_MEM_JIT_INIT (old ioctl renamed to _OLD)
- * 11.6:
- * - Added flags field to base_jit_alloc_info structure, which can be used to
- *   specify pseudo chunked tiler alignment for JIT allocations.
- * 11.7:
- * - Removed UMP support
- * 11.8:
- * - Added BASE_MEM_UNCACHED_GPU under base_mem_alloc_flags
- * 11.9:
- * - Added BASE_MEM_PERMANENT_KERNEL_MAPPING and BASE_MEM_FLAGS_KERNEL_ONLY
- *   under base_mem_alloc_flags
- * 11.10:
- * - Enabled the use of nr_extres field of base_jd_atom_v2 structure for
- *   JIT_ALLOC and JIT_FREE type softjobs to enable multiple JIT allocations
- *   with one softjob.
- * 11.11:
- * - Added BASE_MEM_GPU_VA_SAME_4GB_PAGE under base_mem_alloc_flags
- * 11.12:
- * - Removed ioctl: KBASE_IOCTL_GET_PROFILING_CONTROLS
- * 11.13:
- * - New ioctl: KBASE_IOCTL_MEM_EXEC_INIT
- * 11.14:
- * - Add BASE_MEM_GROUP_ID_MASK, base_mem_group_id_get, base_mem_group_id_set
- *   under base_mem_alloc_flags
- * 11.15:
- * - Added BASEP_CONTEXT_MMU_GROUP_ID_MASK under base_context_create_flags.
- * - Require KBASE_IOCTL_SET_FLAGS before BASE_MEM_MAP_TRACKING_HANDLE can be
- *   passed to mmap().
- * 11.16:
- * - Extended ioctl KBASE_IOCTL_MEM_SYNC to accept imported dma-buf.
- * - Modified (backwards compatible) ioctl KBASE_IOCTL_MEM_IMPORT behavior for
- *   dma-buf. Now, buffers are mapped on GPU when first imported, no longer
- *   requiring external resource or sticky resource tracking. UNLESS,
- *   CONFIG_MALI_DMA_BUF_MAP_ON_DEMAND is enabled.
- * 11.17:
- * - Added BASE_JD_REQ_JOB_SLOT.
- * - Reused padding field in base_jd_atom_v2 to pass job slot number.
- * 11.18:
- * - New ioctl: KBASE_IOCTL_GET_CPU_GPU_TIMEINFO
- */
-#define BASE_UK_VERSION_MAJOR 11
-#define BASE_UK_VERSION_MINOR 17
-
-/**
- * struct kbase_ioctl_version_check - Check version compatibility with kernel
- *
- * @major: Major version number
- * @minor: Minor version number
- */
-struct kbase_ioctl_version_check {
-	__u16 major;
-	__u16 minor;
-};
-
-#define KBASE_IOCTL_VERSION_CHECK \
-	_IOWR(KBASE_IOCTL_TYPE, 0, struct kbase_ioctl_version_check)
 
 /**
  * struct kbase_ioctl_set_flags - Set kernel context creation flags
@@ -113,22 +68,6 @@ struct kbase_ioctl_set_flags {
 
 #define KBASE_IOCTL_SET_FLAGS \
 	_IOW(KBASE_IOCTL_TYPE, 1, struct kbase_ioctl_set_flags)
-
-/**
- * struct kbase_ioctl_job_submit - Submit jobs/atoms to the kernel
- *
- * @addr: Memory address of an array of struct base_jd_atom_v2
- * @nr_atoms: Number of entries in the array
- * @stride: sizeof(struct base_jd_atom_v2)
- */
-struct kbase_ioctl_job_submit {
-	__u64 addr;
-	__u32 nr_atoms;
-	__u32 stride;
-};
-
-#define KBASE_IOCTL_JOB_SUBMIT \
-	_IOW(KBASE_IOCTL_TYPE, 2, struct kbase_ioctl_job_submit)
 
 /**
  * struct kbase_ioctl_get_gpuprops - Read GPU properties from the kernel
@@ -165,15 +104,12 @@ struct kbase_ioctl_get_gpuprops {
 #define KBASE_IOCTL_GET_GPUPROPS \
 	_IOW(KBASE_IOCTL_TYPE, 3, struct kbase_ioctl_get_gpuprops)
 
-#define KBASE_IOCTL_POST_TERM \
-	_IO(KBASE_IOCTL_TYPE, 4)
-
 /**
  * union kbase_ioctl_mem_alloc - Allocate memory on the GPU
  *
  * @va_pages: The number of pages of virtual address space to reserve
  * @commit_pages: The number of physical pages to allocate
- * @extent: The number of extra pages to allocate on each GPU fault which grows
+ * @extension: The number of extra pages to allocate on each GPU fault which grows
  *          the region
  * @flags: Flags
  * @gpu_va: The GPU virtual address which is allocated
@@ -185,7 +121,7 @@ union kbase_ioctl_mem_alloc {
 	struct {
 		__u64 va_pages;
 		__u64 commit_pages;
-		__u64 extent;
+		__u64 extension;
 		__u64 flags;
 	} in;
 	struct {
@@ -239,7 +175,7 @@ struct kbase_ioctl_mem_free {
 /**
  * struct kbase_ioctl_hwcnt_reader_setup - Setup HWC dumper/reader
  * @buffer_count: requested number of dumping buffers
- * @jm_bm:        counters selection bitmask (JM)
+ * @fe_bm:        counters selection bitmask (Front end)
  * @shader_bm:    counters selection bitmask (Shader)
  * @tiler_bm:     counters selection bitmask (Tiler)
  * @mmu_l2_bm:    counters selection bitmask (MMU_L2)
@@ -248,7 +184,7 @@ struct kbase_ioctl_mem_free {
  */
 struct kbase_ioctl_hwcnt_reader_setup {
 	__u32 buffer_count;
-	__u32 jm_bm;
+	__u32 fe_bm;
 	__u32 shader_bm;
 	__u32 tiler_bm;
 	__u32 mmu_l2_bm;
@@ -260,14 +196,14 @@ struct kbase_ioctl_hwcnt_reader_setup {
 /**
  * struct kbase_ioctl_hwcnt_enable - Enable hardware counter collection
  * @dump_buffer:  GPU address to write counters to
- * @jm_bm:        counters selection bitmask (JM)
+ * @fe_bm:        counters selection bitmask (Front end)
  * @shader_bm:    counters selection bitmask (Shader)
  * @tiler_bm:     counters selection bitmask (Tiler)
  * @mmu_l2_bm:    counters selection bitmask (MMU_L2)
  */
 struct kbase_ioctl_hwcnt_enable {
 	__u64 dump_buffer;
-	__u32 jm_bm;
+	__u32 fe_bm;
 	__u32 shader_bm;
 	__u32 tiler_bm;
 	__u32 mmu_l2_bm;
@@ -331,8 +267,9 @@ struct kbase_ioctl_get_ddk_version {
 	_IOW(KBASE_IOCTL_TYPE, 13, struct kbase_ioctl_get_ddk_version)
 
 /**
- * struct kbase_ioctl_mem_jit_init_old - Initialise the JIT memory allocator
- *
+ * struct kbase_ioctl_mem_jit_init_10_2 - Initialize the just-in-time memory
+ *                                        allocator (between kernel driver
+ *                                        version 10.2--11.4)
  * @va_pages: Number of VA pages to reserve for JIT
  *
  * Note that depending on the VA size of the application and GPU, the value
@@ -341,21 +278,50 @@ struct kbase_ioctl_get_ddk_version {
  * New code should use KBASE_IOCTL_MEM_JIT_INIT instead, this is kept for
  * backwards compatibility.
  */
-struct kbase_ioctl_mem_jit_init_old {
+struct kbase_ioctl_mem_jit_init_10_2 {
 	__u64 va_pages;
 };
 
-#define KBASE_IOCTL_MEM_JIT_INIT_OLD \
-	_IOW(KBASE_IOCTL_TYPE, 14, struct kbase_ioctl_mem_jit_init_old)
+#define KBASE_IOCTL_MEM_JIT_INIT_10_2 \
+	_IOW(KBASE_IOCTL_TYPE, 14, struct kbase_ioctl_mem_jit_init_10_2)
 
 /**
- * struct kbase_ioctl_mem_jit_init - Initialise the JIT memory allocator
- *
+ * struct kbase_ioctl_mem_jit_init_11_5 - Initialize the just-in-time memory
+ *                                        allocator (between kernel driver
+ *                                        version 11.5--11.19)
  * @va_pages: Number of VA pages to reserve for JIT
  * @max_allocations: Maximum number of concurrent allocations
  * @trim_level: Level of JIT allocation trimming to perform on free (0 - 100%)
  * @group_id: Group ID to be used for physical allocations
  * @padding: Currently unused, must be zero
+ *
+ * Note that depending on the VA size of the application and GPU, the value
+ * specified in @va_pages may be ignored.
+ *
+ * New code should use KBASE_IOCTL_MEM_JIT_INIT instead, this is kept for
+ * backwards compatibility.
+ */
+struct kbase_ioctl_mem_jit_init_11_5 {
+	__u64 va_pages;
+	__u8 max_allocations;
+	__u8 trim_level;
+	__u8 group_id;
+	__u8 padding[5];
+};
+
+#define KBASE_IOCTL_MEM_JIT_INIT_11_5 \
+	_IOW(KBASE_IOCTL_TYPE, 14, struct kbase_ioctl_mem_jit_init_11_5)
+
+/**
+ * struct kbase_ioctl_mem_jit_init - Initialize the just-in-time memory
+ *                                   allocator
+ * @va_pages: Number of GPU virtual address pages to reserve for just-in-time
+ *            memory allocations
+ * @max_allocations: Maximum number of concurrent allocations
+ * @trim_level: Level of JIT allocation trimming to perform on free (0 - 100%)
+ * @group_id: Group ID to be used for physical allocations
+ * @padding: Currently unused, must be zero
+ * @phys_pages: Maximum number of physical pages to allocate just-in-time
  *
  * Note that depending on the VA size of the application and GPU, the value
  * specified in @va_pages may be ignored.
@@ -366,6 +332,7 @@ struct kbase_ioctl_mem_jit_init {
 	__u8 trim_level;
 	__u8 group_id;
 	__u8 padding[5];
+	__u64 phys_pages;
 };
 
 #define KBASE_IOCTL_MEM_JIT_INIT \
@@ -584,21 +551,6 @@ struct kbase_ioctl_mem_profile_add {
 	_IOW(KBASE_IOCTL_TYPE, 27, struct kbase_ioctl_mem_profile_add)
 
 /**
- * struct kbase_ioctl_soft_event_update - Update the status of a soft-event
- * @event: GPU address of the event which has been updated
- * @new_status: The new status to set
- * @flags: Flags for future expansion
- */
-struct kbase_ioctl_soft_event_update {
-	__u64 event;
-	__u32 new_status;
-	__u32 flags;
-};
-
-#define KBASE_IOCTL_SOFT_EVENT_UPDATE \
-	_IOW(KBASE_IOCTL_TYPE, 28, struct kbase_ioctl_soft_event_update)
-
-/**
  * struct kbase_ioctl_sticky_resource_map - Permanently map an external resource
  * @count: Number of resources
  * @address: Array of u64 GPU addresses of the external resources to map
@@ -694,7 +646,6 @@ union kbase_ioctl_cinstr_gwt_dump {
 #define KBASE_IOCTL_CINSTR_GWT_DUMP \
 	_IOWR(KBASE_IOCTL_TYPE, 35, union kbase_ioctl_cinstr_gwt_dump)
 
-
 /**
  * struct kbase_ioctl_mem_exec_init - Initialise the EXEC_VA memory zone
  *
@@ -706,7 +657,6 @@ struct kbase_ioctl_mem_exec_init {
 
 #define KBASE_IOCTL_MEM_EXEC_INIT \
 	_IOW(KBASE_IOCTL_TYPE, 38, struct kbase_ioctl_mem_exec_init)
-
 
 /**
  * union kbase_ioctl_get_cpu_gpu_timeinfo - Request zero or more types of
@@ -740,6 +690,18 @@ union kbase_ioctl_get_cpu_gpu_timeinfo {
 
 #define KBASE_IOCTL_GET_CPU_GPU_TIMEINFO \
 	_IOWR(KBASE_IOCTL_TYPE, 50, union kbase_ioctl_get_cpu_gpu_timeinfo)
+
+/**
+ * struct kbase_ioctl_context_priority_check - Check the max possible priority
+ * @priority: Input priority & output priority
+ */
+
+struct kbase_ioctl_context_priority_check {
+	__u8 priority;
+};
+
+#define KBASE_IOCTL_CONTEXT_PRIORITY_CHECK \
+	_IOWR(KBASE_IOCTL_TYPE, 54, struct kbase_ioctl_context_priority_check)
 
 /***************
  * test ioctls *
@@ -782,38 +744,7 @@ struct kbase_ioctl_tlstream_stats {
 #define KBASE_IOCTL_TLSTREAM_STATS \
 	_IOR(KBASE_IOCTL_TEST_TYPE, 2, struct kbase_ioctl_tlstream_stats)
 
-/**
- * struct kbase_ioctl_cs_event_memory_write - Write an event memory address
- * @cpu_addr: Memory address to write
- * @value: Value to write
- * @padding: Currently unused, must be zero
- */
-struct kbase_ioctl_cs_event_memory_write {
-	__u64 cpu_addr;
-	__u8 value;
-	__u8 padding[7];
-};
-
-/**
- * union kbase_ioctl_cs_event_memory_read - Read an event memory address
- * @cpu_addr: Memory address to read
- * @value: Value read
- * @padding: Currently unused, must be zero
- *
- * @in: Input parameters
- * @out: Output parameters
- */
-union kbase_ioctl_cs_event_memory_read {
-	struct {
-		__u64 cpu_addr;
-	} in;
-	struct {
-		__u8 value;
-		__u8 padding[7];
-	} out;
-};
-
-#endif
+#endif /* MALI_UNIT_TEST */
 
 /* Customer extension range */
 #define KBASE_IOCTL_EXTRA_TYPE (KBASE_IOCTL_TYPE + 2)
@@ -926,11 +857,11 @@ union kbase_ioctl_cs_event_memory_read {
 #define KBASE_GPUPROP_TEXTURE_FEATURES_3		80
 #define KBASE_GPUPROP_RAW_TEXTURE_FEATURES_3		81
 
-#define KBASE_GPUPROP_NUM_EXEC_ENGINES                  82
+#define KBASE_GPUPROP_NUM_EXEC_ENGINES			82
 
 #define KBASE_GPUPROP_RAW_THREAD_TLS_ALLOC		83
 #define KBASE_GPUPROP_TLS_ALLOC				84
-
+#define KBASE_GPUPROP_RAW_GPU_FEATURES			85
 #ifdef __cpluscplus
 }
 #endif
