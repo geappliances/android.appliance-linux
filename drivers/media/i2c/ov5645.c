@@ -27,6 +27,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_graph.h>
+#include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/types.h>
@@ -108,7 +109,6 @@ struct ov5645 {
 	u8 timing_tc_reg21;
 
 	struct mutex power_lock; /* lock to protect power state */
-	int power_count;
 
 	struct gpio_desc *enable_gpio;
 	struct gpio_desc *rst_gpio;
@@ -679,41 +679,52 @@ static int ov5645_s_power(struct v4l2_subdev *sd, int on)
 
 	mutex_lock(&ov5645->power_lock);
 
-	/* If the power count is modified from 0 to != 0 or from != 0 to 0,
-	 * update the power state.
-	 */
-	if (ov5645->power_count == !on) {
-		if (on) {
-			ret = ov5645_set_power_on(ov5645);
-			if (ret < 0)
-				goto exit;
+	if (on) {
+		ret = ov5645_set_power_on(ov5645);
+		if (ret < 0)
+			goto exit;
 
-			ret = ov5645_set_register_array(ov5645,
-					ov5645_global_init_setting,
-					ARRAY_SIZE(ov5645_global_init_setting));
-			if (ret < 0) {
-				dev_err(ov5645->dev,
-					"could not set init registers\n");
-				ov5645_set_power_off(ov5645);
-				goto exit;
-			}
-
-			usleep_range(500, 1000);
-		} else {
-			ov5645_write_reg(ov5645, OV5645_IO_MIPI_CTRL00, 0x58);
+		ret = ov5645_set_register_array(ov5645,
+				ov5645_global_init_setting,
+				ARRAY_SIZE(ov5645_global_init_setting));
+		if (ret < 0) {
+			dev_err(ov5645->dev,
+				"could not set init registers\n");
 			ov5645_set_power_off(ov5645);
+			goto exit;
 		}
-	}
 
-	/* Update the power count. */
-	ov5645->power_count += on ? 1 : -1;
-	WARN_ON(ov5645->power_count < 0);
+		usleep_range(500, 1000);
+	} else {
+		ov5645_write_reg(ov5645, OV5645_IO_MIPI_CTRL00, 0x58);
+		ov5645_set_power_off(ov5645);
+	}
 
 exit:
 	mutex_unlock(&ov5645->power_lock);
 
 	return ret;
 }
+
+static int ov5645_runtime_resume(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct v4l2_subdev *subdev = i2c_get_clientdata(client);
+
+	return ov5645_s_power(subdev, 1);
+}
+
+static int ov5645_runtime_suspend(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct v4l2_subdev *subdev = i2c_get_clientdata(client);
+
+	return ov5645_s_power(subdev, 0);
+}
+
+static const struct dev_pm_ops ov5645_pm_ops = {
+	SET_RUNTIME_PM_OPS(ov5645_runtime_suspend, ov5645_runtime_resume, NULL)
+};
 
 static int ov5645_set_saturation(struct ov5645 *ov5645, s32 value)
 {
@@ -798,7 +809,8 @@ static int ov5645_s_ctrl(struct v4l2_ctrl *ctrl)
 	int ret;
 
 	mutex_lock(&ov5645->power_lock);
-	if (!ov5645->power_count) {
+
+	if(pm_runtime_get_if_in_use(ov5645->dev) <= 0) {
 		mutex_unlock(&ov5645->power_lock);
 		return 0;
 	}
@@ -833,6 +845,8 @@ static int ov5645_s_ctrl(struct v4l2_ctrl *ctrl)
 		ret = -EINVAL;
 		break;
 	}
+
+	pm_runtime_put(ov5645->dev);
 
 	mutex_unlock(&ov5645->power_lock);
 
@@ -1000,6 +1014,10 @@ static int ov5645_s_stream(struct v4l2_subdev *subdev, int enable)
 	int ret;
 
 	if (enable) {
+		ret = pm_runtime_get_sync(ov5645->dev);
+		if (ret < 0)
+			goto error;
+
 		ret = ov5645_set_register_array(ov5645,
 					ov5645->current_mode->data,
 					ov5645->current_mode->data_size);
@@ -1007,39 +1025,47 @@ static int ov5645_s_stream(struct v4l2_subdev *subdev, int enable)
 			dev_err(ov5645->dev, "could not set mode %dx%d\n",
 				ov5645->current_mode->width,
 				ov5645->current_mode->height);
-			return ret;
+			goto error;
 		}
 		ret = v4l2_ctrl_handler_setup(&ov5645->ctrls);
 		if (ret < 0) {
 			dev_err(ov5645->dev, "could not sync v4l2 controls\n");
-			return ret;
+			goto error;
 		}
 
 		ret = ov5645_write_reg(ov5645, OV5645_IO_MIPI_CTRL00, 0x45);
 		if (ret < 0)
-			return ret;
+			goto error;
 
 		ret = ov5645_write_reg(ov5645, OV5645_SYSTEM_CTRL0,
 				       OV5645_SYSTEM_CTRL0_START);
 		if (ret < 0)
-			return ret;
+			goto error;
 	} else {
 		ret = ov5645_write_reg(ov5645, OV5645_IO_MIPI_CTRL00, 0x40);
 		if (ret < 0)
-			return ret;
+			goto error;
 
 		ret = ov5645_write_reg(ov5645, OV5645_SYSTEM_CTRL0,
 				       OV5645_SYSTEM_CTRL0_STOP);
 		if (ret < 0)
-			return ret;
+			goto error;
+
+		pm_runtime_mark_last_busy(ov5645->dev);
+		pm_runtime_put_autosuspend(ov5645->dev);
 	}
 
 	return 0;
-}
 
-static const struct v4l2_subdev_core_ops ov5645_core_ops = {
-	.s_power = ov5645_s_power,
-};
+error:
+	/*
+	 * In case of error, turn the power off synchronously as the
+	 * device likely has no other chance to recover.
+	 */
+	pm_runtime_put_sync(ov5645->dev);
+
+	return ret;
+}
 
 static const struct v4l2_subdev_video_ops ov5645_video_ops = {
 	.s_stream = ov5645_s_stream,
@@ -1055,7 +1081,6 @@ static const struct v4l2_subdev_pad_ops ov5645_subdev_pad_ops = {
 };
 
 static const struct v4l2_subdev_ops ov5645_subdev_ops = {
-	.core = &ov5645_core_ops,
 	.video = &ov5645_video_ops,
 	.pad = &ov5645_subdev_pad_ops,
 };
@@ -1206,6 +1231,14 @@ static int ov5645_probe(struct i2c_client *client)
 		goto free_entity;
 	}
 
+	/*
+	 * Enable runtime PM. As the device has been powered manually, mark it
+	 * as active, and increase the usage count without resuming the device.
+	 */
+	pm_runtime_set_active(ov5645->dev);
+	pm_runtime_get_noresume(ov5645->dev);
+	pm_runtime_enable(ov5645->dev);
+
 	ret = ov5645_read_reg(ov5645, OV5645_CHIP_ID_HIGH, &chip_id_high);
 	if (ret < 0 || chip_id_high != OV5645_CHIP_ID_HIGH_BYTE) {
 		dev_err(dev, "could not read ID high\n");
@@ -1245,20 +1278,28 @@ static int ov5645_probe(struct i2c_client *client)
 		goto power_down;
 	}
 
-	ov5645_s_power(&ov5645->sd, false);
-
 	ret = v4l2_async_register_subdev(&ov5645->sd);
 	if (ret < 0) {
 		dev_err(dev, "could not register v4l2 device\n");
-		goto free_entity;
+		goto power_down;
 	}
 
 	ov5645_entity_init_cfg(&ov5645->sd, NULL);
 
+	/*
+	 * Finally, enable autosuspend and decrease the usage count. The device
+	 * will get suspended after the autosuspend delay, turning the power
+	 * off.
+	 */
+	pm_runtime_set_autosuspend_delay(ov5645->dev, 1000);
+	pm_runtime_use_autosuspend(ov5645->dev);
+	pm_runtime_put_autosuspend(ov5645->dev);
+
 	return 0;
 
 power_down:
-	ov5645_s_power(&ov5645->sd, false);
+	pm_runtime_disable(ov5645->dev);
+	pm_runtime_put_noidle(ov5645->dev);
 free_entity:
 	media_entity_cleanup(&ov5645->sd.entity);
 free_ctrl:
@@ -1277,6 +1318,15 @@ static int ov5645_remove(struct i2c_client *client)
 	media_entity_cleanup(&ov5645->sd.entity);
 	v4l2_ctrl_handler_free(&ov5645->ctrls);
 	mutex_destroy(&ov5645->power_lock);
+
+	/*
+	 * Disable runtime PM. In case runtime PM is disabled in the kernel,
+	 * make sure to turn power off manually.
+	 */
+	pm_runtime_disable(ov5645->dev);
+	if (!pm_runtime_status_suspended(ov5645->dev))
+		ov5645_s_power(sd, 0);
+	pm_runtime_set_suspended(ov5645->dev);
 
 	return 0;
 }
@@ -1297,6 +1347,7 @@ static struct i2c_driver ov5645_i2c_driver = {
 	.driver = {
 		.of_match_table = of_match_ptr(ov5645_of_match),
 		.name  = "ov5645",
+		.pm = &ov5645_pm_ops,
 	},
 	.probe_new = ov5645_probe,
 	.remove = ov5645_remove,
