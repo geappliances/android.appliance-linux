@@ -120,6 +120,15 @@ static const struct mtk_seninf_conf seninf_8183_conf = {
 	.nb_phy = 5,
 };
 
+static const struct mtk_seninf_conf seninf_8167_conf = {
+	.seninf_version = SENINF_20,
+	.model = "mtk-camsys-2.0",
+	.csi2_rx_type = MTK_SENINF_CSI2_RX_NCSI2,
+	.nb_inputs = 4,
+	.nb_outputs = 1,
+	.nb_phy = 1,
+};
+
 struct mtk_seninf_format_info {
 	u32 code;
 	u32 flags;
@@ -1262,6 +1271,12 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	if (port >= conf->nb_inputs)
 		return 0;
 
+	if (conf->seninf_version == SENINF_20 && port >= 1) {
+		dev_err(dev, "Port %u is not currently supported on ISP2.0\n",
+			port);
+		return -ENOTCONN;
+	}
+
 	if (vep->bus_type != V4L2_MBUS_CSI2_DPHY) {
 		dev_err(dev, "Only CSI2 bus type is currently supported\n");
 		return -EINVAL;
@@ -1644,10 +1659,12 @@ static int seninf_remove(struct platform_device *pdev)
 
 static const struct of_device_id mtk_seninf_of_match[] = {
 	{
+		.compatible = "mediatek,mt8167-seninf",
+		.data = &seninf_8167_conf,
+	}, {
 		.compatible = "mediatek,mt8183-seninf",
 		.data = &seninf_8183_conf,
 	},
-	{},
 };
 MODULE_DEVICE_TABLE(of, mtk_seninf_of_match);
 
