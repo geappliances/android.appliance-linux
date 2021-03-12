@@ -28,9 +28,10 @@
 #define SENINF_SETTLE_DELAY		0x15
 #define SENINF_HS_TRAIL_PARAMETER	0x8
 
-#define SENINF_NUM_INPUTS		4
-#define SENINF_NUM_OUTPUTS		4
-#define SENINF_NUM_PADS			(SENINF_NUM_INPUTS + SENINF_NUM_OUTPUTS)
+#define SENINF_MAX_NUM_INPUTS		4
+#define SENINF_MAX_NUM_OUTPUTS		4
+#define SENINF_MAX_NUM_PADS		(SENINF_MAX_NUM_INPUTS + \
+					 SENINF_MAX_NUM_OUTPUTS)
 
 #define SENINF_DEFAULT_WIDTH		1920
 #define SENINF_DEFAULT_HEIGHT		1080
@@ -98,11 +99,17 @@ enum mtk_seninf_version {
 struct mtk_seninf_conf {
 	enum mtk_seninf_version seninf_version;
 	char *model;
+	u8 nb_inputs;
+	u8 nb_outputs;
+	u8 nb_phy;
 };
 
 static const struct mtk_seninf_conf seninf_8183_conf = {
 	.seninf_version = SENINF_50,
 	.model = "mtk-camsys-5.0",
+	.nb_inputs = 4,
+	.nb_outputs = 4,
+	.nb_phy = 5,
 };
 
 struct mtk_seninf_format_info {
@@ -136,13 +143,13 @@ struct mtk_seninf {
 	struct media_device media_dev;
 	struct v4l2_device v4l2_dev;
 	struct v4l2_subdev subdev;
-	struct media_pad pads[SENINF_NUM_PADS];
+	struct media_pad pads[SENINF_MAX_NUM_PADS];
 	struct v4l2_async_notifier notifier;
 	struct v4l2_ctrl_handler ctrl_handler;
 
 	struct v4l2_mbus_framefmt source_format;
 
-	struct mtk_seninf_input inputs[SENINF_NUM_INPUTS];
+	struct mtk_seninf_input inputs[SENINF_MAX_NUM_INPUTS];
 	struct mtk_seninf_input *active_input;
 
 	const struct mtk_seninf_conf *conf;
@@ -382,7 +389,7 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	 * FIFOs to the outputs (CAM and CAMSV).
 	 */
 	if (conf->seninf_version == SENINF_50) {
-		pos = input->source_pad - SENINF_NUM_INPUTS + 2;
+		pos = input->source_pad - conf->nb_inputs + 2;
 		val = (mtk_seninf_read(priv, SENINF_TOP_CAM_MUX_CTRL)
 		       & ~(0xF << (pos * 4))) |
 		       ((input->seninf & 0xF) << (pos * 4));
@@ -803,11 +810,13 @@ static struct v4l2_mbus_framefmt *
 seninf_get_pad_format(struct mtk_seninf *priv, struct v4l2_subdev_pad_config *cfg,
 		      unsigned int pad, u32 which)
 {
+	const struct mtk_seninf_conf *conf = priv->conf;
+
 	switch (which) {
 	case V4L2_SUBDEV_FORMAT_TRY:
 		return v4l2_subdev_get_try_format(&priv->subdev, cfg, pad);
 	case V4L2_SUBDEV_FORMAT_ACTIVE:
-		if (pad < ARRAY_SIZE(priv->inputs))
+		if (pad < conf->nb_inputs)
 			return &priv->inputs[pad].format;
 		else
 			return &priv->source_format;
@@ -837,13 +846,15 @@ static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_mbus_code_enum *code)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
+	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
+	const struct mtk_seninf_conf *conf = priv->conf;
 
 	if (code->index >= ARRAY_SIZE(mtk_seninf_formats))
 		return -EINVAL;
 
 	fmtinfo = &mtk_seninf_formats[code->index];
 	if (fmtinfo->flags & MTK_SENINF_FORMAT_INPUT_ONLY &&
-	    code->pad >= SENINF_NUM_INPUTS)
+	    code->pad >= conf->nb_inputs)
 		return -EINVAL;
 
 	code->code = fmtinfo->code;
@@ -905,19 +916,20 @@ static int seninf_get_routing(struct v4l2_subdev *sd,
 			     struct v4l2_subdev_krouting *routing)
 {
 	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
+	const struct mtk_seninf_conf *conf = priv->conf;
 	struct v4l2_subdev_route *route = routing->routes;
 	unsigned int sink, source;
 	unsigned int num_routes = routing->num_routes;
 
-	routing->num_routes = SENINF_NUM_INPUTS * SENINF_NUM_OUTPUTS;
+	routing->num_routes = conf->nb_inputs * conf->nb_outputs;
 	if (num_routes < routing->num_routes)
 		return -ENOSPC;
 
-	for (sink = 0; sink < SENINF_NUM_INPUTS; ++sink) {
-		for (source = 0; source < SENINF_NUM_OUTPUTS; ++source) {
+	for (sink = 0; sink < conf->nb_inputs; ++sink) {
+		for (source = 0; source < conf->nb_outputs; ++source) {
 			route->sink_pad = sink;
 			route->sink_stream = 0;
-			route->source_pad = source + SENINF_NUM_INPUTS;
+			route->source_pad = source + conf->nb_inputs;
 			route->source_stream = 0;
 
 			if (priv->inputs[sink].source_pad == route->source_pad)
@@ -934,6 +946,7 @@ static int seninf_set_routing(struct v4l2_subdev *sd,
 			     struct v4l2_subdev_krouting *routing)
 {
 	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
+	const struct mtk_seninf_conf *conf = priv->conf;
 	struct v4l2_subdev_route *route = routing->routes;
 	unsigned int i, k;
 	int pad;
@@ -945,7 +958,7 @@ static int seninf_set_routing(struct v4l2_subdev *sd,
 			return -EINVAL;
 
 		pad = -1;
-		for (i = 0; i < SENINF_NUM_INPUTS; ++i) {
+		for (i = 0; i < conf->nb_inputs; ++i) {
 			if (priv->inputs[i].subdev == NULL)
 				continue;
 			if (priv->inputs[i].source_pad == route->source_pad) {
@@ -1067,9 +1080,10 @@ static bool seninf_has_route(struct media_entity *entity,
 {
 	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(entity);
 	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
+	const struct mtk_seninf_conf *conf = priv->conf;
 	unsigned int i;
 
-	for (i = 0; i < ARRAY_SIZE(priv->inputs); ++i)
+	for (i = 0; i < conf->nb_inputs; ++i)
 		if (pad0 == i && pad1 == priv->inputs[i].source_pad)
 			return true;
 
@@ -1105,6 +1119,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	};
 
 	struct mtk_seninf *priv = dev_get_drvdata(dev);
+	const struct mtk_seninf_conf *conf = priv->conf;
 	struct mtk_seninf_async_subdev *s_asd =
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
 	unsigned int port = vep->base.port;
@@ -1116,14 +1131,14 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	if (!fwnode_device_is_available(asd->match.fwnode))
 		return -ENOTCONN;
 
-	if (port >= SENINF_NUM_PADS) {
+	if (port >= (conf->nb_inputs + conf->nb_outputs)) {
 		dev_err(dev, "Invalid port %u\n", port);
 		return -EINVAL;
 	}
 
 	s_asd->port = port;
 
-	if (port >= ARRAY_SIZE(priv->inputs))
+	if (port >= conf->nb_inputs)
 		return 0;
 
 	if (vep->bus_type != V4L2_MBUS_CSI2_DPHY) {
@@ -1137,7 +1152,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	input->seninf = port_to_seninf[port];
 	input->base = priv->base + 0x1000 * input->seninf;
 	input->bus = vep->bus.mipi_csi2;
-	input->source_pad = port + SENINF_NUM_INPUTS;
+	input->source_pad = port + conf->nb_inputs;
 
 	/*
 	 * Select the PHY. SENINF2, SENINF3 and SENINF5 are hardwired to the
@@ -1206,6 +1221,7 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
                                     struct v4l2_async_subdev *asd)
 {
 	struct mtk_seninf *priv = container_of(notifier, struct mtk_seninf, notifier);
+	const struct mtk_seninf_conf *conf = priv->conf;
 	struct mtk_seninf_async_subdev *s_asd =
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
 	int ret;
@@ -1213,7 +1229,7 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
 	dev_dbg(priv->dev, "%s bound to SENINF port %u\n", sd->entity.name,
 		s_asd->port);
 
-	if (s_asd->port < ARRAY_SIZE(priv->inputs)) {
+	if (s_asd->port < conf->nb_inputs) {
 		struct mtk_seninf_input *input = s_asd->input;
 
 		input->subdev = sd;
@@ -1234,7 +1250,6 @@ static int mtk_seninf_notifier_complete(struct v4l2_async_notifier *notifier)
 {
 	struct mtk_seninf *priv = container_of(notifier, struct mtk_seninf, notifier);
 	int ret;
-
 	ret = v4l2_device_register_subdev_nodes(&priv->v4l2_dev);
 	if (ret)
 		dev_err(priv->dev, "Failed to register subdev nodes: %d\n", ret);
@@ -1254,8 +1269,10 @@ static const struct v4l2_async_notifier_operations mtk_seninf_async_ops = {
 static int mtk_seninf_media_init(struct mtk_seninf *priv)
 {
 	struct media_pad *pads = priv->pads;
+	const struct mtk_seninf_conf *conf = priv->conf;
 	struct device *dev = priv->dev;
 	struct media_device *media_dev = &priv->media_dev;
+	u8 num_pads = conf->nb_outputs + conf->nb_inputs;
 	unsigned int i;
 	int ret;
 
@@ -1266,17 +1283,16 @@ static int mtk_seninf_media_init(struct mtk_seninf *priv)
 	media_dev->hw_revision = 0;
 	media_device_init(media_dev);
 
-	ret = media_entity_pads_init(&priv->subdev.entity, SENINF_NUM_PADS, pads);
+	ret = media_entity_pads_init(&priv->subdev.entity, num_pads, pads);
 	if (ret)
 		goto err_clean_media;
 
-	for (i = 0; i < SENINF_NUM_INPUTS; i++)
+	for (i = 0; i < conf->nb_inputs; i++)
 		pads[i].flags = MEDIA_PAD_FL_SINK;
-	for (i = SENINF_NUM_INPUTS; i < SENINF_NUM_PADS; i++)
+	for (i = conf->nb_inputs; i < num_pads; i++)
 		pads[i].flags = MEDIA_PAD_FL_SOURCE;
 
 	return 0;
-
 err_clean_media:
 	media_device_cleanup(media_dev);
 
@@ -1286,12 +1302,13 @@ err_clean_media:
 static int mtk_seninf_v4l2_async_register(struct mtk_seninf *priv)
 {
 	struct device *dev = priv->dev;
+	const struct mtk_seninf_conf *conf = priv->conf;
 	int ret;
 	unsigned int i;
 
 	v4l2_async_notifier_init(&priv->notifier);
 
-	for (i = 0; i < SENINF_NUM_PADS; ++i) {
+	for (i = 0; i < (conf->nb_inputs + conf->nb_outputs); ++i) {
 		ret = v4l2_async_notifier_parse_fwnode_endpoints_by_port(
 			dev, &priv->notifier,
 			sizeof(struct mtk_seninf_async_subdev), i,
@@ -1422,7 +1439,7 @@ static int seninf_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->base))
 		return PTR_ERR(priv->base);
 
-	for (i = 0; i < ARRAY_SIZE(priv->phy); ++i) {
+	for (i = 0; i < priv->conf->nb_phy; ++i) {
 		struct phy *phy;
 
 		phy = devm_phy_get(dev, phy_names[i]);
