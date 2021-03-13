@@ -382,6 +382,11 @@ SND_SOC_DAILINK_DEFS(playback2,
 	DAILINK_COMP_ARRAY(COMP_DUMMY()),
 	DAILINK_COMP_ARRAY(COMP_EMPTY()));
 
+SND_SOC_DAILINK_DEFS(hdmi_playback,
+	DAILINK_COMP_ARRAY(COMP_CPU("HDMI")),
+	DAILINK_COMP_ARRAY(COMP_DUMMY()),
+	DAILINK_COMP_ARRAY(COMP_EMPTY()));
+
 SND_SOC_DAILINK_DEFS(i2s_8ch_playback,
 	DAILINK_COMP_ARRAY(COMP_CPU("HDMI")),
 	DAILINK_COMP_ARRAY(COMP_DUMMY()),
@@ -467,8 +472,8 @@ SND_SOC_DAILINK_DEFS(intdir,
 static struct snd_soc_dai_link mt8516_pumpkin_dais[] = {
 	/* Front End DAI links */
 	{
-		.name = "I2S 8CH Playback",
-		.stream_name = "I2S8CH Playback",
+		.name = "HDMI Playback",
+		.stream_name = "HDMI_Playback",
 		.trigger = {
 			SND_SOC_DPCM_TRIGGER_POST,
 			SND_SOC_DPCM_TRIGGER_POST
@@ -476,7 +481,7 @@ static struct snd_soc_dai_link mt8516_pumpkin_dais[] = {
 		.dynamic = 1,
 		.dpcm_playback = 1,
 		.ops = &i2s_8ch_playback_ops,
-		SND_SOC_DAILINK_REG(i2s_8ch_playback),
+		SND_SOC_DAILINK_REG(hdmi_playback),
 	},
 	{
 		.name = "TDM Capture",
@@ -558,6 +563,18 @@ static struct snd_soc_dai_link mt8516_pumpkin_dais[] = {
 	        .dynamic = 1,
 	        .dpcm_playback = 1,
 		SND_SOC_DAILINK_REG(playback2),
+	},
+	{
+		.name = "I2S 8CH Playback",
+		.stream_name = "I2S8CH Playback",
+		.trigger = {
+			SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST
+		},
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.ops = &i2s_8ch_playback_ops,
+		SND_SOC_DAILINK_REG(i2s_8ch_playback),
 	},
 
 	/* Backend End DAI links */
