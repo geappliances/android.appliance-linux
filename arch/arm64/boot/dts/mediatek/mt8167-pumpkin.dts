@@ -20,7 +20,7 @@
 	sound: sound {
 		dai-link-hdmi {
 			sound-dai = <&afe>;
-			dai-link-name = "I2S 8CH Playback";
+			dai-link-name = "HDMI Playback";
 
 			codec-0 {
 				sound-dai = <&hdmi>;
