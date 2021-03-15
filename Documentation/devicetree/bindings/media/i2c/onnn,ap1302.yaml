@@ -87,7 +87,7 @@ properties:
           Model of the connected sensors. Must be a valid compatible string.
 
           If no sensor is connected, this property must no be specified, and
-          the AP1302 can be used with it's internal test pattern generator.
+          the AP1302 can be used with its internal test pattern generator.
 
     patternProperties:
       "^sensor@[01]":
