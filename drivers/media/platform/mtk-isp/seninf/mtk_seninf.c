@@ -30,7 +30,8 @@
 #define SENINF_HS_TRAIL_PARAMETER	0x8
 
 #define SENINF_NUM_INPUTS		4
-#define SENINF_NUM_PADS			8
+#define SENINF_NUM_OUTPUTS		4
+#define SENINF_NUM_PADS			(SENINF_NUM_INPUTS + SENINF_NUM_OUTPUTS)
 
 #define SENINF_DEFAULT_WIDTH		1920
 #define SENINF_DEFAULT_HEIGHT		1080
@@ -834,6 +835,72 @@ static int seninf_set_fmt(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static int seninf_get_routing(struct v4l2_subdev *sd,
+			     struct v4l2_subdev_krouting *routing)
+{
+	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
+	struct v4l2_subdev_route *route = routing->routes;
+	unsigned int sink, source;
+	unsigned int num_routes = routing->num_routes;
+
+	routing->num_routes = SENINF_NUM_INPUTS * SENINF_NUM_OUTPUTS;
+	if (num_routes < routing->num_routes)
+		return -ENOSPC;
+
+	for (sink = 0; sink < SENINF_NUM_INPUTS; ++sink) {
+		for (source = 0; source < SENINF_NUM_OUTPUTS; ++source) {
+			route->sink_pad = sink;
+			route->sink_stream = 0;
+			route->source_pad = source + SENINF_NUM_INPUTS;
+			route->source_stream = 0;
+
+			if (priv->inputs[sink].source_pad == route->source_pad)
+				route->flags = V4L2_SUBDEV_ROUTE_FL_ACTIVE;
+
+			route++;
+		}
+	}
+
+	return 0;
+}
+
+static int seninf_set_routing(struct v4l2_subdev *sd,
+			     struct v4l2_subdev_krouting *routing)
+{
+	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
+	struct v4l2_subdev_route *route = routing->routes;
+	unsigned int i, k;
+	int pad;
+
+	for (k = 0; k < routing->num_routes; ++k) {
+		struct mtk_seninf_input *input = &priv->inputs[route->sink_pad];
+
+		if (route->sink_stream != 0 || route->source_stream != 0)
+			return -EINVAL;
+
+		pad = -1;
+		for (i = 0; i < SENINF_NUM_INPUTS; ++i) {
+			if (priv->inputs[i].subdev == NULL)
+				continue;
+			if (priv->inputs[i].source_pad == route->source_pad) {
+				pad = i;
+				break;
+			}
+		}
+
+		if (route->flags == V4L2_SUBDEV_ROUTE_FL_ACTIVE) {
+			if ((input->source_pad != 0) || ((pad != -1) && (pad != route->sink_pad)))
+				return -EMLINK;
+			input->source_pad = route->source_pad;
+		} else {
+			if (input->source_pad == route->source_pad)
+				input->source_pad = 0;
+		}
+	}
+
+	return 0;
+}
+
 static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
@@ -883,6 +950,8 @@ static const struct v4l2_subdev_pad_ops seninf_subdev_pad_ops = {
 	.init_cfg = seninf_init_cfg,
 	.set_fmt = seninf_set_fmt,
 	.get_fmt = seninf_get_fmt,
+	.get_routing = seninf_get_routing,
+	.set_routing = seninf_set_routing,
 	.enum_mbus_code = seninf_enum_mbus_code,
 };
 
