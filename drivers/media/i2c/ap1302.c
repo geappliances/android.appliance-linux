@@ -1991,6 +1991,9 @@ static int ap1302_sensor_parse_of(struct ap1302_device *ap1302,
 	u32 reg;
 	int ret;
 
+	if (!of_device_is_available(node))
+		return -ENODEV;
+
 	/* Retrieve the sensor index from the reg property. */
 	ret = of_property_read_u32(node, "reg", &reg);
 	if (ret < 0) {
