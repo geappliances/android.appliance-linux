@@ -996,10 +996,25 @@ static int seninf_link_setup(struct media_entity *entity,
 	return 0;
 }
 
+static bool seninf_has_route(struct media_entity *entity,
+			unsigned int pad0, unsigned int pad1)
+{
+	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(entity);
+	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(priv->inputs); ++i)
+		if (pad0 == i && pad1 == priv->inputs[i].source_pad)
+			return true;
+
+	return false;
+}
+
 static const struct media_entity_operations seninf_media_ops = {
 	.get_fwnode_pad = v4l2_subdev_get_fwnode_pad_1_to_1,
 	.link_setup = seninf_link_setup,
 	.link_validate = v4l2_subdev_link_validate,
+	.has_route = seninf_has_route,
 };
 
 /* -----------------------------------------------------------------------------
