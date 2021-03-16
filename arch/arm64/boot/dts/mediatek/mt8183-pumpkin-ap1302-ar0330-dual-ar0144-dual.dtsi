@@ -86,6 +86,9 @@
 		reset-gpios = <&pio 102 GPIO_ACTIVE_LOW>;
 		standby-gpios = <&pio 40 GPIO_ACTIVE_HIGH>;
 
+		orientation = <0>;
+		rotation = <0>;
+
 		port {
 			isp1_out: endpoint {
 				remote-endpoint = <&seninf_in1>;
@@ -136,6 +139,9 @@
 
 		reset-gpios = <&pio 109 GPIO_ACTIVE_LOW>;
 		standby-gpios = <&pio 39 GPIO_ACTIVE_HIGH>;
+
+		orientation = <0>;
+		rotation = <0>;
 
 		port {
 			isp2_out: endpoint {
