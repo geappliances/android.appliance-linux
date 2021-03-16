@@ -79,6 +79,9 @@
 		vaa-supply = <&mt6358_vcama1_reg>;
 		vddio-supply = <&mt6358_vcamio_reg>;
 
+		orientation = <0>;
+		rotation = <0>;
+
 		port@0 {
 			ar0330_1_endpoint: endpoint {
 				remote-endpoint = <&mipi_ar0330_1>;
@@ -108,6 +111,9 @@
 		vddpll-supply = <&mt6358_vldo28_reg>;
 		vaa-supply = <&mt6358_vcama2_reg>;
 		vddio-supply = <&mt6358_vcamio_reg>;
+
+		orientation = <0>;
+		rotation = <0>;
 
 		port@0 {
 			ar0330_2_endpoint: endpoint {
