@@ -38,8 +38,8 @@
 		mmc0 = &mmc0;
 		mmc1 = &mmc1;
 		ovl0 = &ovl0;
-		ovl_2l0 = &ovl_2l0;
-		ovl_2l1 = &ovl_2l1;
+		ovl-2l0 = &ovl_2l0;
+		ovl-2l1 = &ovl_2l1;
 		rdma0 = &rdma0;
 		rdma1 = &rdma1;
 	};
