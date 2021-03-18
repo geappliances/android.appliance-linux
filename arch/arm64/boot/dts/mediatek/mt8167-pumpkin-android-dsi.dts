@@ -11,13 +11,14 @@
 &reserved_memory {
 	#address-cells = <2>;
 	#size-cells = <2>;
-	ramoops@0x4FF00000 {
+
+	ramoops@43e00000 {
 		compatible = "ramoops";
-		reg = <0x0 0x4FF00000 0x0 0x00100000>;
-		record-size = <0x00008000>;
-		console-size = <0x00008000>;
-		ftrace-size = <0x00000000>;
-		pmsg-size = <0x00008000>;
+		reg = <0 0x43e00000 0 0x00100000>;
+		record-size = <0x8000>;
+		console-size = <0x8000>;
+		ftrace-size = <0x0>;
+		pmsg-size = <0x8000>;
 	};
 };
 
