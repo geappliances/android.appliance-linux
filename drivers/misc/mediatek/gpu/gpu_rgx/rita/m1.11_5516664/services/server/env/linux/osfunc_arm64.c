@@ -149,6 +149,49 @@ e0:
 	PVR_UNREFERENCED_PARAMETER(arg);
 }
 
+static inline void FlushRange(void *pvRangeAddrStart, void *pvRangeAddrEnd,
+			      PVRSRV_CACHE_OP eCacheOp)
+{
+	IMG_UINT32 ui32CacheLineSize =
+		OSCPUCacheAttributeSize(PVR_DCACHE_LINE_SIZE);
+	IMG_BYTE *pbStart = pvRangeAddrStart;
+	IMG_BYTE *pbEnd = pvRangeAddrEnd;
+	IMG_BYTE *pbBase;
+
+	/*
+	  On arm64, the TRM states in D5.8.1 (data and unified caches) that if cache
+	  maintenance is performed on a memory location using a VA, the effect of
+	  that cache maintenance is visible to all VA aliases of the physical memory
+	  location. So here it's quicker to issue the machine cache maintenance
+	  instruction directly without going via the Linux kernel DMA framework as
+	  this is sufficient to maintain the CPU d-caches on arm64.
+	 */
+	pbEnd = (IMG_BYTE *)PVR_ALIGN((uintptr_t)pbEnd,
+				      (uintptr_t)ui32CacheLineSize);
+	for (pbBase = pbStart; pbBase < pbEnd; pbBase += ui32CacheLineSize) {
+		switch (eCacheOp) {
+		case PVRSRV_CACHE_OP_CLEAN:
+			asm volatile("dc cvac, %0" ::"r"(pbBase));
+			break;
+
+		case PVRSRV_CACHE_OP_INVALIDATE:
+			asm volatile("dc ivac, %0" ::"r"(pbBase));
+			break;
+
+		case PVRSRV_CACHE_OP_FLUSH:
+			asm volatile("dc civac, %0" ::"r"(pbBase));
+			break;
+
+		default:
+			PVR_DPF((
+				PVR_DBG_ERROR,
+				"%s: Cache maintenance operation type %d is invalid",
+				__FUNCTION__, eCacheOp));
+			break;
+		}
+	}
+}
+
 PVRSRV_ERROR OSCPUOperation(PVRSRV_CACHE_OP uiCacheOp)
 {
 	PVRSRV_ERROR eError = PVRSRV_OK;
@@ -185,6 +228,12 @@ void OSCPUCacheFlushRangeKM(PVRSRV_DEVICE_NODE *psDevNode,
 	struct device *dev;
 	const struct dma_map_ops *dma_ops;
 
+	if (pvVirtStart)
+	{
+		FlushRange(pvVirtStart, pvVirtEnd, PVRSRV_CACHE_OP_FLUSH);
+		return;
+	}
+
 	PVR_UNREFERENCED_PARAMETER(pvVirtStart);
 	PVR_UNREFERENCED_PARAMETER(pvVirtEnd);
 
@@ -204,6 +253,12 @@ void OSCPUCacheCleanRangeKM(PVRSRV_DEVICE_NODE *psDevNode,
 	struct device *dev;
 	const struct dma_map_ops *dma_ops;
 
+	if (pvVirtStart)
+	{
+		FlushRange(pvVirtStart, pvVirtEnd, PVRSRV_CACHE_OP_FLUSH);
+		return;
+	}
+
 	PVR_UNREFERENCED_PARAMETER(pvVirtStart);
 	PVR_UNREFERENCED_PARAMETER(pvVirtEnd);
 
@@ -221,6 +276,12 @@ void OSCPUCacheInvalidateRangeKM(PVRSRV_DEVICE_NODE *psDevNode,
 {
 	struct device *dev;
 	const struct dma_map_ops *dma_ops;
+
+	if (pvVirtStart)
+	{
+		FlushRange(pvVirtStart, pvVirtEnd, PVRSRV_CACHE_OP_FLUSH);
+		return;
+	}
 
 	PVR_UNREFERENCED_PARAMETER(pvVirtStart);
 	PVR_UNREFERENCED_PARAMETER(pvVirtEnd);
