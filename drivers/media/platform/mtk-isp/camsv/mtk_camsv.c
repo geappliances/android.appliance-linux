@@ -324,8 +324,7 @@ static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 	cam->subdev.entity.ops = &mtk_camsv_media_entity_ops;
 	cam->subdev.internal_ops = &mtk_camsv_internal_ops;
 	cam->subdev.flags = V4L2_SUBDEV_FL_HAS_DEVNODE;
-	snprintf(cam->subdev.name, sizeof(cam->subdev.name), "%s",
-		 dev_driver_string(dev));
+	strscpy(cam->subdev.name, dev_name(dev), V4L2_SUBDEV_NAME_SIZE);
 	v4l2_set_subdevdata(&cam->subdev, cam);
 
 	mtk_camsv_init_cfg(&cam->subdev, NULL);
