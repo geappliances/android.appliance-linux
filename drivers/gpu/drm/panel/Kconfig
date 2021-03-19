@@ -193,6 +193,14 @@ config DRM_PANEL_RAYDIUM_RM67191
 	  Say Y here if you want to enable support for Raydium RM67191 FHD
 	  (1080x1920) DSI panel.
 
+config DRM_PANEL_RPI_PUMPKIN_TOUCHSCREEN
+	tristate "RPi 7-inch touchscreen panel for Pumpkin boards"
+	depends on DRM_MIPI_DSI
+	help
+	  Say Y here if you want to enable support for the Raspberry
+	  Pi 7" Touchscreen modified for use with the pumpkin boards.
+	  To compile this driver as a module, choose M here.
+
 config DRM_PANEL_RAYDIUM_RM68200
 	tristate "Raydium RM68200 720x1280 DSI video mode panel"
 	depends on OF
@@ -298,6 +306,15 @@ config DRM_PANEL_SHARP_LS043T1LE01
 	  Say Y here if you want to enable support for Sharp LS043T1LE01 qHD
 	  (540x960) DSI panel as found on the Qualcomm APQ8074 Dragonboard
 
+config DRM_PANEL_SHARP_NT35532
+	tristate "Sharp NT35532 panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for Sharp NT35532 DSI panel
+	  as found on the MT8183 EVB (aiv8183m1)
+
 config DRM_PANEL_SITRONIX_ST7701
 	tristate "Sitronix ST7701 panel driver"
 	depends on OF
@@ -348,6 +365,15 @@ config DRM_PANEL_TPO_TPG110
 	  400CH LTPS TFT LCD Single Chip Digital Driver for up to
 	  800x400 LCD panels.
 
+config DRM_PANEL_TPV_OTM1901A
+	tristate "TPV OTM1901A panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for TPV OTM1901A DSI panel
+	  as found on the MT8183 EVB (aiv8183m1)
+
 config DRM_PANEL_TRULY_NT35597_WQXGA
 	tristate "Truly WQXGA"
 	depends on OF
@@ -355,4 +381,32 @@ config DRM_PANEL_TRULY_NT35597_WQXGA
 	help
 	  Say Y here if you want to enable support for Truly NT35597 WQXGA Dual DSI
 	  Video Mode panel
+
+config DRM_PANEL_TRULY_R63350A
+	tristate "TRULY R63350A panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for Truly R63350A DSI panel
+	  as found on the MT8183 EVB (aiv8183m1)
+
+config DRM_PANEL_URT_UMO_9465MD_T
+	tristate "URT UMO-9465MD-T panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for U.R.T. UMO-9465MD-T DSI panel
+	  based on HX8260-A controller
+
+config DRM_PANEL_AVD_TT70WS_CN_134_A
+	tristate "AVD TT70WS-CN-134-A panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for AVD TT70WS-CN-134-A DSI panel
+	  based on COGIC-EK731217BGCA controller
+
 endmenu

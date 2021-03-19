@@ -1,0 +1,97 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2019 BayLibre, SAS.
+ * Author: Fabien Parent <fparent@baylibre.com>
+ */
+
+/dts-v1/;
+
+#include "mt8167.dtsi"
+#include "i300-pumpkin-common.dtsi"
+
+/ {
+	model = "Pumpkin MT8167";
+
+	memory@40000000 {
+		device_type = "memory";
+		reg = <0 0x40000000 0 0x80000000>;
+	};
+
+	sound: sound {
+		dai-link-hdmi {
+			sound-dai = <&afe>;
+			dai-link-name = "I2S 8CH Playback";
+
+			codec-0 {
+				sound-dai = <&hdmi>;
+			};
+		};
+	};
+
+};
+
+&dpi1 {
+	status = "okay";
+	ddc-i2c-bus = <&hdmiddc>;
+
+	port {
+		hdmi_connector_in: endpoint@0 {
+			remote-endpoint = <&hdmi_out>;
+		};
+	};
+};
+
+&hdmi_phy {
+	status = "okay";
+};
+
+&cec {
+	status = "okay";
+};
+
+&hdmi {
+	pinctrl-names = "default", "hdmi_hpd";
+	pinctrl-0 = <&hdmi_pins_default>;
+	pinctrl-1 = <&hdmi_pins_hpd>;
+	status = "okay";
+
+	#sound-dai-cells = <0>;
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@1 {
+			reg = <1>;
+
+			hdmi_out: endpoint {
+				remote-endpoint = <&hdmi_connector_in>;
+			};
+		};
+	};
+};
+
+&pio {
+	hdmi_pins_default: hdmi_pins_default {
+	};
+
+	hdmi_pins_hpd: hdmi_pins_hpd {
+		pins_cmd_dat {
+			pinmux = <MT8167_PIN_122_HTPLG__FUNC_HTPLG>;
+			bias-pull-down;
+		};
+	};
+
+	uart2_pins: uart2 {
+		pins {
+			pinmux = <MT8167_PIN_34_URXD2__FUNC_URXD2>,
+				 <MT8167_PIN_35_UTXD2__FUNC_UTXD2>;
+		};
+	};
+};
+
+&uart2 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart2_pins>;
+};

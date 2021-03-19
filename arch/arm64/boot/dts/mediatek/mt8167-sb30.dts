@@ -1,0 +1,394 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2020 BayLibre, SAS.
+ * Author: Fabien Parent <fparent@baylibre.com>
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+
+#include "mt8167.dtsi"
+#include "mt6392.dtsi"
+
+/ {
+	model = "Innocomm MT8167 SB30";
+
+	aliases {
+		serial0 = &uart0;
+	};
+
+	chosen {
+		stdout-path = "serial0:921600n8";
+	};
+
+	memory@40000000 {
+		device_type = "memory";
+		reg = <0 0x40000000 0 0x40000000>;
+	};
+
+	firmware {
+		optee: optee@4fd00000 {
+			compatible = "linaro,optee-tz";
+			method = "smc";
+		};
+	};
+
+	mt8167_audio_codec: mt8167_audio_codec {
+		compatible = "mediatek,mt8167-codec";
+		clocks = <&topckgen CLK_TOP_AUDIO>;
+		clock-names = "bus";
+		mediatek,afe-regmap = <&afe>;
+		mediatek,apmixedsys-regmap = <&apmixedsys>;
+		mediatek,pwrap-regmap = <&pwrap>;
+		mediatek,speaker-mode = <0>; /* 0(CLASSD) 1(CLASSAB) */
+		mediatek,dmic-wire-mode = <1>; /* 0(ONE_WIRE) 1(TWO_WIRE) */
+	};
+
+	sound: sound {
+		compatible = "mediatek,mt8516-soc-pumpkin";
+		mediatek,platform = <&afe>;
+		mediatek,audio-codec = <&mt8167_audio_codec>;
+		status = "okay";
+	};
+};
+
+&cpu0 {
+	proc-supply = <&mt6392_vproc_reg>;
+};
+
+&cpu1 {
+	proc-supply = <&mt6392_vproc_reg>;
+};
+
+&cpu2 {
+	proc-supply = <&mt6392_vproc_reg>;
+};
+
+&cpu3 {
+	proc-supply = <&mt6392_vproc_reg>;
+};
+
+&mt6392_pmic {
+	interrupt-parent = <&pio>;
+	interrupts = <28 IRQ_TYPE_LEVEL_HIGH>;
+	interrupt-controller;
+	#interrupt-cells = <2>;
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&pio {
+	mmc0_pins_default: mmc0default {
+		pins_cmd_dat {
+			pinmux = <MT8167_PIN_120_MSDC0_DAT0__FUNC_MSDC0_DAT0>,
+				 <MT8167_PIN_119_MSDC0_DAT1__FUNC_MSDC0_DAT1>,
+				 <MT8167_PIN_118_MSDC0_DAT2__FUNC_MSDC0_DAT2>,
+				 <MT8167_PIN_117_MSDC0_DAT3__FUNC_MSDC0_DAT3>,
+				 <MT8167_PIN_113_MSDC0_DAT4__FUNC_MSDC0_DAT4>,
+				 <MT8167_PIN_112_MSDC0_DAT5__FUNC_MSDC0_DAT5>,
+				 <MT8167_PIN_111_MSDC0_DAT6__FUNC_MSDC0_DAT6>,
+				 <MT8167_PIN_110_MSDC0_DAT7__FUNC_MSDC0_DAT7>,
+				 <MT8167_PIN_115_MSDC0_CMD__FUNC_MSDC0_CMD>;
+			input-enable;
+			bias-pull-up;
+		};
+
+		pins_clk {
+			pinmux = <MT8167_PIN_116_MSDC0_CLK__FUNC_MSDC0_CLK>;
+			bias-pull-down;
+		};
+
+		pins_rst {
+			pinmux = <MT8167_PIN_114_MSDC0_RSTB__FUNC_MSDC0_RSTB>;
+			bias-pull-up;
+		};
+	};
+
+	mmc0_pins_uhs: mmc0@0{
+		pins_cmd_dat {
+			pinmux = <MT8167_PIN_120_MSDC0_DAT0__FUNC_MSDC0_DAT0>,
+				 <MT8167_PIN_119_MSDC0_DAT1__FUNC_MSDC0_DAT1>,
+				 <MT8167_PIN_118_MSDC0_DAT2__FUNC_MSDC0_DAT2>,
+				 <MT8167_PIN_117_MSDC0_DAT3__FUNC_MSDC0_DAT3>,
+				 <MT8167_PIN_113_MSDC0_DAT4__FUNC_MSDC0_DAT4>,
+				 <MT8167_PIN_112_MSDC0_DAT5__FUNC_MSDC0_DAT5>,
+				 <MT8167_PIN_111_MSDC0_DAT6__FUNC_MSDC0_DAT6>,
+				 <MT8167_PIN_110_MSDC0_DAT7__FUNC_MSDC0_DAT7>,
+				 <MT8167_PIN_115_MSDC0_CMD__FUNC_MSDC0_CMD>;
+			input-enable;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_clk {
+			pinmux = <MT8167_PIN_116_MSDC0_CLK__FUNC_MSDC0_CLK>;
+			drive-strength = <MTK_DRIVE_8mA>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+
+		pins_rst {
+			pinmux = <MT8167_PIN_114_MSDC0_RSTB__FUNC_MSDC0_RSTB>;
+			bias-pull-up;
+		};
+	};
+
+	hdmi_pins_default: hdmi_pins_default {
+		pins_pwr {
+			pinmux = <MT8167_PIN_20_EINT20__FUNC_GPIO20>;
+			output-high;
+		};
+	};
+
+	hdmi_pins_hpd: hdmi_pins_hpd {
+		pins_cmd_dat {
+			pinmux = <MT8167_PIN_122_HTPLG__FUNC_HTPLG>;
+			bias-pull-down;
+		};
+	};
+
+	mmc1_pins_default: mmc1default {
+		pins_cmd_dat {
+			pinmux = <MT8167_PIN_106_MSDC1_DAT0__FUNC_MSDC1_DAT0>,
+				 <MT8167_PIN_107_MSDC1_DAT1__FUNC_MSDC1_DAT1>,
+				 <MT8167_PIN_108_MSDC1_DAT2__FUNC_MSDC1_DAT2>,
+				 <MT8167_PIN_109_MSDC1_DAT3__FUNC_MSDC1_DAT3>,
+				 <MT8167_PIN_104_MSDC1_CMD__FUNC_MSDC1_CMD>;
+			input-enable;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_clk {
+			pinmux = <MT8167_PIN_105_MSDC1_CLK__FUNC_MSDC1_CLK>;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+
+		pin_cd {
+			pinmux = <MT8167_PIN_18_EINT18__FUNC_GPIO18>;
+			bias-pull-up;
+			input-enable;
+		};
+
+		pins_3v3 {
+			pinmux = <MT8167_PIN_2_EINT2__FUNC_GPIO2>;
+			output-high;
+		};
+	};
+
+	mmc1_pins_uhs: mmc1@0 {
+		pins_cmd_dat {
+			pinmux = <MT8167_PIN_106_MSDC1_DAT0__FUNC_MSDC1_DAT0>,
+				 <MT8167_PIN_107_MSDC1_DAT1__FUNC_MSDC1_DAT1>,
+				 <MT8167_PIN_108_MSDC1_DAT2__FUNC_MSDC1_DAT2>,
+				 <MT8167_PIN_109_MSDC1_DAT3__FUNC_MSDC1_DAT3>,
+				 <MT8167_PIN_104_MSDC1_CMD__FUNC_MSDC1_CMD>;
+			input-enable;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_clk {
+			pinmux = <MT8167_PIN_105_MSDC1_CLK__FUNC_MSDC1_CLK>;
+			drive-strength = <MTK_DRIVE_8mA>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+	};
+
+	mmc2_pins_default: mmc2default {
+		pins_cmd_dat {
+			pinmux = <MT8167_PIN_70_MSDC2_DAT0__FUNC_MSDC2_DAT0>,
+				 <MT8167_PIN_71_MSDC2_DAT1__FUNC_MSDC2_DAT1>,
+				 <MT8167_PIN_72_MSDC2_DAT2__FUNC_MSDC2_DAT2>,
+				 <MT8167_PIN_73_MSDC2_DAT3__FUNC_MSDC2_DAT3>,
+				 <MT8167_PIN_68_MSDC2_CMD__FUNC_MSDC2_CMD>;
+			input-enable;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_clk {
+			pinmux = <MT8167_PIN_69_MSDC2_CLK__FUNC_MSDC2_CLK>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+	};
+
+	mmc2_pins_uhs: mmc2@0 {
+		pins_cmd_dat {
+			pinmux = <MT8167_PIN_70_MSDC2_DAT0__FUNC_MSDC2_DAT0>,
+				 <MT8167_PIN_71_MSDC2_DAT1__FUNC_MSDC2_DAT1>,
+				 <MT8167_PIN_72_MSDC2_DAT2__FUNC_MSDC2_DAT2>,
+				 <MT8167_PIN_73_MSDC2_DAT3__FUNC_MSDC2_DAT3>,
+				 <MT8167_PIN_68_MSDC2_CMD__FUNC_MSDC2_CMD>;
+			input-enable;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_clk {
+			pinmux = <MT8167_PIN_69_MSDC2_CLK__FUNC_MSDC2_CLK>;
+			drive-strength = <MTK_DRIVE_8mA>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+	};
+
+	usb1_default_pins: usb1_pins {
+		hub_5v {
+			pinmux = <MT8167_PIN_46_JTDI__FUNC_GPIO46>;
+			output-high;
+		};
+
+		hub_3v3 {
+			pinmux = <MT8167_PIN_47_JTDO__FUNC_GPIO47>;
+			output-high;
+		};
+
+		hub_reset {
+			pinmux = <MT8167_PIN_45_JTCK__FUNC_GPIO45>;
+			output-low;
+		};
+
+		ethernet_reset {
+			pinmux = <MT8167_PIN_15_EINT15__FUNC_GPIO15>;
+			output-low;
+		};
+
+		ethernet_en {
+			pinmux = <MT8167_PIN_51_SPI_MO__FUNC_GPIO51>;
+			output-high;
+		};
+	};
+};
+
+&mmc0 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc0_pins_default>;
+	pinctrl-1 = <&mmc0_pins_uhs>;
+	status = "okay";
+	bus-width = <8>;
+	max-frequency = <200000000>;
+	cap-mmc-highspeed;
+	mmc-hs200-1_8v;
+	cap-mmc-hw-reset;
+	vmmc-supply = <&mt6392_vemc3v3_reg>;
+	vqmmc-supply = <&mt6392_vio18_reg>;
+	non-removable;
+};
+
+&mmc1 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc1_pins_default>;
+	pinctrl-1 = <&mmc1_pins_uhs>;
+	cd-gpios = <&pio 18 GPIO_ACTIVE_HIGH>;
+	bus-width = <4>;
+	max-frequency = <200000000>;
+	cap-sd-highspeed;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
+	vmmc-supply = <&mt6392_vmch_reg>;
+	vqmmc-supply = <&mt6392_vio18_reg>;
+	status = "okay";
+};
+
+&mmc2 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc2_pins_default>;
+	pinctrl-1 = <&mmc2_pins_uhs>;
+	bus-width = <4>;
+	max-frequency = <200000000>;
+	cap-sd-highspeed;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
+	keep-power-in-suspend;
+	enable-sdio-wakeup;
+	cap-sdio-irq;
+	vmmc-supply = <&mt6392_vemc3v3_reg>;
+	vqmmc-supply = <&mt6392_vio18_reg>;
+	non-removable;
+	status = "okay";
+
+	mt7668 {
+		wifi: mt7668-wifi@0 {
+			compatible = "mediatek,mt8516-wifi",
+				     "mediatek,mt7668-wifi";
+			mac-address = [00 00 00 00 00 00];
+		};
+
+		bluetooth: mt7668-bluetooth@0 {
+			compatible = "mediatek,mt8516-bluetooth",
+				     "mediatek,mt7668-bluetooth";
+			mac-address = [00 00 00 00 00 00];
+		};
+	};
+};
+
+&dpi1 {
+	status = "okay";
+	ddc-i2c-bus = <&hdmiddc>;
+
+	port {
+		hdmi_connector_in: endpoint@0 {
+			remote-endpoint = <&hdmi_out>;
+		};
+	};
+};
+
+&hdmi_phy {
+	status = "okay";
+};
+
+&cec {
+	status = "okay";
+};
+
+&hdmi {
+	pinctrl-names = "default", "hdmi_hpd";
+	pinctrl-0 = <&hdmi_pins_default>;
+	pinctrl-1 = <&hdmi_pins_hpd>;
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@1 {
+			reg = <1>;
+
+			hdmi_out: endpoint {
+				remote-endpoint = <&hdmi_connector_in>;
+			};
+		};
+	};
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "peripheral";
+
+	usb_con: connector {
+		compatible = "usb-b-connector";
+		label = "micro-USB";
+		type = "micro";
+	};
+};
+
+&usb0_phy {
+	status = "okay";
+};
+
+&usb1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&usb1_default_pins>;
+	status = "okay";
+};
+
+&afe {
+	/* 0(HDMI) 1(I2S) 2(TDM) */
+	mediatek,tdm-out-mode = <1>;
+	/* 0(IR1) 1(IRQ2) 4(IRQ7)*/
+	mediatek,awb-irq-mode = <4>;
+	/*0(Spearated Mode) 1(Share Mode)*/
+	mediatek,i2s-clock-modes = <1 1>;
+};

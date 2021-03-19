@@ -1903,7 +1903,7 @@ static int pwrap_probe(struct platform_device *pdev)
 		of_slave_id = of_match_node(of_slave_match_tbl, np->child);
 
 	if (!of_slave_id) {
-		dev_dbg(&pdev->dev, "slave pmic should be defined in dts\n");
+		dev_err(&pdev->dev, "slave pmic should be defined in dts\n");
 		return -EINVAL;
 	}
 
@@ -1926,7 +1926,7 @@ static int pwrap_probe(struct platform_device *pdev)
 		wrp->rstc = devm_reset_control_get(wrp->dev, "pwrap");
 		if (IS_ERR(wrp->rstc)) {
 			ret = PTR_ERR(wrp->rstc);
-			dev_dbg(wrp->dev, "cannot get pwrap reset: %d\n", ret);
+			dev_err(wrp->dev, "cannot get pwrap reset: %d\n", ret);
 			return ret;
 		}
 	}
@@ -1942,7 +1942,7 @@ static int pwrap_probe(struct platform_device *pdev)
 							  "pwrap-bridge");
 		if (IS_ERR(wrp->rstc_bridge)) {
 			ret = PTR_ERR(wrp->rstc_bridge);
-			dev_dbg(wrp->dev,
+			dev_err(wrp->dev,
 				"cannot get pwrap-bridge reset: %d\n", ret);
 			return ret;
 		}
@@ -1950,14 +1950,14 @@ static int pwrap_probe(struct platform_device *pdev)
 
 	wrp->clk_spi = devm_clk_get(wrp->dev, "spi");
 	if (IS_ERR(wrp->clk_spi)) {
-		dev_dbg(wrp->dev, "failed to get clock: %ld\n",
+		dev_err(wrp->dev, "failed to get SPI clock: %ld\n",
 			PTR_ERR(wrp->clk_spi));
 		return PTR_ERR(wrp->clk_spi);
 	}
 
 	wrp->clk_wrap = devm_clk_get(wrp->dev, "wrap");
 	if (IS_ERR(wrp->clk_wrap)) {
-		dev_dbg(wrp->dev, "failed to get clock: %ld\n",
+		dev_err(wrp->dev, "failed to get WRAP clock: %ld\n",
 			PTR_ERR(wrp->clk_wrap));
 		return PTR_ERR(wrp->clk_wrap);
 	}
@@ -1983,13 +1983,13 @@ static int pwrap_probe(struct platform_device *pdev)
 	if (!pwrap_readl(wrp, PWRAP_INIT_DONE2)) {
 		ret = pwrap_init(wrp);
 		if (ret) {
-			dev_dbg(wrp->dev, "init failed with %d\n", ret);
+			dev_err(wrp->dev, "init failed with %d\n", ret);
 			goto err_out2;
 		}
 	}
 
 	if (!(pwrap_readl(wrp, PWRAP_WACS2_RDATA) & PWRAP_STATE_INIT_DONE0)) {
-		dev_dbg(wrp->dev, "initialization isn't finished\n");
+		dev_err(wrp->dev, "initialization isn't finished\n");
 		ret = -ENODEV;
 		goto err_out2;
 	}
@@ -2028,7 +2028,7 @@ static int pwrap_probe(struct platform_device *pdev)
 
 	ret = of_platform_populate(np, NULL, NULL, wrp->dev);
 	if (ret) {
-		dev_dbg(wrp->dev, "failed to create child devices at %pOF\n",
+		dev_err(wrp->dev, "failed to create child devices at %pOF\n",
 				np);
 		goto err_out2;
 	}

@@ -134,6 +134,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_PCM179X_SPI if SPI_MASTER
 	select SND_SOC_PCM186X_I2C if I2C
 	select SND_SOC_PCM186X_SPI if SPI_MASTER
+	select SND_SOC_TLV320ADC3101 if  I2C
 	select SND_SOC_PCM3008
 	select SND_SOC_PCM3060_I2C if I2C
 	select SND_SOC_PCM3060_SPI if SPI_MASTER
@@ -846,6 +847,16 @@ config SND_SOC_PCM186X_SPI
 	select SND_SOC_PCM186X
 	select REGMAP_SPI
 
+config SND_SOC_TLV320ADC3101
+	tristate
+
+config SND_SOC_TLV320ADC3101_I2C
+	tristate "Texas Instruments TLV320ADC3101 CODECs - I2C"
+	depends on I2C
+	select SND_SOC_TLV320ADC3101
+	select REGMAP_I2C
+
+
 config SND_SOC_PCM3008
        tristate
 
@@ -1436,6 +1447,9 @@ config SND_SOC_ZX_AUD96P22
 	depends on I2C
 	select REGMAP_I2C
 
+config SND_SOC_MT8167_CODEC
+	tristate
+
 # Amp
 config SND_SOC_LM4857
 	tristate
@@ -1464,6 +1478,19 @@ config SND_SOC_MT6358
 	help
 	  Enable support for the platform which uses MT6358 as
 	  external codec device.
+
+config SND_SOC_MT6392_MT8167
+	tristate "MediaTek MT6392 Codec in addition to MT8167 Codec"
+	select MT8167_CODEC
+	select MTK_SPEAKER
+
+config MTK_SPEAKER
+	bool "MTK SPEAKER AMP"
+	default n
+	help
+	  If you say Y, enable MTK_SPEAKER_AMP
+	  This is a config for mediatek internal speaker amp.
+	  Generally you select "N", if unsupport it.
 
 config SND_SOC_NAU8540
        tristate "Nuvoton Technology Corporation NAU85L40 CODEC"

@@ -231,11 +231,14 @@ struct otg_switch_mtk {
  * @dma_clk: dma_bus_ck clock for AXI bus etc
  * @dr_mode: works in which mode:
  *		host only, device only or dual-role mode
+ * @otg_srp_reqd: used for SRP request handling.
+ * @otg_hnp_reqd: used for HNP request handling.
  * @u2_ports: number of usb2.0 host ports
  * @u3_ports: number of usb3.0 host ports
  * @u3p_dis_msk: mask of disabling usb3 ports, for example, bit0==1 to
  *		disable u3port0, bit1==1 to disable u3port1,... etc
  * @dbgfs_root: only used when supports manual dual-role switch via debugfs
+ * @force_vbus: without Vbus PIN, SW need set force_vbus state for device
  * @uwk_en: it's true when supports remote wakeup in host mode
  * @uwk: syscon including usb wakeup glue layer between SSUSB IP and SPM
  * @uwk_reg_base: the base address of the wakeup glue layer in @uwk
@@ -257,11 +260,14 @@ struct ssusb_mtk {
 	/* otg */
 	struct otg_switch_mtk otg_switch;
 	enum usb_dr_mode dr_mode;
+	bool otg_srp_reqd;
+	bool otg_hnp_reqd;
 	bool is_host;
 	int u2_ports;
 	int u3_ports;
 	int u3p_dis_msk;
 	struct dentry *dbgfs_root;
+	bool force_vbus;
 	/* usb wakeup for host mode */
 	bool uwk_en;
 	struct regmap *uwk;
@@ -420,6 +426,7 @@ static inline void mtu3_clrbits(void __iomem *base, u32 offset, u32 bits)
 }
 
 int ssusb_check_clocks(struct ssusb_mtk *ssusb, u32 ex_clks);
+void ssusb_set_force_vbus(struct ssusb_mtk *ssusb, bool vbus_on);
 struct usb_request *mtu3_alloc_request(struct usb_ep *ep, gfp_t gfp_flags);
 void mtu3_free_request(struct usb_ep *ep, struct usb_request *req);
 void mtu3_req_complete(struct mtu3_ep *mep,

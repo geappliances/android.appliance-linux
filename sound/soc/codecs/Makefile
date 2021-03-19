@@ -134,6 +134,8 @@ snd-soc-pcm179x-spi-objs := pcm179x-spi.o
 snd-soc-pcm186x-objs := pcm186x.o
 snd-soc-pcm186x-i2c-objs := pcm186x-i2c.o
 snd-soc-pcm186x-spi-objs := pcm186x-spi.o
+snd-soc-tlv320adc3101-objs := tlv320adc3101.o
+snd-soc-tlv320adc3101-i2c-objs := tlv320adc3101-i2c.o
 snd-soc-pcm3008-objs := pcm3008.o
 snd-soc-pcm3060-objs := pcm3060.o
 snd-soc-pcm3060-i2c-objs := pcm3060-i2c.o
@@ -274,6 +276,9 @@ snd-soc-wm9712-objs := wm9712.o
 snd-soc-wm9713-objs := wm9713.o
 snd-soc-wm-hubs-objs := wm_hubs.o
 snd-soc-zx-aud96p22-objs := zx_aud96p22.o
+snd-soc-mt8167-codec-objs := mt8167-codec.o mt8167-codec-utils.o
+snd-soc-mt6392-codec-objs := mt6392-codec.o
+
 # Amp
 snd-soc-max9877-objs := max9877.o
 snd-soc-max98504-objs := max98504.o
@@ -418,6 +423,8 @@ obj-$(CONFIG_SND_SOC_PCM179X_SPI)	+= snd-soc-pcm179x-spi.o
 obj-$(CONFIG_SND_SOC_PCM186X)	+= snd-soc-pcm186x.o
 obj-$(CONFIG_SND_SOC_PCM186X_I2C)	+= snd-soc-pcm186x-i2c.o
 obj-$(CONFIG_SND_SOC_PCM186X_SPI)	+= snd-soc-pcm186x-spi.o
+obj-$(CONFIG_SND_SOC_TLV320ADC3101)	+= snd-soc-tlv320adc3101.o
+obj-$(CONFIG_SND_SOC_TLV320ADC3101_I2C)	+= snd-soc-tlv320adc3101-i2c.o
 obj-$(CONFIG_SND_SOC_PCM3008)	+= snd-soc-pcm3008.o
 obj-$(CONFIG_SND_SOC_PCM3060)	+= snd-soc-pcm3060.o
 obj-$(CONFIG_SND_SOC_PCM3060_I2C)	+= snd-soc-pcm3060-i2c.o
@@ -557,9 +564,11 @@ obj-$(CONFIG_SND_SOC_WM9713)	+= snd-soc-wm9713.o
 obj-$(CONFIG_SND_SOC_WM_ADSP)	+= snd-soc-wm-adsp.o
 obj-$(CONFIG_SND_SOC_WM_HUBS)	+= snd-soc-wm-hubs.o
 obj-$(CONFIG_SND_SOC_ZX_AUD96P22) += snd-soc-zx-aud96p22.o
+obj-$(CONFIG_SND_SOC_MT8167_CODEC)	+= snd-soc-mt8167-codec.o
 
 # Amp
 obj-$(CONFIG_SND_SOC_MAX9877)	+= snd-soc-max9877.o
 obj-$(CONFIG_SND_SOC_MAX98504)	+= snd-soc-max98504.o
 obj-$(CONFIG_SND_SOC_SIMPLE_AMPLIFIER)	+= snd-soc-simple-amplifier.o
 obj-$(CONFIG_SND_SOC_TPA6130A2)	+= snd-soc-tpa6130a2.o
+obj-$(CONFIG_MTK_SPEAKER)	+= snd-soc-mt6392-codec.o

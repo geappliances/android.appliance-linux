@@ -1,0 +1,27 @@
+config MTK_SENINF
+	tristate "Mediatek sensor interface driver"
+	depends on VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
+	depends on MEDIA_CAMERA_SUPPORT
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	depends on OF
+	select V4L2_FWNODE
+	select PHY_MTK_CDPHY
+	default n
+	---help---
+	  This driver provides a MIPI CSI-2 receiver interface to connect
+	  an external camera module with Mediatek's MT8183 ISP SoC. It is
+	  able to handle multiple cameras at the same time.
+
+config MTK_ISP_P1_CAMSV
+	tristate "Mediatek ISP Pass 1 CAMSV driver"
+	depends on VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
+	depends on ARCH_MEDIATEK
+	select V4L2_FWNODE
+	select VIDEOBUF2_VMALLOC
+	select VIDEOBUF2_DMA_CONTIG
+	select MTK_SENINF
+	default n
+	---help---
+	  This driver provides a path to bypass the SoC ISP so that
+	  image data come from the SENINF can go directly into memory
+	  without any image processing.

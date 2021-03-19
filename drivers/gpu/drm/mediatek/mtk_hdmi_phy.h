@@ -52,6 +52,7 @@ struct mtk_hdmi_phy *to_mtk_hdmi_phy(struct clk_hw *hw);
 
 extern struct platform_driver mtk_hdmi_phy_driver;
 extern struct mtk_hdmi_phy_conf mtk_hdmi_phy_8173_conf;
+extern struct mtk_hdmi_phy_conf mtk_hdmi_phy_8167_conf;
 extern struct mtk_hdmi_phy_conf mtk_hdmi_phy_2701_conf;
 
 #endif /* _MTK_HDMI_PHY_H */

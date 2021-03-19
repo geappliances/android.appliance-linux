@@ -92,4 +92,8 @@ properties:
           - enum:
               - mediatek,mt8183-evb
           - const: mediatek,mt8183
+      - items:
+          - enum:
+              - mediatek,mt8183-pumpkin
+          - const: mediatek,mt8183
 ...

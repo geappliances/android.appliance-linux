@@ -643,11 +643,13 @@ static int ov5645_set_power_on(struct ov5645 *ov5645)
 	if (ret < 0)
 		return ret;
 
-	ret = clk_prepare_enable(ov5645->xclk);
-	if (ret < 0) {
-		dev_err(ov5645->dev, "clk prepare enable failed\n");
-		regulator_bulk_disable(OV5645_NUM_SUPPLIES, ov5645->supplies);
-		return ret;
+	if (ov5645->xclk) {
+		ret = clk_prepare_enable(ov5645->xclk);
+		if (ret < 0) {
+			dev_err(ov5645->dev, "clk prepare enable failed\n");
+			regulator_bulk_disable(OV5645_NUM_SUPPLIES, ov5645->supplies);
+			return ret;
+		}
 	}
 
 	usleep_range(5000, 15000);
@@ -665,7 +667,8 @@ static void ov5645_set_power_off(struct ov5645 *ov5645)
 {
 	gpiod_set_value_cansleep(ov5645->rst_gpio, 1);
 	gpiod_set_value_cansleep(ov5645->enable_gpio, 0);
-	clk_disable_unprepare(ov5645->xclk);
+	if (ov5645->xclk)
+		clk_disable_unprepare(ov5645->xclk);
 	regulator_bulk_disable(OV5645_NUM_SUPPLIES, ov5645->supplies);
 }
 
@@ -822,6 +825,10 @@ static int ov5645_s_ctrl(struct v4l2_ctrl *ctrl)
 	case V4L2_CID_VFLIP:
 		ret = ov5645_set_vflip(ov5645, ctrl->val);
 		break;
+	case V4L2_CID_PIXEL_RATE:
+	case V4L2_CID_LINK_FREQ:
+		ret = 0;
+		break;
 	default:
 		ret = -EINVAL;
 		break;
@@ -949,6 +956,10 @@ static int ov5645_set_format(struct v4l2_subdev *sd,
 	__format->code = MEDIA_BUS_FMT_UYVY8_2X8;
 	__format->field = V4L2_FIELD_NONE;
 	__format->colorspace = V4L2_COLORSPACE_SRGB;
+
+	__format->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
+	__format->quantization = V4L2_QUANTIZATION_DEFAULT;
+	__format->xfer_func = V4L2_XFER_FUNC_DEFAULT;
 
 	format->format = *__format;
 
@@ -1088,29 +1099,32 @@ static int ov5645_probe(struct i2c_client *client)
 	}
 
 	/* get system clock (xclk) */
-	ov5645->xclk = devm_clk_get(dev, "xclk");
+	ov5645->xclk = devm_clk_get_optional(dev, "xclk");
 	if (IS_ERR(ov5645->xclk)) {
 		dev_err(dev, "could not get xclk");
 		return PTR_ERR(ov5645->xclk);
 	}
 
-	ret = of_property_read_u32(dev->of_node, "clock-frequency", &xclk_freq);
-	if (ret) {
-		dev_err(dev, "could not get xclk frequency\n");
-		return ret;
-	}
+	if (ov5645->xclk) {
+		ret = of_property_read_u32(dev->of_node, "clock-frequency",
+					   &xclk_freq);
+		if (ret) {
+			dev_err(dev, "could not get xclk frequency\n");
+			return ret;
+		}
 
-	/* external clock must be 24MHz, allow 1% tolerance */
-	if (xclk_freq < 23760000 || xclk_freq > 24240000) {
-		dev_err(dev, "external clock frequency %u is not supported\n",
-			xclk_freq);
-		return -EINVAL;
-	}
+		/* external clock must be 24MHz, allow 1% tolerance */
+		if (xclk_freq < 23760000 || xclk_freq > 24240000) {
+			dev_err(dev, "external clock frequency %u is not supported\n",
+				xclk_freq);
+			return -EINVAL;
+		}
 
-	ret = clk_set_rate(ov5645->xclk, xclk_freq);
-	if (ret) {
-		dev_err(dev, "could not set xclk frequency\n");
-		return ret;
+		ret = clk_set_rate(ov5645->xclk, xclk_freq);
+		if (ret) {
+			dev_err(dev, "could not set xclk frequency\n");
+			return ret;
+		}
 	}
 
 	for (i = 0; i < OV5645_NUM_SUPPLIES; i++)

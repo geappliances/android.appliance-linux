@@ -1,0 +1,35 @@
+* Mediatek MIPI-CSI2 receiver
+
+Mediatek MIPI-CSI2 receiver is the MIPI Signal capture hardware present in Mediatek SoCs
+
+Required properties:
+- compatible: should be "mediatek,mt8167-mipicsi"
+- reg : physical base address of the mipicsi receiver registers and length of
+  memory mapped region.
+- power-domains: a phandle to the power domain, see
+  Documentation/devicetree/bindings/power/power_domain.txt for details.
+- mediatek,larb: must contain the local arbiters in the current Socs, see
+  Documentation/devicetree/bindings/memory-controllers/mediatek,smi-larb.txt
+  for details.
+- iommus: should point to the respective IOMMU block with master port as
+  argument, see Documentation/devicetree/bindings/iommu/mediatek,iommu.txt
+  for details.
+- mediatek,seninf_mux_camsv: seninf_mux_camsv the data go through of the mipicsi port.
+- mediatek,mipicsiid: the id of the mipicsi port, there is only one port for mt8167
+- mediatek,mipicsi: the common component of the mipicsi port
+
+Example:
+	mipicsi0: mipicsi@10011800 {
+		compatible = "mediatek,mt8167-mipicsi";
+		mediatek,mipicsi = <&mipicsi>;
+		iommus = <&iommu0 M4U_PORT_CAM_IMGO>;
+		mediatek,larb = <&larb1>;
+		power-domains = <&scpsys MT8167_POWER_DOMAIN_ISP>;
+
+		mediatek,seninf_mux_camsv = <&seninf1_mux_camsv0>;
+		reg = <0 0x10011800 0 0x60>,
+			  <0 0x15008100 0 0x4>,
+			  <0 0x15008300 0 0x100>;
+
+		mediatek,mipicsiid = <0>;
+	};

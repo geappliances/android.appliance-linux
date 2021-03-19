@@ -87,14 +87,22 @@ obj-$(CONFIG_VIDEO_STM32_DCMI)		+= stm32/
 obj-$(CONFIG_VIDEO_MEDIATEK_VPU)	+= mtk-vpu/
 
 obj-$(CONFIG_VIDEO_MEDIATEK_VCODEC)	+= mtk-vcodec/
+obj-$(CONFIG_VIDEO_MEDIATEK_VCODEC_MT8167)	+= mtk-vcodec-mt8167/
 
 obj-$(CONFIG_VIDEO_MEDIATEK_MDP)	+= mtk-mdp/
+obj-$(CONFIG_VIDEO_MEDIATEK_MDP3)	+= mtk-mdp3/
 
 obj-$(CONFIG_VIDEO_MEDIATEK_JPEG)	+= mtk-jpeg/
+
+obj-$(CONFIG_MTK_SENINF)		+= mtk-isp/
+
+obj-$(CONFIG_MTK_ISP_P1_CAMSV)		+= mtk-isp/
 
 obj-$(CONFIG_VIDEO_QCOM_CAMSS)		+= qcom/camss/
 
 obj-$(CONFIG_VIDEO_QCOM_VENUS)		+= qcom/venus/
+
+obj-$(CONFIG_VIDEO_MEDIATEK_MIPICSI) += mtk-mipicsi/
 
 obj-y					+= meson/
 

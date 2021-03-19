@@ -9,13 +9,16 @@
 
 #include <linux/platform_device.h>
 
+
+void vcu_get_task(struct task_struct **task, struct files_struct **f);
+
 /**
  * VPU (video processor unit) is a tiny processor controlling video hardware
  * related to video codec, scaling and color format converting.
  * VPU interfaces with other blocks by share memory and interrupt.
  **/
 
-typedef void (*ipi_handler_t) (void *data,
+typedef int (*ipi_handler_t) (void *data,
 			       unsigned int len,
 			       void *priv);
 
@@ -58,6 +61,7 @@ enum ipi_id {
 	IPI_VENC_H264,
 	IPI_VENC_VP8,
 	IPI_MDP,
+	IPI_VENC_HYBRID_H264,
 	IPI_MAX,
 };
 
@@ -76,6 +80,28 @@ enum rst_id {
 	VPU_RST_MAX,
 };
 
+struct mtk_vpu_plat;
+
+struct mtk_vpu_ops {
+	int (*ipi_register)(struct mtk_vpu_plat *vpu, enum ipi_id id,
+		     ipi_handler_t handler, const char *name, void *priv);
+	int (*ipi_send)(struct mtk_vpu_plat *vpu,
+		 enum ipi_id id, void *buf,
+		 unsigned int len);
+	int (*wdt_reg_handler)(struct mtk_vpu_plat *vpu,
+			void vpu_wdt_reset_func(void *),
+			void *priv, enum rst_id id);
+	unsigned int (*get_vdec_hw_capa)(struct mtk_vpu_plat *vpu);
+	unsigned int (*get_venc_hw_capa)(struct mtk_vpu_plat *vpu);
+	int (*load_firmware)(struct mtk_vpu_plat *vpu);
+	void *(*mapping_dm_addr)(struct mtk_vpu_plat *vpu,
+			  uintptr_t dtcm_dmem_addr);
+};
+
+struct mtk_vpu_plat {
+	struct mtk_vpu_ops *ops;
+};
+
 /**
  * vpu_ipi_register - register an ipi function
  *
@@ -89,8 +115,16 @@ enum rst_id {
  *
  * Return: Return 0 if ipi registers successfully, otherwise it is failed.
  */
-int vpu_ipi_register(struct platform_device *pdev, enum ipi_id id,
-		     ipi_handler_t handler, const char *name, void *priv);
+static inline int vpu_ipi_register(struct platform_device *pdev, enum ipi_id id,
+		     ipi_handler_t handler, const char *name, void *priv)
+{
+	struct mtk_vpu_plat *vpu = platform_get_drvdata(pdev);
+
+	if (vpu->ops->ipi_register)
+		return vpu->ops->ipi_register(vpu, id, handler, name, priv);
+
+	return -ENOTSUPP;
+}
 
 /**
  * vpu_ipi_send - send data from AP to vpu.
@@ -107,9 +141,17 @@ int vpu_ipi_register(struct platform_device *pdev, enum ipi_id id,
  *
  * Return: Return 0 if sending data successfully, otherwise it is failed.
  **/
-int vpu_ipi_send(struct platform_device *pdev,
+static inline int vpu_ipi_send(struct platform_device *pdev,
 		 enum ipi_id id, void *buf,
-		 unsigned int len);
+		 unsigned int len)
+{
+	struct mtk_vpu_plat *vpu = platform_get_drvdata(pdev);
+
+	if (vpu->ops->ipi_send)
+		return vpu->ops->ipi_send(vpu, id, buf, len);
+
+	return -ENOTSUPP;
+}
 
 /**
  * vpu_get_plat_device - get VPU's platform device
@@ -136,9 +178,17 @@ struct platform_device *vpu_get_plat_device(struct platform_device *pdev);
  * otherwise it is failed.
  *
  **/
-int vpu_wdt_reg_handler(struct platform_device *pdev,
+static inline int vpu_wdt_reg_handler(struct platform_device *pdev,
 			void vpu_wdt_reset_func(void *),
-			void *priv, enum rst_id id);
+			void *priv, enum rst_id id)
+{
+	struct mtk_vpu_plat *vpu = platform_get_drvdata(pdev);
+
+	if (vpu->ops->wdt_reg_handler)
+		return vpu->ops->wdt_reg_handler(vpu, vpu_wdt_reset_func, priv, id);
+
+	return -ENOTSUPP;
+}
 
 /**
  * vpu_get_vdec_hw_capa - get video decoder hardware capability
@@ -147,7 +197,15 @@ int vpu_wdt_reg_handler(struct platform_device *pdev,
  *
  * Return: video decoder hardware capability
  **/
-unsigned int vpu_get_vdec_hw_capa(struct platform_device *pdev);
+static inline unsigned int vpu_get_vdec_hw_capa(struct platform_device *pdev)
+{
+	struct mtk_vpu_plat *vpu = platform_get_drvdata(pdev);
+
+	if (vpu->ops->get_vdec_hw_capa)
+		return vpu->ops->get_vdec_hw_capa(vpu);
+
+	return 0;
+}
 
 /**
  * vpu_get_venc_hw_capa - get video encoder hardware capability
@@ -156,7 +214,15 @@ unsigned int vpu_get_vdec_hw_capa(struct platform_device *pdev);
  *
  * Return: video encoder hardware capability
  **/
-unsigned int vpu_get_venc_hw_capa(struct platform_device *pdev);
+static inline unsigned int vpu_get_venc_hw_capa(struct platform_device *pdev)
+{
+	struct mtk_vpu_plat *vpu = platform_get_drvdata(pdev);
+
+	if (vpu->ops->get_venc_hw_capa)
+		return vpu->ops->get_venc_hw_capa(vpu);
+
+	return 0;
+}
 
 /**
  * vpu_load_firmware - download VPU firmware and boot it
@@ -166,7 +232,15 @@ unsigned int vpu_get_venc_hw_capa(struct platform_device *pdev);
  * Return: Return 0 if downloading firmware successfully,
  * otherwise it is failed
  **/
-int vpu_load_firmware(struct platform_device *pdev);
+static inline int vpu_load_firmware(struct platform_device *pdev)
+{
+	struct mtk_vpu_plat *vpu = platform_get_drvdata(pdev);
+
+	if (vpu->ops->load_firmware)
+		return vpu->ops->load_firmware(vpu);
+
+	return -ENOTSUPP;
+}
 
 /**
  * vpu_mapping_dm_addr - Mapping DTCM/DMEM to kernel virtual address
@@ -181,6 +255,14 @@ int vpu_load_firmware(struct platform_device *pdev);
  * Return: Return ERR_PTR(-EINVAL) if mapping failed,
  * otherwise the mapped kernel virtual address
  **/
-void *vpu_mapping_dm_addr(struct platform_device *pdev,
-			  u32 dtcm_dmem_addr);
+static inline void *vpu_mapping_dm_addr(struct platform_device *pdev,
+					uintptr_t dtcm_dmem_addr)
+{
+	struct mtk_vpu_plat *vpu = platform_get_drvdata(pdev);
+
+	if (vpu->ops->mapping_dm_addr)
+		return vpu->ops->mapping_dm_addr(vpu, dtcm_dmem_addr);
+
+	return ERR_PTR(-ENOTSUPP);
+}
 #endif /* _MTK_VPU_H */

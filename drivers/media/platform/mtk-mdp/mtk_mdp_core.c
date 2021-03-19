@@ -31,6 +31,21 @@ module_param(mtk_mdp_dbg_level, int, 0644);
 
 static const struct of_device_id mtk_mdp_comp_dt_ids[] = {
 	{
+		.compatible = "mediatek,mt8167-mdp-rdma",
+		.data = (void *)MTK_MDP_RDMA
+	}, {
+		.compatible = "mediatek,mt8167-mdp-rsz",
+		.data = (void *)MTK_MDP_RSZ
+	}, {
+		.compatible = "mediatek,mt8167-mdp-wdma",
+		.data = (void *)MTK_MDP_WDMA
+	}, {
+		.compatible = "mediatek,mt8167-mdp-wrot",
+		.data = (void *)MTK_MDP_WROT
+	}, {
+		.compatible = "mediatek,mt8167-mdp-tdshp",
+		.data = (void *)MTK_MDP_TDSHP
+	}, {
 		.compatible = "mediatek,mt8173-mdp-rdma",
 		.data = (void *)MTK_MDP_RDMA
 	}, {
@@ -48,6 +63,7 @@ static const struct of_device_id mtk_mdp_comp_dt_ids[] = {
 
 static const struct of_device_id mtk_mdp_of_ids[] = {
 	{ .compatible = "mediatek,mt8173-mdp", },
+	{ .compatible = "mediatek,mt8167-mdp", },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, mtk_mdp_of_ids);
@@ -58,7 +74,8 @@ static void mtk_mdp_clock_on(struct mtk_mdp_dev *mdp)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(mdp->comp); i++)
-		mtk_mdp_comp_clock_on(dev, mdp->comp[i]);
+		if (mdp->comp[i])
+			mtk_mdp_comp_clock_on(dev, mdp->comp[i]);
 }
 
 static void mtk_mdp_clock_off(struct mtk_mdp_dev *mdp)
@@ -67,7 +84,8 @@ static void mtk_mdp_clock_off(struct mtk_mdp_dev *mdp)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(mdp->comp); i++)
-		mtk_mdp_comp_clock_off(dev, mdp->comp[i]);
+		if (mdp->comp[i])
+			mtk_mdp_comp_clock_off(dev, mdp->comp[i]);
 }
 
 static void mtk_mdp_wdt_worker(struct work_struct *work)
@@ -91,12 +109,44 @@ static void mtk_mdp_reset_handler(void *priv)
 	queue_work(mdp->wdt_wq, &mdp->wdt_work);
 }
 
+static const struct of_device_id mtk_mdp_comp_of_match[] = {
+	{ .compatible = "mediatek,mt8167-mdp-wdma" },
+	{ .compatible = "mediatek,mt8167-mdp-wrot" },
+	{},
+};
+MODULE_DEVICE_TABLE(of, mtk_mdp_comp_of_match);
+
+struct platform_driver mtk_mdp_comp = {
+	.driver		= {
+		.name	= "mediatek-mdp-comp",
+		.owner	= THIS_MODULE,
+		.of_match_table = mtk_mdp_comp_of_match,
+	},
+};
+
 static int mtk_mdp_probe(struct platform_device *pdev)
 {
 	struct mtk_mdp_dev *mdp;
 	struct device *dev = &pdev->dev;
 	struct device_node *node, *parent;
+	struct platform_device *cmdq_dev;
 	int i, ret = 0;
+
+	//mtk_mdp_dbg_level = 3;
+
+	/* Check whether cmdq driver is ready */
+	node = of_parse_phandle(dev->of_node, "mediatek,gce", 0);
+	if (!node) {
+		dev_err(dev, "cannot get gce node handle\n");
+		return -EINVAL;
+	}
+
+	cmdq_dev = of_find_device_by_node(node);
+	if (!cmdq_dev || !cmdq_dev->dev.driver) {
+		dev_err(dev, "Waiting cmdq driver ready...\n");
+		of_node_put(node);
+		return -EPROBE_DEFER;
+	}
 
 	mdp = devm_kzalloc(dev, sizeof(*mdp), GFP_KERNEL);
 	if (!mdp)
@@ -159,6 +209,8 @@ static int mtk_mdp_probe(struct platform_device *pdev)
 		}
 	}
 
+	platform_driver_register(&mtk_mdp_comp);
+
 	mdp->job_wq = create_singlethread_workqueue(MTK_MDP_MODULE_NAME);
 	if (!mdp->job_wq) {
 		dev_err(&pdev->dev, "unable to alloc job workqueue\n");
@@ -196,6 +248,9 @@ static int mtk_mdp_probe(struct platform_device *pdev)
 	vb2_dma_contig_set_max_seg_size(&pdev->dev, DMA_BIT_MASK(32));
 
 	pm_runtime_enable(dev);
+
+	mdp->cmdq_client = cmdq_mbox_create(dev, 0, CMDQ_NO_TIMEOUT);
+
 	dev_dbg(dev, "mdp-%d registered successfully\n", mdp->id);
 
 	return 0;
@@ -234,6 +289,8 @@ static int mtk_mdp_remove(struct platform_device *pdev)
 
 	for (i = 0; i < ARRAY_SIZE(mdp->comp); i++)
 		mtk_mdp_comp_deinit(&pdev->dev, mdp->comp[i]);
+
+	cmdq_mbox_destroy(mdp->cmdq_client);
 
 	dev_dbg(&pdev->dev, "%s driver unloaded\n", pdev->name);
 	return 0;

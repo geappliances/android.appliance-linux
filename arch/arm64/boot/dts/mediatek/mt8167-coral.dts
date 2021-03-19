@@ -1,0 +1,197 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2019 BayLibre, SAS.
+ * Author: Fabien Parent <fparent@baylibre.com>
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+
+#include "mt8167.dtsi"
+#include "mt6392.dtsi"
+
+/ {
+	model = "Google Coral MT8167";
+
+	aliases {
+		serial0 = &uart0;
+	};
+
+	chosen {
+		stdout-path = "serial0:921600n8";
+	};
+
+	memory@40000000 {
+		device_type = "memory";
+		reg = <0 0x40000000 0 0x40000000>;
+	};
+
+	firmware {
+		optee: optee@4fd00000 {
+			compatible = "linaro,optee-tz";
+			method = "smc";
+		};
+	};
+};
+
+&cpu0 {
+	proc-supply = <&mt6392_vproc_reg>;
+};
+
+&cpu1 {
+	proc-supply = <&mt6392_vproc_reg>;
+};
+
+&cpu2 {
+	proc-supply = <&mt6392_vproc_reg>;
+};
+
+&cpu3 {
+	proc-supply = <&mt6392_vproc_reg>;
+};
+
+&mt6392_pmic {
+	interrupt-parent = <&pio>;
+	interrupts = <28 IRQ_TYPE_LEVEL_HIGH>;
+	interrupt-controller;
+	#interrupt-cells = <2>;
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&pio {
+	mmc0_pins_default: mmc0default {
+		pins_cmd_dat {
+			pinmux = <MT8167_PIN_120_MSDC0_DAT0__FUNC_MSDC0_DAT0>,
+				 <MT8167_PIN_119_MSDC0_DAT1__FUNC_MSDC0_DAT1>,
+				 <MT8167_PIN_118_MSDC0_DAT2__FUNC_MSDC0_DAT2>,
+				 <MT8167_PIN_117_MSDC0_DAT3__FUNC_MSDC0_DAT3>,
+				 <MT8167_PIN_113_MSDC0_DAT4__FUNC_MSDC0_DAT4>,
+				 <MT8167_PIN_112_MSDC0_DAT5__FUNC_MSDC0_DAT5>,
+				 <MT8167_PIN_111_MSDC0_DAT6__FUNC_MSDC0_DAT6>,
+				 <MT8167_PIN_110_MSDC0_DAT7__FUNC_MSDC0_DAT7>,
+				 <MT8167_PIN_115_MSDC0_CMD__FUNC_MSDC0_CMD>;
+			input-enable;
+			bias-pull-up;
+		};
+
+		pins_clk {
+			pinmux = <MT8167_PIN_116_MSDC0_CLK__FUNC_MSDC0_CLK>;
+			bias-pull-down;
+		};
+
+		pins_rst {
+			pinmux = <MT8167_PIN_114_MSDC0_RSTB__FUNC_MSDC0_RSTB>;
+			bias-pull-up;
+		};
+	};
+
+	mmc0_pins_uhs: mmc0@0{
+		pins_cmd_dat {
+			pinmux = <MT8167_PIN_120_MSDC0_DAT0__FUNC_MSDC0_DAT0>,
+				 <MT8167_PIN_119_MSDC0_DAT1__FUNC_MSDC0_DAT1>,
+				 <MT8167_PIN_118_MSDC0_DAT2__FUNC_MSDC0_DAT2>,
+				 <MT8167_PIN_117_MSDC0_DAT3__FUNC_MSDC0_DAT3>,
+				 <MT8167_PIN_113_MSDC0_DAT4__FUNC_MSDC0_DAT4>,
+				 <MT8167_PIN_112_MSDC0_DAT5__FUNC_MSDC0_DAT5>,
+				 <MT8167_PIN_111_MSDC0_DAT6__FUNC_MSDC0_DAT6>,
+				 <MT8167_PIN_110_MSDC0_DAT7__FUNC_MSDC0_DAT7>,
+				 <MT8167_PIN_115_MSDC0_CMD__FUNC_MSDC0_CMD>;
+			input-enable;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_clk {
+			pinmux = <MT8167_PIN_116_MSDC0_CLK__FUNC_MSDC0_CLK>;
+			drive-strength = <MTK_DRIVE_8mA>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+
+		pins_rst {
+			pinmux = <MT8167_PIN_114_MSDC0_RSTB__FUNC_MSDC0_RSTB>;
+			bias-pull-up;
+		};
+	};
+
+	hdmi_pins_default: hdmi_pins_default {
+	};
+
+	hdmi_pins_hpd: hdmi_pins_hpd {
+		pins_cmd_dat {
+			pinmux = <MT8167_PIN_122_HTPLG__FUNC_HTPLG>;
+			bias-pull-down;
+		};
+	};
+};
+
+&mmc0 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc0_pins_default>;
+	pinctrl-1 = <&mmc0_pins_uhs>;
+	status = "okay";
+	bus-width = <8>;
+	max-frequency = <200000000>;
+	cap-mmc-highspeed;
+	mmc-hs200-1_8v;
+	cap-mmc-hw-reset;
+	vmmc-supply = <&mt6392_vemc3v3_reg>;
+	vqmmc-supply = <&mt6392_vio18_reg>;
+	non-removable;
+};
+
+&dpi1 {
+	status = "okay";
+	ddc-i2c-bus = <&hdmiddc>;
+
+	port {
+		hdmi_connector_in: endpoint@0 {
+			remote-endpoint = <&hdmi_out>;
+		};
+	};
+};
+
+&hdmi_phy {
+	status = "okay";
+};
+
+&cec {
+	status = "okay";
+};
+
+&hdmi {
+	pinctrl-names = "default", "hdmi_hpd";
+	pinctrl-0 = <&hdmi_pins_default>;
+	pinctrl-1 = <&hdmi_pins_hpd>;
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@1 {
+			reg = <1>;
+
+			hdmi_out: endpoint {
+				remote-endpoint = <&hdmi_connector_in>;
+			};
+		};
+	};
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "peripheral";
+
+	usb_con: connector {
+		compatible = "usb-c-connector";
+		label = "USB-C";
+	};
+};
+
+&usb0_phy {
+	status = "okay";
+};

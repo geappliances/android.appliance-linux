@@ -28,7 +28,7 @@ static void handle_init_ack_msg(struct vdec_vpu_ipi_init_ack *msg)
  * This function runs in interrupt context and it means there's an IPI MSG
  * from VPU.
  */
-void vpu_dec_ipi_handler(void *data, unsigned int len, void *priv)
+int vpu_dec_ipi_handler(void *data, unsigned int len, void *priv)
 {
 	struct vdec_vpu_ipi_ack *msg = data;
 	struct vdec_vpu_inst *vpu = (struct vdec_vpu_inst *)
@@ -57,6 +57,8 @@ void vpu_dec_ipi_handler(void *data, unsigned int len, void *priv)
 	mtk_vcodec_debug(vpu, "- id=%X", msg->msg_id);
 	vpu->failure = msg->status;
 	vpu->signaled = 1;
+
+	return 0;
 }
 
 static int vcodec_vpu_send_msg(struct vdec_vpu_inst *vpu, void *msg, int len)

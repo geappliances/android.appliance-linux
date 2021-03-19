@@ -38,8 +38,15 @@ struct pcm186x_priv {
 	struct regulator_bulk_data supplies[PCM186x_NUM_SUPPLIES];
 	unsigned int sysclk;
 	unsigned int tdm_offset;
+	unsigned int tdm_additional_offset;
+	unsigned int tdm_max_channels;
 	bool is_tdm_mode;
 	bool is_master_mode;
+	unsigned int  adc1_left_input_select;
+	unsigned int  adc1_right_input_select;
+	unsigned int  adc2_left_input_select;
+	unsigned int  adc2_right_input_select;
+	unsigned int  apga_gain_control;
 };
 
 static const DECLARE_TLV_DB_SCALE(pcm186x_pga_tlv, -1200, 50, 0);
@@ -50,6 +57,8 @@ static const struct snd_kcontrol_new pcm1863_snd_controls[] = {
 			   pcm186x_pga_tlv),
 };
 
+static const DECLARE_TLV_DB_SCALE(pcm1865_dpga_tlv, 0, 50, 0);
+
 static const struct snd_kcontrol_new pcm1865_snd_controls[] = {
 	SOC_DOUBLE_R_S_TLV("ADC1 Capture Volume", PCM186X_PGA_VAL_CH1_L,
 			   PCM186X_PGA_VAL_CH1_R, 0, -24, 80, 7, 0,
@@ -57,6 +66,16 @@ static const struct snd_kcontrol_new pcm1865_snd_controls[] = {
 	SOC_DOUBLE_R_S_TLV("ADC2 Capture Volume", PCM186X_PGA_VAL_CH2_L,
 			   PCM186X_PGA_VAL_CH2_R, 0, -24, 80, 7, 0,
 			   pcm186x_pga_tlv),
+	SOC_DOUBLE_R_S_TLV("ADC1 Digital Capture Volume",
+			   PCM186X_DPGA_VAL_CH1_L,
+			   PCM186X_DPGA_VAL_CH1_R,
+			   0, 0x28, 0x37, 7, 0,
+			   pcm1865_dpga_tlv),
+	SOC_DOUBLE_R_S_TLV("ADC2 Digital Capture Volume",
+			   PCM186X_DPGA_VAL_CH2_L,
+			   PCM186X_DPGA_VAL_CH2_R,
+			   0, 0x28, 0x37, 7, 0,
+			   pcm1865_dpga_tlv),
 };
 
 static const unsigned int pcm186x_adc_input_channel_sel_value[] = {
@@ -67,46 +86,46 @@ static const unsigned int pcm186x_adc_input_channel_sel_value[] = {
 
 static const char * const pcm186x_adcl_input_channel_sel_text[] = {
 	"No Select",
-	"VINL1[SE]",					/* Default for ADC1L */
-	"VINL2[SE]",					/* Default for ADC2L */
-	"VINL2[SE] + VINL1[SE]",
-	"VINL3[SE]",
-	"VINL3[SE] + VINL1[SE]",
-	"VINL3[SE] + VINL2[SE]",
-	"VINL3[SE] + VINL2[SE] + VINL1[SE]",
-	"VINL4[SE]",
-	"VINL4[SE] + VINL1[SE]",
-	"VINL4[SE] + VINL2[SE]",
-	"VINL4[SE] + VINL2[SE] + VINL1[SE]",
-	"VINL4[SE] + VINL3[SE]",
-	"VINL4[SE] + VINL3[SE] + VINL1[SE]",
-	"VINL4[SE] + VINL3[SE] + VINL2[SE]",
-	"VINL4[SE] + VINL3[SE] + VINL2[SE] + VINL1[SE]",
-	"{VIN1P, VIN1M}[DIFF]",
-	"{VIN4P, VIN4M}[DIFF]",
-	"{VIN1P, VIN1M}[DIFF] + {VIN4P, VIN4M}[DIFF]"
+	"VINL1_SE",					/* Default for ADC1L */
+	"VINL2_SE",					/* Default for ADC2L */
+	"VINL2_SE + VINL1_SE",
+	"VINL3_SE",
+	"VINL3_SE + VINL1_SE",
+	"VINL3_SE + VINL2_SE",
+	"VINL3_SE + VINL2_SE + VINL1_SE",
+	"VINL4_SE",
+	"VINL4_SE + VINL1_SE",
+	"VINL4_SE + VINL2_SE",
+	"VINL4_SE + VINL2_SE + VINL1_SE",
+	"VINL4_SE + VINL3_SE",
+	"VINL4_SE + VINL3_SE + VINL1_SE",
+	"VINL4_SE + VINL3_SE + VINL2_SE",
+	"VINL4_SE + VINL3_SE + VINL2_SE + VINL1_SE",
+	"VIN1P_DIFF - VIN1M_DIFF",
+	"VIN4P_DIFF - VIN4M_DIFF",
+	"VIN1P_DIFF - VIN1M_DIFF + VIN4P_DIFF - VIN4M_DIFF"
 };
 
 static const char * const pcm186x_adcr_input_channel_sel_text[] = {
 	"No Select",
-	"VINR1[SE]",					/* Default for ADC1R */
-	"VINR2[SE]",					/* Default for ADC2R */
-	"VINR2[SE] + VINR1[SE]",
-	"VINR3[SE]",
-	"VINR3[SE] + VINR1[SE]",
-	"VINR3[SE] + VINR2[SE]",
-	"VINR3[SE] + VINR2[SE] + VINR1[SE]",
-	"VINR4[SE]",
-	"VINR4[SE] + VINR1[SE]",
-	"VINR4[SE] + VINR2[SE]",
-	"VINR4[SE] + VINR2[SE] + VINR1[SE]",
-	"VINR4[SE] + VINR3[SE]",
-	"VINR4[SE] + VINR3[SE] + VINR1[SE]",
-	"VINR4[SE] + VINR3[SE] + VINR2[SE]",
-	"VINR4[SE] + VINR3[SE] + VINR2[SE] + VINR1[SE]",
-	"{VIN2P, VIN2M}[DIFF]",
-	"{VIN3P, VIN3M}[DIFF]",
-	"{VIN2P, VIN2M}[DIFF] + {VIN3P, VIN3M}[DIFF]"
+	"VINR1_SE",					/* Default for ADC1R */
+	"VINR2_SE",					/* Default for ADC2R */
+	"VINR2_SE + VINR1_SE",
+	"VINR3_SE",
+	"VINR3_SE + VINR1_SE",
+	"VINR3_SE + VINR2_SE",
+	"VINR3_SE + VINR2_SE + VINR1_SE",
+	"VINR4_SE",
+	"VINR4_SE + VINR1_SE",
+	"VINR4_SE + VINR2_SE",
+	"VINR4_SE + VINR2_SE + VINR1_SE",
+	"VINR4_SE + VINR3_SE",
+	"VINR4_SE + VINR3_SE + VINR1_SE",
+	"VINR4_SE + VINR3_SE + VINR2_SE",
+	"VINR4_SE + VINR3_SE + VINR2_SE + VINR1_SE",
+	"VIN2P_DIFF - VIN2M_DIFF",
+	"VIN3P_DIFF - VIN3M_DIFF",
+	"VIN2P_DIFF - VIN2M_DIFF + VIN3P_DIFF - VIN3M_DIFF"
 };
 
 static const struct soc_enum pcm186x_adc_input_channel_sel[] = {
@@ -154,11 +173,8 @@ static const struct snd_soc_dapm_widget pcm1863_dapm_widgets[] = {
 	SND_SOC_DAPM_MUX("ADC Right Capture Source", SND_SOC_NOPM, 0, 0,
 			 &pcm186x_adc_mux_controls[1]),
 
-	/*
-	 * Put the codec into SLEEP mode when not in use, allowing the
-	 * Energysense mechanism to operate.
-	 */
-	SND_SOC_DAPM_ADC("ADC", "HiFi Capture", PCM186X_POWER_CTRL, 1,  1),
+	/* Put the codec into Digital standby mode when not in use. */
+	SND_SOC_DAPM_ADC("ADC", "HiFi Capture", PCM186X_POWER_CTRL, 0,  1),
 };
 
 static const struct snd_soc_dapm_widget pcm1865_dapm_widgets[] = {
@@ -180,12 +196,9 @@ static const struct snd_soc_dapm_widget pcm1865_dapm_widgets[] = {
 	SND_SOC_DAPM_MUX("ADC2 Right Capture Source", SND_SOC_NOPM, 0, 0,
 			 &pcm186x_adc_mux_controls[3]),
 
-	/*
-	 * Put the codec into SLEEP mode when not in use, allowing the
-	 * Energysense mechanism to operate.
-	 */
-	SND_SOC_DAPM_ADC("ADC1", "HiFi Capture 1", PCM186X_POWER_CTRL, 1,  1),
-	SND_SOC_DAPM_ADC("ADC2", "HiFi Capture 2", PCM186X_POWER_CTRL, 1,  1),
+	/* Put the codec into Digital standby mode when not in use. */
+	SND_SOC_DAPM_ADC("ADC1", "HiFi Capture 1", PCM186X_POWER_CTRL, 0,  1),
+	SND_SOC_DAPM_ADC("ADC2", "HiFi Capture 2", PCM186X_POWER_CTRL, 0,  1),
 };
 
 static const struct snd_soc_dapm_route pcm1863_dapm_routes[] = {
@@ -258,6 +271,13 @@ static const struct snd_soc_dapm_route pcm1865_dapm_routes[] = {
 	{ "ADC2", NULL, "ADC2 Right Capture Source" },
 };
 
+static const unsigned int pcm1865_digital_gain_registers[] = {
+	PCM186X_DPGA_VAL_CH1_L,
+	PCM186X_DPGA_VAL_CH1_R,
+	PCM186X_DPGA_VAL_CH2_L,
+	PCM186X_DPGA_VAL_CH2_R,
+};
+
 static int pcm186x_hw_params(struct snd_pcm_substream *substream,
 			     struct snd_pcm_hw_params *params,
 			     struct snd_soc_dai *dai)
@@ -313,6 +333,12 @@ static int pcm186x_hw_params(struct snd_pcm_substream *substream,
 	div_lrck = width * channels;
 
 	if (priv->is_tdm_mode) {
+		/* limitating the number of channels looking at the number
+		 * of allocated tdm slots
+		 */
+		if (priv->tdm_max_channels < channels)
+			channels = priv->tdm_max_channels;
+
 		/* Select TDM transmission data */
 		switch (channels) {
 		case 2:
@@ -348,8 +374,10 @@ static int pcm186x_hw_params(struct snd_pcm_substream *substream,
 			"%s() master_clk=%u div_bck=%u div_lrck=%u\n",
 			__func__, priv->sysclk, div_bck, div_lrck);
 
-		snd_soc_component_write(component, PCM186X_BCK_DIV, div_bck - 1);
-		snd_soc_component_write(component, PCM186X_LRK_DIV, div_lrck - 1);
+		snd_soc_component_write(component,
+					PCM186X_BCK_DIV, div_bck - 1);
+		snd_soc_component_write(component,
+					PCM186X_LRK_DIV, div_lrck - 1);
 	}
 
 	return 0;
@@ -363,6 +391,8 @@ static int pcm186x_set_fmt(struct snd_soc_dai *dai, unsigned int format)
 	u8 pcm_cfg = 0;
 
 	dev_dbg(component->dev, "%s() format=0x%x\n", __func__, format);
+
+	priv->tdm_additional_offset = 0;
 
 	/* set master/slave audio interface */
 	switch (format & SND_SOC_DAIFMT_MASTER_MASK) {
@@ -400,7 +430,7 @@ static int pcm186x_set_fmt(struct snd_soc_dai *dai, unsigned int format)
 		pcm_cfg = PCM186X_PCM_CFG_FMT_LEFTJ;
 		break;
 	case SND_SOC_DAIFMT_DSP_A:
-		priv->tdm_offset += 1;
+		priv->tdm_additional_offset = 1;
 		/* fall through */
 		/* DSP_A uses the same basic config as DSP_B
 		 * except we need to shift the TDM output by one BCK cycle
@@ -415,12 +445,10 @@ static int pcm186x_set_fmt(struct snd_soc_dai *dai, unsigned int format)
 	}
 
 	snd_soc_component_update_bits(component, PCM186X_CLK_CTRL,
-			    PCM186X_CLK_CTRL_MST_MODE, clk_ctrl);
-
-	snd_soc_component_write(component, PCM186X_TDM_TX_OFFSET, priv->tdm_offset);
+				PCM186X_CLK_CTRL_MST_MODE, clk_ctrl);
 
 	snd_soc_component_update_bits(component, PCM186X_PCM_CFG,
-			    PCM186X_PCM_CFG_FMT_MASK, pcm_cfg);
+				PCM186X_PCM_CFG_FMT_MASK, pcm_cfg);
 
 	return 0;
 }
@@ -450,6 +478,7 @@ static int pcm186x_set_tdm_slot(struct snd_soc_dai *dai, unsigned int tx_mask,
 	}
 
 	tdm_offset = first_slot * slot_width;
+	tdm_offset += priv->tdm_additional_offset;
 
 	if (tdm_offset > 255) {
 		dev_err(component->dev, "tdm tx slot selection out of bounds\n");
@@ -457,6 +486,10 @@ static int pcm186x_set_tdm_slot(struct snd_soc_dai *dai, unsigned int tx_mask,
 	}
 
 	priv->tdm_offset = tdm_offset;
+	priv->tdm_max_channels = last_slot - first_slot + 1;
+
+	snd_soc_component_write(component, PCM186X_TDM_TX_OFFSET,
+				priv->tdm_offset);
 
 	return 0;
 }
@@ -499,7 +532,7 @@ static struct snd_soc_dai_driver pcm1865_dai = {
 	.capture = {
 		 .stream_name = "Capture",
 		 .channels_min = 1,
-		 .channels_max = 4,
+		 .channels_max = 8,
 		 .rates = PCM186X_RATES,
 		 .formats = PCM186X_FORMATS,
 	 },
@@ -562,7 +595,8 @@ static int pcm186x_set_bias_level(struct snd_soc_component *component,
 	case SND_SOC_BIAS_PREPARE:
 		break;
 	case SND_SOC_BIAS_STANDBY:
-		if (snd_soc_component_get_bias_level(component) == SND_SOC_BIAS_OFF)
+		if (snd_soc_component_get_bias_level(component) ==
+		    SND_SOC_BIAS_OFF)
 			pcm186x_power_on(component);
 		break;
 	case SND_SOC_BIAS_OFF:
@@ -573,7 +607,7 @@ static int pcm186x_set_bias_level(struct snd_soc_component *component,
 	return 0;
 }
 
-static struct snd_soc_component_driver soc_codec_dev_pcm1863 = {
+static const struct snd_soc_component_driver soc_codec_dev_pcm1863 = {
 	.set_bias_level		= pcm186x_set_bias_level,
 	.controls		= pcm1863_snd_controls,
 	.num_controls		= ARRAY_SIZE(pcm1863_snd_controls),
@@ -587,7 +621,7 @@ static struct snd_soc_component_driver soc_codec_dev_pcm1863 = {
 	.non_legacy_dai_naming	= 1,
 };
 
-static struct snd_soc_component_driver soc_codec_dev_pcm1865 = {
+static const struct snd_soc_component_driver soc_codec_dev_pcm1865 = {
 	.set_bias_level		= pcm186x_set_bias_level,
 	.controls		= pcm1865_snd_controls,
 	.num_controls		= ARRAY_SIZE(pcm1865_snd_controls),
@@ -654,19 +688,21 @@ int pcm186x_probe(struct device *dev, enum pcm186x_type type, int irq,
 
 	dev_set_drvdata(dev, priv);
 	priv->regmap = regmap;
+	/* the maximum number of channels that can be outputted on TDM is 6 */
+	priv->tdm_max_channels = 6;
 
 	for (i = 0; i < ARRAY_SIZE(priv->supplies); i++)
 		priv->supplies[i].supply = pcm186x_supply_names[i];
 
 	ret = devm_regulator_bulk_get(dev, ARRAY_SIZE(priv->supplies),
-				      priv->supplies);
+				priv->supplies);
 	if (ret) {
 		dev_err(dev, "failed to request supplies: %d\n", ret);
 		return ret;
 	}
 
 	ret = regulator_bulk_enable(ARRAY_SIZE(priv->supplies),
-				    priv->supplies);
+				priv->supplies);
 	if (ret) {
 		dev_err(dev, "failed enable supplies: %d\n", ret);
 		return ret;
@@ -679,6 +715,94 @@ int pcm186x_probe(struct device *dev, enum pcm186x_type type, int irq,
 		return ret;
 	}
 
+	ret = of_property_read_u32(dev->of_node, "adc1-left-input-select",
+				&priv->adc1_left_input_select);
+	if (!ret) {
+		ret = regmap_write(regmap, PCM186X_ADC1_INPUT_SEL_L,
+				0x40 | priv->adc1_left_input_select);
+		if (ret) {
+			dev_err(dev, "failed to write device: %d\n", ret);
+			return ret;
+		}
+	} else {
+		dev_err(dev, "adc1 left input not selected\n");
+		return ret;
+	}
+
+	ret = of_property_read_u32(dev->of_node, "adc1-right-input-select",
+				&priv->adc1_right_input_select);
+	if (!ret) {
+		ret = regmap_write(regmap, PCM186X_ADC1_INPUT_SEL_R,
+				0x40 | priv->adc1_right_input_select);
+		if (ret) {
+			dev_err(dev, "failed to write device: %d\n", ret);
+			return ret;
+		}
+	} else {
+		dev_err(dev, "adc1 right input not selected\n");
+		return ret;
+	}
+
+	ret = of_property_read_u32(dev->of_node, "adc2-left-input-select",
+				&priv->adc2_left_input_select);
+	if (!ret) {
+		ret = regmap_write(regmap, PCM186X_ADC2_INPUT_SEL_L,
+				0x40 | priv->adc2_left_input_select);
+		if (ret) {
+			dev_err(dev, "failed to write device: %d\n", ret);
+			return ret;
+		}
+	} else {
+		dev_err(dev, "adc2 left input not selected\n");
+		return ret;
+	}
+
+	ret = of_property_read_u32(dev->of_node, "adc2-right-input-select",
+				&priv->adc2_right_input_select);
+	if (!ret) {
+		ret = regmap_write(regmap, PCM186X_ADC2_INPUT_SEL_R,
+				0x40 | priv->adc2_right_input_select);
+		if (ret) {
+			dev_err(dev, "failed to write device: %d\n", ret);
+			return ret;
+		}
+	} else {
+		dev_err(dev, "adc2 right input not selected\n");
+		return ret;
+	}
+
+	ret = of_property_read_u32(dev->of_node, "apga-gain-control",
+				&priv->apga_gain_control);
+	if (!ret) {
+		ret = regmap_write(regmap, PCM186X_DPGA_GAIN_CTRL,
+						priv->apga_gain_control);
+		if (ret) {
+			dev_err(dev, "failed to write device: %d\n", ret);
+			return ret;
+		}
+	} else {
+		dev_info(dev, "apga-gain-control not found, using default\n");
+		return ret;
+	}
+
+	/* Setting the digital gains to 0dB to be in the documentation range */
+	for (i = 0; i < ARRAY_SIZE(pcm1865_digital_gain_registers); i++) {
+		ret = regmap_write(regmap, pcm1865_digital_gain_registers[i],
+				PCM186X_DPGA_0DB);
+		if (ret) {
+			dev_err(dev, "failed to write val at addr 0x%x: %d\n",
+				pcm1865_digital_gain_registers[i], ret);
+			return ret;
+		}
+	}
+
+	/* standby */
+	ret = regmap_write(regmap, PCM186X_POWER_CTRL, 0x70 | 0x01);
+		if (ret) {
+			dev_err(dev, "failed to write device: %d\n", ret);
+			return ret;
+		}
+
 	ret = regulator_bulk_disable(ARRAY_SIZE(priv->supplies),
 				     priv->supplies);
 	if (ret) {
@@ -689,14 +813,14 @@ int pcm186x_probe(struct device *dev, enum pcm186x_type type, int irq,
 	switch (type) {
 	case PCM1865:
 	case PCM1864:
-		ret = devm_snd_soc_register_component(dev, &soc_codec_dev_pcm1865,
-					     &pcm1865_dai, 1);
+		ret = devm_snd_soc_register_component(dev,
+				&soc_codec_dev_pcm1865, &pcm1865_dai, 1);
 		break;
 	case PCM1863:
 	case PCM1862:
 	default:
-		ret = devm_snd_soc_register_component(dev, &soc_codec_dev_pcm1863,
-					     &pcm1863_dai, 1);
+		ret = devm_snd_soc_register_component(dev,
+				&soc_codec_dev_pcm1863, &pcm1863_dai, 1);
 	}
 	if (ret) {
 		dev_err(dev, "failed to register CODEC: %d\n", ret);

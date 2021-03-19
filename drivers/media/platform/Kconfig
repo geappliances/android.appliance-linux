@@ -11,6 +11,8 @@ menuconfig V4L_PLATFORM_DRIVERS
 
 if V4L_PLATFORM_DRIVERS
 
+source "drivers/media/platform/mtk-isp/Kconfig"
+
 source "drivers/media/platform/marvell-ccic/Kconfig"
 
 config VIDEO_VIA_CAMERA
@@ -240,6 +242,25 @@ config VIDEO_MEDIATEK_MDP
 	    To compile this driver as a module, choose M here: the
 	    module will be called mtk-mdp.
 
+config VIDEO_MEDIATEK_MDP3
+	tristate "Mediatek MDP v3 driver"
+	depends on MTK_IOMMU || COMPILE_TEST
+	depends on VIDEO_DEV && VIDEO_V4L2
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	depends on HAS_DMA
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_MEM2MEM_DEV
+	select VIDEO_MEDIATEK_VPU
+	select MTK_CMDQ
+	select MTK_SCP
+	default n
+	help
+	    It is a v4l2 driver and present in Mediatek MT8183 SoC.
+	    The driver supports for scaling and color space conversion.
+
+	    To compile this driver as a module, choose M here: the
+	    module will be called mtk-mdp3.
+
 config VIDEO_MEDIATEK_VCODEC
 	tristate "Mediatek Video Codec driver"
 	depends on MTK_IOMMU || COMPILE_TEST
@@ -250,6 +271,24 @@ config VIDEO_MEDIATEK_VCODEC
 	select VIDEO_MEDIATEK_VPU
 	help
 	    Mediatek video codec driver provides HW capability to
+	    encode and decode in a range of video formats
+	    This driver rely on VPU driver to communicate with VPU.
+
+	    To compile this driver as a module, choose M here: the
+	    module will be called mtk-vcodec
+
+config VIDEO_MEDIATEK_VCODEC_MT8167
+	tristate "Mediatek Video Codec driver for MT8167 SoC"
+	depends on MTK_IOMMU || COMPILE_TEST
+	depends on VIDEO_DEV && VIDEO_V4L2
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	depends on !VIDEO_MEDIATEK_VCODEC
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_MEM2MEM_DEV
+	select VIDEO_MEDIATEK_VPU
+	default n
+	---help---
+	    Mediatek MT8167 video codec driver provides HW capability to
 	    encode and decode in a range of video formats
 	    This driver rely on VPU driver to communicate with VPU.
 
@@ -686,3 +725,12 @@ config VIDEO_RCAR_DRIF
 	  will be called rcar_drif.
 
 endif # SDR_PLATFORM_DRIVERS
+
+config VIDEO_MEDIATEK_MIPICSI
+    tristate "MIPICSI"
+    depends on VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
+	select V4L2_FWNODE
+    default n
+    help
+	  Mediatek mipicsi driver provides support of csi bus
+

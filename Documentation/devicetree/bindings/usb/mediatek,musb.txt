@@ -50,6 +50,7 @@ usb2: usb@11200000 {
 	usb-role-switch;
 	connector{
 		compatible = "gpio-usb-b-connector", "usb-b-connector";
+		label = "micro-USB";
 		type = "micro";
 		id-gpios = <&pio 44 GPIO_ACTIVE_HIGH>;
 		vbus-supply = <&usb_vbus>;

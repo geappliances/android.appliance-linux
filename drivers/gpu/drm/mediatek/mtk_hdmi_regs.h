@@ -194,7 +194,16 @@
 #define NORMAL_PATH			(1 << 7)
 #define GEN_RGB				(0 << 7)
 
+#define HDCP_STATUS_RESET		0x398
+#define RG_N_DIV2			(0x1 << 2)
+#define RG_SPD_IIS_SEL			(0x1 << 3)
+
+#define MMSYS_CG_CON1			0x10
+#define HDMI_ADSP_BCK_CG		(0x1 << 20)
+#define HDMI_ADSP_BCK_CG_CLR		(0x0 << 20)
+
 #define HDMI_SYS_CFG1C		0x000
+#define MT8167_HDMI_SYS_CFG1C		0x800
 #define HDMI_ON				BIT(0)
 #define HDMI_RST			BIT(1)
 #define ANLG_ON				BIT(2)
@@ -211,6 +220,7 @@
 #define HTPLG_PIN_SEL_OFF		BIT(30)
 #define AES_EFUSE_ENABLE		BIT(31)
 #define HDMI_SYS_CFG20		0x004
+#define MT8167_HDMI_SYS_CFG20		0x804
 #define DEEP_COLOR_MODE_MASK		(3 << 1)
 #define COLOR_8BIT_MODE			(0 << 1)
 #define COLOR_10BIT_MODE		(1 << 1)

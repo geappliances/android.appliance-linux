@@ -143,6 +143,11 @@
 #define	TEST_SE0_NAK	3
 #define	TEST_PACKET	4
 #define	TEST_FORCE_EN	5
+/*
+ * OTG HNP and SRP REQD
+ */
+#define	OTG_SRP_REQD	6
+#define	OTG_HNP_REQD	7
 
 /* Status Type */
 #define USB_STATUS_TYPE_STANDARD	0

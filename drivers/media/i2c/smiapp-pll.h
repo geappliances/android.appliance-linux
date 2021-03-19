@@ -18,6 +18,7 @@
 /* op pix clock is for all lanes in total normally */
 #define SMIAPP_PLL_FLAG_OP_PIX_CLOCK_PER_LANE			(1 << 0)
 #define SMIAPP_PLL_FLAG_NO_OP_CLOCKS				(1 << 1)
+#define SMIAPP_PLL_FLAG_DUAL_READOUT				(1 << 2)
 
 struct smiapp_pll_branch {
 	uint16_t sys_clk_div;

@@ -100,7 +100,7 @@ static int mtu3_device_enable(struct mtu3 *mtu)
 
 	mtu3_clrbits(ibase, U3D_SSUSB_IP_PW_CTRL2, SSUSB_IP_DEV_PDN);
 
-	if (mtu->is_u3_ip) {
+	if (mtu->is_u3_ip && mtu->max_speed >= USB_SPEED_SUPER) {
 		check_clk = SSUSB_U3_MAC_RST_B_STS;
 		mtu3_clrbits(ibase, SSUSB_U3_CTRL(0),
 			(SSUSB_U3_PORT_DIS | SSUSB_U3_PORT_PDN |
@@ -609,6 +609,7 @@ static void mtu3_regs_init(struct mtu3 *mtu)
 	/* enable automatical HWRW from L1 */
 	mtu3_setbits(mbase, U3D_POWER_MANAGEMENT, LPM_HRWE);
 
+	ssusb_set_force_vbus(mtu->ssusb, true);
 	/* use new QMU format when HW version >= 0x1003 */
 	if (mtu->gen2cp)
 		mtu3_writel(mbase, U3D_QFCR, ~0x0);

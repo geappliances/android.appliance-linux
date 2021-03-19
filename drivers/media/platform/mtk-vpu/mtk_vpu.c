@@ -198,6 +198,7 @@ struct share_obj {
  *
  */
 struct mtk_vpu {
+	struct mtk_vpu_plat vpu;
 	struct vpu_mem extmem[2];
 	struct vpu_regs reg;
 	struct vpu_run run;
@@ -214,6 +215,7 @@ struct mtk_vpu {
 	wait_queue_head_t ack_wq;
 	bool ipi_id_ack[IPI_MAX];
 };
+#define to_vpu(vpu_plat) container_of(vpu_plat, struct mtk_vpu, vpu)
 
 static inline void vpu_cfg_writel(struct mtk_vpu *vpu, u32 val, u32 offset)
 {
@@ -261,15 +263,15 @@ static int vpu_clock_enable(struct mtk_vpu *vpu)
 	return ret;
 }
 
-int vpu_ipi_register(struct platform_device *pdev,
-		     enum ipi_id id, ipi_handler_t handler,
-		     const char *name, void *priv)
+static int mtk_vpu_ipi_register(struct mtk_vpu_plat *vpu_plat,
+				enum ipi_id id, ipi_handler_t handler,
+				const char *name, void *priv)
 {
-	struct mtk_vpu *vpu = platform_get_drvdata(pdev);
+	struct mtk_vpu *vpu = to_vpu(vpu_plat);
 	struct vpu_ipi_desc *ipi_desc;
 
 	if (!vpu) {
-		dev_err(&pdev->dev, "vpu device in not ready\n");
+		dev_err(vpu->dev, "vpu device in not ready\n");
 		return -EPROBE_DEFER;
 	}
 
@@ -281,17 +283,16 @@ int vpu_ipi_register(struct platform_device *pdev,
 		return 0;
 	}
 
-	dev_err(&pdev->dev, "register vpu ipi id %d with invalid arguments\n",
+	dev_err(vpu->dev, "register vpu ipi id %d with invalid arguments\n",
 		id);
 	return -EINVAL;
 }
-EXPORT_SYMBOL_GPL(vpu_ipi_register);
 
-int vpu_ipi_send(struct platform_device *pdev,
-		 enum ipi_id id, void *buf,
-		 unsigned int len)
+static int mtk_vpu_ipi_send(struct mtk_vpu_plat *vpu_plat,
+			    enum ipi_id id, void *buf,
+			    unsigned int len)
 {
-	struct mtk_vpu *vpu = platform_get_drvdata(pdev);
+	struct mtk_vpu *vpu = to_vpu(vpu_plat);
 	struct share_obj *send_obj = vpu->send_buf;
 	unsigned long timeout;
 	int ret = 0;
@@ -355,7 +356,6 @@ clock_disable:
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(vpu_ipi_send);
 
 static void vpu_wdt_reset_func(struct work_struct *ws)
 {
@@ -384,15 +384,15 @@ static void vpu_wdt_reset_func(struct work_struct *ws)
 	}
 }
 
-int vpu_wdt_reg_handler(struct platform_device *pdev,
-			void wdt_reset(void *),
-			void *priv, enum rst_id id)
+static int mtk_vpu_wdt_reg_handler(struct mtk_vpu_plat *vpu_plat,
+				   void wdt_reset(void *),
+				   void *priv, enum rst_id id)
 {
-	struct mtk_vpu *vpu = platform_get_drvdata(pdev);
+	struct mtk_vpu *vpu = to_vpu(vpu_plat);
 	struct vpu_wdt_handler *handler;
 
 	if (!vpu) {
-		dev_err(&pdev->dev, "vpu device in not ready\n");
+		dev_err(vpu->dev, "vpu device in not ready\n");
 		return -EPROBE_DEFER;
 	}
 
@@ -410,28 +410,25 @@ int vpu_wdt_reg_handler(struct platform_device *pdev,
 	dev_err(vpu->dev, "register vpu wdt handler failed\n");
 	return -EINVAL;
 }
-EXPORT_SYMBOL_GPL(vpu_wdt_reg_handler);
 
-unsigned int vpu_get_vdec_hw_capa(struct platform_device *pdev)
+static unsigned int mtk_vpu_get_vdec_hw_capa(struct mtk_vpu_plat *vpu_plat)
 {
-	struct mtk_vpu *vpu = platform_get_drvdata(pdev);
+	struct mtk_vpu *vpu = to_vpu(vpu_plat);
 
 	return vpu->run.dec_capability;
 }
-EXPORT_SYMBOL_GPL(vpu_get_vdec_hw_capa);
 
-unsigned int vpu_get_venc_hw_capa(struct platform_device *pdev)
+static unsigned int mtk_vpu_get_venc_hw_capa(struct mtk_vpu_plat *vpu_plat)
 {
-	struct mtk_vpu *vpu = platform_get_drvdata(pdev);
+	struct mtk_vpu *vpu = to_vpu(vpu_plat);
 
 	return vpu->run.enc_capability;
 }
-EXPORT_SYMBOL_GPL(vpu_get_venc_hw_capa);
 
-void *vpu_mapping_dm_addr(struct platform_device *pdev,
-			  u32 dtcm_dmem_addr)
+static void *mtk_vpu_mapping_dm_addr(struct mtk_vpu_plat *vpu_plat,
+				     uintptr_t dtcm_dmem_addr)
 {
-	struct mtk_vpu *vpu = platform_get_drvdata(pdev);
+	struct mtk_vpu *vpu = to_vpu(vpu_plat);
 
 	if (!dtcm_dmem_addr ||
 	    (dtcm_dmem_addr > (VPU_DTCM_SIZE + VPU_EXT_D_SIZE))) {
@@ -445,7 +442,6 @@ void *vpu_mapping_dm_addr(struct platform_device *pdev,
 
 	return vpu->extmem[D_FW].va + (dtcm_dmem_addr - VPU_DTCM_SIZE);
 }
-EXPORT_SYMBOL_GPL(vpu_mapping_dm_addr);
 
 struct platform_device *vpu_get_plat_device(struct platform_device *pdev)
 {
@@ -526,19 +522,18 @@ static int load_requested_vpu(struct mtk_vpu *vpu,
 	return 0;
 }
 
-int vpu_load_firmware(struct platform_device *pdev)
+static int mtk_vpu_load_firmware(struct mtk_vpu_plat *vpu_plat)
 {
-	struct mtk_vpu *vpu;
-	struct device *dev = &pdev->dev;
+	struct mtk_vpu *vpu = to_vpu(vpu_plat);
+	struct device *dev = vpu->dev;
 	struct vpu_run *run;
 	int ret;
 
-	if (!pdev) {
+	if (!vpu_plat) {
 		dev_err(dev, "VPU platform device is invalid\n");
 		return -EINVAL;
 	}
 
-	vpu = platform_get_drvdata(pdev);
 	run = &vpu->run;
 
 	mutex_lock(&vpu->vpu_mutex);
@@ -598,9 +593,8 @@ OUT_LOAD_FW:
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(vpu_load_firmware);
 
-static void vpu_init_ipi_handler(void *data, unsigned int len, void *priv)
+static int vpu_init_ipi_handler(void *data, unsigned int len, void *priv)
 {
 	struct mtk_vpu *vpu = (struct mtk_vpu *)priv;
 	struct vpu_run *run = (struct vpu_run *)data;
@@ -610,6 +604,8 @@ static void vpu_init_ipi_handler(void *data, unsigned int len, void *priv)
 	vpu->run.dec_capability = run->dec_capability;
 	vpu->run.enc_capability = run->enc_capability;
 	wake_up_interruptible(&vpu->run.wq);
+
+	return 0;
 }
 
 #ifdef CONFIG_DEBUG_FS
@@ -762,6 +758,17 @@ static irqreturn_t vpu_irq_handler(int irq, void *priv)
 	return IRQ_HANDLED;
 }
 
+
+static struct mtk_vpu_ops mtk_vpu_ops = {
+	.ipi_register = mtk_vpu_ipi_register,
+	.ipi_send = mtk_vpu_ipi_send,
+	.wdt_reg_handler = mtk_vpu_wdt_reg_handler,
+	.get_vdec_hw_capa = mtk_vpu_get_vdec_hw_capa,
+	.get_venc_hw_capa = mtk_vpu_get_venc_hw_capa,
+	.load_firmware = mtk_vpu_load_firmware,
+	.mapping_dm_addr = mtk_vpu_mapping_dm_addr,
+};
+
 #ifdef CONFIG_DEBUG_FS
 static struct dentry *vpu_debugfs;
 #endif
@@ -780,6 +787,7 @@ static int mtk_vpu_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	vpu->dev = &pdev->dev;
+	vpu->vpu.ops = &mtk_vpu_ops;
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "tcm");
 	vpu->reg.tcm = devm_ioremap_resource(dev, res);
 	if (IS_ERR((__force void *)vpu->reg.tcm))
@@ -797,7 +805,7 @@ static int mtk_vpu_probe(struct platform_device *pdev)
 		return PTR_ERR(vpu->clk);
 	}
 
-	platform_set_drvdata(pdev, vpu);
+	platform_set_drvdata(pdev, &vpu->vpu);
 
 	ret = clk_prepare(vpu->clk);
 	if (ret) {
