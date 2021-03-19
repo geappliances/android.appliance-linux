@@ -21,6 +21,20 @@
 
 #define V4L2_CID_MTK_MDP_CONTRAST_AUTO (V4L2_CID_USER_BASE | 0x1000)
 
+#define IMG_MAX_WIDTH                  5376
+#define IMG_MAX_HEIGHT                 4032
+#define IMG_MIN_WIDTH                  80
+#define IMG_MIN_HEIGHT                 60
+
+static struct v4l2_frmsize_stepwise mdp_frmsize_stepwise = {
+       .max_width = IMG_MAX_WIDTH,
+       .min_width = IMG_MIN_WIDTH,
+       .max_height = IMG_MAX_HEIGHT,
+       .min_height = IMG_MIN_HEIGHT,
+       .step_height = 1,
+       .step_width = 1,
+};
+
 /**
  *  struct mtk_mdp_pix_limit - image pixel size limits
  *  @org_w: source pixel width
@@ -823,6 +837,21 @@ static int mtk_mdp_enum_fmt(struct v4l2_fmtdesc *f, u32 type)
 	return 0;
 }
 
+static int mtk_mdp_m2m_enum_framesizes(struct file *file, void *fh,
+                                            struct v4l2_frmsizeenum *sizes)
+{
+        if (sizes->index)
+                return -EINVAL;
+
+        if (mtk_mdp_find_fmt(sizes->pixel_format, V4L2_BUF_TYPE_VIDEO_CAPTURE) == NULL)
+                return -EINVAL;
+
+        sizes->type = V4L2_FRMSIZE_TYPE_CONTINUOUS;
+        memcpy(&sizes->stepwise, &mdp_frmsize_stepwise, sizeof(sizes->stepwise));
+
+        return 0;
+}
+
 static int mtk_mdp_m2m_enum_fmt_vid_cap(struct file *file, void *priv,
 					struct v4l2_fmtdesc *f)
 {
@@ -1132,6 +1161,7 @@ static int mtk_mdp_m2m_s_selection(struct file *file, void *fh,
 
 static const struct v4l2_ioctl_ops mtk_mdp_m2m_ioctl_ops = {
 	.vidioc_querycap		= mtk_mdp_m2m_querycap,
+	.vidioc_enum_framesizes         = mtk_mdp_m2m_enum_framesizes,
 	.vidioc_enum_fmt_vid_cap	= mtk_mdp_m2m_enum_fmt_vid_cap,
 	.vidioc_enum_fmt_vid_out	= mtk_mdp_m2m_enum_fmt_vid_out,
 	.vidioc_g_fmt_vid_cap_mplane	= mtk_mdp_m2m_g_fmt_mplane,
@@ -1472,21 +1502,46 @@ int mtk_mdp_register_m2m_device(struct mtk_mdp_dev *mdp)
 		goto err_vdev_register;
 	}
 
+	mdp->mdev.dev = dev;
+	strscpy(mdp->mdev.model, MTK_MDP_MODULE_NAME, sizeof(mdp->mdev.model));
+	snprintf(mdp->mdev.bus_info, sizeof(mdp->mdev.bus_info), "platform:%s",
+				dev_name(dev));
+	media_device_init(&mdp->mdev);
+	mdp->v4l2_dev.mdev = &mdp->mdev;
+
+	ret = v4l2_m2m_register_media_controller(mdp->m2m_dev, mdp->vdev,
+											MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER);
+	if (ret) {
+		dev_err(dev, "Failed to initialize media device\n");
+		goto err_vfd;
+	}
+
+	ret = media_device_register(&mdp->mdev);
+	if (ret) {
+		dev_err(dev, "Failed to register media device\n");
+		goto err_m2m_mc;
+	}
+
 	v4l2_info(&mdp->v4l2_dev, "driver registered as /dev/video%d",
 		  mdp->vdev->num);
 	return 0;
 
+err_m2m_mc:
+	v4l2_m2m_unregister_media_controller(mdp->m2m_dev);
+err_vfd:
+    video_unregister_device(mdp->vdev);
 err_vdev_register:
 	v4l2_m2m_release(mdp->m2m_dev);
 err_m2m_init:
 	video_device_release(mdp->vdev);
 err_video_alloc:
-
 	return ret;
 }
 
 void mtk_mdp_unregister_m2m_device(struct mtk_mdp_dev *mdp)
 {
+	media_device_unregister(&mdp->mdev);
+	v4l2_m2m_unregister_media_controller(mdp->m2m_dev);
 	video_unregister_device(mdp->vdev);
 	v4l2_m2m_release(mdp->m2m_dev);
 }

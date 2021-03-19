@@ -39,6 +39,92 @@
 #include <uapi/linux/mtk_vcu_controls.h>
 #include "mtk_vpu.h"
 
+
+extern void __inner_flush_dcache_all(void);
+extern void __inner_flush_dcache_L1(void);
+extern void __inner_flush_dcache_L2(void);
+extern void __disable_dcache(void);
+
+void inner_dcache_flush_all(void)
+{
+	__inner_flush_dcache_all();
+}
+EXPORT_SYMBOL(inner_dcache_flush_all);
+
+void inner_dcache_flush_L1(void)
+{
+	__inner_flush_dcache_L1();
+}
+
+void inner_dcache_flush_L2(void)
+{
+	__inner_flush_dcache_L2();
+}
+
+void inner_dcache_disable(void)
+{
+	__disable_dcache();
+}
+
+/*
+ * smp_inner_dcache_flush_all: Flush (clean + invalidate) the entire L1 data cache.
+ *
+ * This can be used ONLY by the M4U driver!!
+ * Other drivers should NOT use this function at all!!
+ * Others should use DMA-mapping APIs!!
+ *
+ * This is the smp version of inner_dcache_flush_all().
+ * It will use IPI to do flush on all CPUs.
+ * Must not call this function with disabled interrupts or from a
+ * hardware interrupt handler or from a bottom half handler.
+ */
+void smp_inner_dcache_flush_all(void)
+{
+#ifdef CONFIG_MTK_FIQ_CACHE
+//	mt_fiq_cache_flush_all();
+#else
+	int i, total_core, cid, last_cid;
+	struct cpumask mask;
+
+	if (in_interrupt()) {
+		pr_err("Cannot invoke smp_inner_dcache_flush_all() in interrupt/softirq context\n");
+		return;
+	}
+
+	get_online_cpus();
+	preempt_disable();
+
+	/* Find first online cpu in each cluster */
+	last_cid = -1;
+	cpumask_clear(&mask);
+	total_core = num_possible_cpus();
+	for (i = 0; i < total_core; i++) {
+		if (!cpu_online(i))
+			continue;
+
+//		cid = arch_get_cluster_id(i);
+		cid = 0;
+		if (last_cid != cid) {
+			cpumask_set_cpu(i, &mask);
+			last_cid = cid;
+		}
+	}
+
+	on_each_cpu((smp_call_func_t)inner_dcache_flush_L1, NULL, true);
+	smp_call_function_many(&mask, (smp_call_func_t)inner_dcache_flush_L2,
+				NULL, true);
+	/*
+	 * smp_call_function_many only run on "other Cpus".
+	 * Flush L2 here if this is one of the first cores
+	 */
+	if (cpumask_test_cpu(smp_processor_id(), &mask))
+		inner_dcache_flush_L2();
+
+	preempt_enable();
+	put_online_cpus();
+#endif
+}
+
 /**
  * VCU (Video Communication/Controller Unit) is a daemon in user space
  * controlling video hardware related to video codec, scaling and color
@@ -64,8 +150,11 @@ enum mtk_vcu_daemon_id {
 enum vcu_ipi_id {
 	VCU_IPI_VPU_INIT = 0,
 	VCU_IPI_VDEC_H264,
+	VCU_IPI_VDEC_H265,
 	VCU_IPI_VDEC_VP8 = 3,
 	VCU_IPI_VDEC_VP9,
+	VCU_IPI_VDEC_MPEG4,
+	VCU_IPI_VDEC_MPEG12 = 7,
 	VCU_IPI_VENC_H264 = 11,
 	VCU_IPI_VENC_VP8,
 	VCU_IPI_MDP,
@@ -104,6 +193,22 @@ enum vcu_ipi_id {
 #define MAP_VENC_CACHE_MAX_NUM 30
 #define VCU_IPIMSG_VENC_BASE 0xD000
 
+static inline enum ipi_id ipi_vpu_id_fixup(enum ipi_id id)
+{
+	switch (id) {
+	case IPI_VENC_H264:
+		return VCU_IPI_VENC_H264;
+	case IPI_VCU_VDEC_H265:
+		return VCU_IPI_VDEC_H265;
+	case IPI_VCU_VDEC_MPEG4:
+		return VCU_IPI_VDEC_MPEG4;
+	case IPI_VCU_VDEC_MPEG12:
+		return VCU_IPI_VDEC_MPEG12;
+	default:
+		return id;
+	}
+}
+
 static inline enum vcu_ipi_id ipi_vpu_to_vcu(enum ipi_id id)
 {
 	switch (id) {
@@ -123,6 +228,12 @@ static inline enum vcu_ipi_id ipi_vpu_to_vcu(enum ipi_id id)
 		return VCU_IPI_MDP;
 	case IPI_VENC_HYBRID_H264:
 		return VCU_IPI_VENC_HYBRID_H264;
+	case IPI_VCU_VDEC_H265:
+		return VCU_IPI_VDEC_H265;
+	case IPI_VCU_VDEC_MPEG4:
+		return VCU_IPI_VDEC_MPEG4;
+	case IPI_VCU_VDEC_MPEG12:
+		return VCU_IPI_VDEC_MPEG12;
 	case IPI_MAX:
 	default:
 		return VCU_IPI_MAX;
@@ -138,10 +249,16 @@ static inline enum ipi_id ipi_vcu_to_vpu(enum vcu_ipi_id id)
 		return IPI_VPU_INIT;
 	case VCU_IPI_VDEC_H264:
 		return IPI_VDEC_H264;
+	case VCU_IPI_VDEC_H265:
+		return IPI_VCU_VDEC_H265;
 	case VCU_IPI_VDEC_VP8:
 		return IPI_VDEC_VP8;
 	case VCU_IPI_VDEC_VP9:
 		return IPI_VDEC_VP9;
+	case VCU_IPI_VDEC_MPEG4:
+		return IPI_VCU_VDEC_MPEG4;
+	case VCU_IPI_VDEC_MPEG12:
+		return IPI_VCU_VDEC_MPEG12;
 	case VCU_IPI_VENC_H264:
 		return IPI_VENC_H264;
 	case VCU_IPI_VENC_VP8:
@@ -366,11 +483,12 @@ static inline bool vcu_running(struct mtk_vcu *vcu)
 }
 
 int vcu_ipi_register(struct mtk_vpu_plat *vpu,
-		     enum ipi_id id, ipi_handler_t handler,
+		     enum ipi_id vpu_id, ipi_handler_t handler,
 		     const char *name, void *priv)
 {
 	struct mtk_vcu *vcu = to_vcu(vpu);
 	struct vcu_ipi_desc *ipi_desc;
+	enum ipi_id id = ipi_vpu_id_fixup(vpu_id);
 
 	if (vcu == NULL) {
 		dev_err(vcu->dev, "vcu device in not ready\n");
@@ -391,11 +509,12 @@ int vcu_ipi_register(struct mtk_vpu_plat *vpu,
 }
 
 int vcu_ipi_send(struct mtk_vpu_plat *vpu,
-		 enum ipi_id id, void *buf,
+		 enum ipi_id vpu_id, void *buf,
 		 unsigned int len)
 {
 	int i = 0;
 	struct mtk_vcu *vcu = to_vcu(vpu);
+	enum ipi_id id = ipi_vpu_id_fixup(vpu_id);
 	struct share_obj send_obj;
 	unsigned long timeout;
 	int ret;
@@ -418,7 +537,7 @@ int vcu_ipi_send(struct mtk_vpu_plat *vpu,
 	/* send the command to VCU */
 	memcpy((void *)vcu->user_obj[i].share_buf, buf, len);
 	vcu->user_obj[i].len = len;
-	vcu->user_obj[i].id = (int)ipi_vpu_to_vcu(id);
+	vcu->user_obj[i].id = (int)ipi_vpu_to_vcu(vpu_id);
 
 	atomic_set(&vcu->ipi_got[i], 1);
 	atomic_set(&vcu->ipi_done[i], 0);
@@ -820,6 +939,7 @@ static long mtk_vcu_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 	struct mtk_vcu *vcu_dev;
 	struct device *dev;
 	struct map_obj mem_map_obj;
+	struct compat_map_obj mem_map_obj_compat;
 	struct share_obj share_buff_data;
 	struct mem_obj mem_buff_data;
 	struct mtk_vcu_queue *vcu_queue = (struct mtk_vcu_queue *)file->private_data;
@@ -846,6 +966,25 @@ static long mtk_vcu_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 			return -EINVAL;
 		}
 		break;
+    case COMPAT_VCUD_SET_MMAP_TYPE:
+		user_data_addr = (unsigned char *)arg;
+		ret = (long)copy_from_user(&mem_map_obj_compat, user_data_addr,
+			(unsigned long)sizeof(struct compat_map_obj));
+
+		if (ret != 0L) {
+			pr_err("[VCU] %s(%d) Copy data to user failed!\n",
+				__func__, __LINE__);
+			return -EINVAL;
+		}
+
+		pr_err("[VCU] VCUD_SET_MMAP_TYPE(%d) mem_map_obj:(%u %u)\n",
+				 __LINE__,mem_map_obj_compat.map_buf,mem_map_obj_compat.map_type);
+
+		vcu_queue->map_buf = mem_map_obj_compat.map_buf;
+		vcu_queue->map_type = mem_map_obj_compat.map_type;
+
+		break;
+
     case VCUD_SET_MMAP_TYPE:
 
 		user_data_addr = (unsigned char *)arg;
@@ -921,6 +1060,13 @@ static long mtk_vcu_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 				__func__, __LINE__);
 			return -EINVAL;
 		}
+		ret = 0;
+		break;
+	case VCUD_CACHE_FLUSH_ALL:
+		smp_inner_dcache_flush_all();
+		ret = 0;
+		break;
+	case VCUD_MVA_MAP_CACHE:
 		ret = 0;
 		break;
 	default:
@@ -1020,6 +1166,10 @@ static long mtk_vcu_unlocked_compat_ioctl(struct file *file, unsigned int cmd, u
 	case COMPAT_VCUD_CACHE_FLUSH_ALL:
 		ret = file->f_op->unlocked_ioctl(file,
 			(uint32_t)VCUD_CACHE_FLUSH_ALL, 0);
+		break;
+	case COMPAT_VCUD_MVA_MAP_CACHE:
+	case COMPAT_VCUD_SET_MMAP_TYPE:
+		ret = 0;
 		break;
 	default:
 		pr_err("[VCU] Invalid cmd_number 0x%x.\n", cmd);
@@ -1195,6 +1345,7 @@ err_ipi_init:
 }
 
 static const struct of_device_id mtk_vcu_match[] = {
+	{.compatible = "mediatek,mt8183-vcu",},
 	{.compatible = "mediatek,mt8167-vcu",},
 	{},
 };

@@ -479,6 +479,24 @@
 			      "normal";
 		};
 
+		vcodec_enc: codec@15009000 {
+			compatible = "mediatek,mt8167-vcodec-enc";
+			reg = <0 0x15009000 0 0x1000>;  /* VENC_BASE */
+			interrupts = <GIC_SPI 179 IRQ_TYPE_LEVEL_LOW>;
+			mediatek,larb = <&larb1>;
+			iommus = <&iommu M4U_PORT_VENC_REC>,
+				 <&iommu M4U_PORT_VENC_BSDMA>,
+				 <&iommu M4U_PORT_VENC_RD_COMV>,
+				 <&iommu M4U_PORT_VENC_CUR_LUMA>,
+				 <&iommu M4U_PORT_VENC_CUR_CHROMA>,
+				 <&iommu M4U_PORT_VENC_REF_LUMA>,
+				 <&iommu M4U_PORT_VENC_REF_CHROMA>;
+			mediatek,vpu = <&vcu>;
+			power-domains = <&scpsys MT8167_POWER_DOMAIN_ISP>;
+			clocks = <&imgsys CLK_IMG_VENC>;
+			clock-names = "img_venc";
+		};
+
 		seninf1_mux_camsv0: seninf_mux_camsv@15004000 {
 			reg = <0 0x15008120 0 0x40>,
 			      <0 0x15004000 0 0x1000>,
@@ -580,5 +598,12 @@
 			input-enable;
 			bias-pull-down;
 		};
+	};
+};
+
+&cluster0_opp {
+	opp-1500000000 {
+		opp-hz = /bits/ 64 <1500000000>;
+		opp-microvolt = <1300000>;
 	};
 };

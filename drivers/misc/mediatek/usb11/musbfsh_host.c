@@ -492,6 +492,10 @@ __releases(musbfsh->lock) __acquires(musbfsh->lock)
 	 * urb->ep->desc.bEndpointAddress);
 	 */
 
+	if (is_dma_capable() && usb_pipein(urb->pipe) &&
+		usb_pipeendpoint(urb->pipe))
+		complete(&urb->done);
+
 	usb_hcd_unlink_urb_from_ep(musbfsh_to_hcd(musbfsh), urb);
 	spin_unlock(&musbfsh->lock);
 	usb_hcd_giveback_urb(musbfsh_to_hcd(musbfsh), urb, status);
@@ -720,9 +724,9 @@ u16 musbfsh_h_flush_rxfifo(struct musbfsh_hw_ep *hw_ep, u16 csr)
 	 * leave toggle alone (may not have been saved yet)
 	 */
 	INFO("%s++\r\n", __func__);
-	csr |= MUSBFSH_RXCSR_FLUSHFIFO | MUSBFSH_RXCSR_RXPKTRDY;
+	csr |= MUSBFSH_RXCSR_FLUSHFIFO;
 	csr &= ~(MUSBFSH_RXCSR_H_REQPKT | MUSBFSH_RXCSR_H_AUTOREQ |
-		MUSBFSH_RXCSR_AUTOCLEAR);
+		MUSBFSH_RXCSR_AUTOCLEAR | MUSBFSH_RXCSR_RXPKTRDY);
 
 	/* write 2x to allow double buffering */
 	musbfsh_writew(hw_ep->regs, MUSBFSH_RXCSR, csr);
@@ -1418,7 +1422,7 @@ void musbfsh_host_tx(struct musbfsh *musbfsh, u8 epnum)	/* real ep num */
 
 	/* with CPPI, DMA sometimes triggers "extra" irqs */
 	if (!urb) {
-		WARNING("extra TX%d ready, csr %04x\n", epnum, tx_csr);
+		INFO("extra TX%d ready, csr %04x\n", epnum, tx_csr);
 		return;
 	}
 
@@ -1487,7 +1491,7 @@ void musbfsh_host_tx(struct musbfsh *musbfsh, u8 epnum)	/* real ep num */
 
 	/* second cppi case */
 	if (dma_channel_status(dma) == MUSBFSH_DMA_STATUS_BUSY) {
-		WARNING("extra TX%d ready, csr %04x\n", epnum, tx_csr);
+		INFO("extra TX%d ready, csr %04x\n", epnum, tx_csr);
 		return;
 	}
 
@@ -1748,6 +1752,12 @@ void musbfsh_host_rx(struct musbfsh *musbfsh, u8 epnum)
 
 	urb = next_urb(qh);	/* current urb */
 	dma = is_dma_capable() ? hw_ep->rx_channel : NULL;
+
+	if (dma && (dma->status == MUSBFSH_DMA_STATUS_BUSY)) {
+		INFO("not Dma interrupt %s, @Line %d\n", __func__, __LINE__);
+		return;
+	}
+
 	status = 0;
 	xfer_len = 0;
 
@@ -1827,6 +1837,7 @@ void musbfsh_host_rx(struct musbfsh *musbfsh, u8 epnum)
 			dma->status = MUSBFSH_DMA_STATUS_CORE_ABORT;
 			(void)musbfsh->dma_controller->channel_abort(dma);
 			xfer_len = dma->actual_len;
+			dma->actual_len = 0L;
 		}
 		musbfsh_h_flush_rxfifo(hw_ep, 0);
 		musbfsh_writeb(epio, MUSBFSH_RXINTERVAL, 0);
@@ -1885,6 +1896,8 @@ void musbfsh_host_rx(struct musbfsh *musbfsh, u8 epnum)
 			done = (urb->actual_length + xfer_len >=
 				urb->transfer_buffer_length ||
 				dma->actual_len < qh->maxpacket);
+
+		dma->actual_len = 0L;
 
 		/* send IN token for next packet, without AUTOREQ */
 		if (!done) {
@@ -2292,6 +2305,8 @@ static int musbfsh_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,
 		urb->transfer_flags &= ~URB_DMA_MAP_SINGLE;
 	spin_lock_irqsave(&musbfsh->lock, flags);
 
+	init_completion(&urb->done);
+
 	/* add the urb to the ep, return 0 for no error. */
 	ret = usb_hcd_link_urb_to_ep(hcd, urb);
 	qh = ret ? NULL : hep->hcpriv;
@@ -2517,9 +2532,10 @@ static int musbfsh_cleanup_urb(struct urb *urb, struct musbfsh_qh *qh)
 		dma = is_in ? ep->rx_channel : ep->tx_channel;
 		if (dma) {
 			stat = ep->musbfsh->dma_controller->channel_abort(dma);
-			WARNING("abort %cX%d DMA for urb %p --> %d\n",
+			INFO("abort %cX%d DMA for urb %p --> %d\n",
 				is_in ? 'R' : 'T', ep->epnum, urb, stat);
 			urb->actual_length += dma->actual_len;
+			dma->actual_len = 0L;
 		}
 	}
 
@@ -2609,8 +2625,19 @@ static int musbfsh_urb_dequeue(struct usb_hcd *hcd, struct urb *urb, int status)
 				musbfsh_host_free_ep_fifo(musbfsh, qh, is_in);
 			kfree(qh);
 		}
-	} else
+	} else {
+		spin_unlock_irqrestore(&musbfsh->lock, flags);
+		if (is_dma_capable() && is_in && usb_pipeendpoint(urb->pipe)) {
+			ret = wait_for_completion_timeout(&urb->done,
+				msecs_to_jiffies(50));
+			if (ret)
+				return status;
+
+			INFO("wait time out\n");
+		}
+		spin_lock_irqsave(&musbfsh->lock, flags);
 		ret = musbfsh_cleanup_urb(urb, qh);
+	}
 done:
 	spin_unlock_irqrestore(&musbfsh->lock, flags);
 	return ret;

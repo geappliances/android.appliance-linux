@@ -47,6 +47,20 @@
 		#size-cells = <2>;
 		ranges;
 
+		/* 12 MiB reserved for OP-TEE (BL32)
+		 * +-----------------------+ 0x43e0_0000
+		 * |      SHMEM 2MiB       |
+		 * +-----------------------+ 0x43c0_0000
+		 * |        | TA_RAM  8MiB |
+		 * + TZDRAM +--------------+ 0x4340_0000
+		 * |        | TEE_RAM 2MiB |
+		 * +-----------------------+ 0x4320_0000
+		 */
+		optee_reserved: optee@43200000 {
+			no-map;
+			reg = <0 0x43200000 0 0x00c00000>;
+		};
+
 		/* 192 KiB reserved for ARM Trusted Firmware (BL31) */
 		bl31_secmon_reserved: secmon@54600000 {
 			no-map;
@@ -659,6 +673,16 @@
 			#mbox-cells = <3>;
 			clocks = <&infracfg CLK_INFRA_GCE>;
 			clock-names = "gce";
+		};
+
+		vcu: vcu@0 {
+			compatible = "mediatek,mt8183-vcu";
+			mediatek,vcuid = <0>;
+			mediatek,vcuname = "vpu";
+			reg = <0 0x16000000 0 0x40000>,	/* VDEC_BASE */
+			      <0 0x17020000 0 0x1000>,	/* VENC_BASE */
+			      <0 0x19002000 0 0x1000>;	/* VENC_LT_BASE */
+			iommus = <&iommu M4U_PORT_HW_VDEC_MC_EXT>;
 		};
 
 		auxadc: auxadc@11001000 {
@@ -1774,6 +1798,37 @@
 			power-domains = <&scpsys MT8183_POWER_DOMAIN_VDEC>;
 		};
 
+		vcodec_dec: codec@16000000 {
+			compatible = "mediatek,mt8183-vcodec-dec";
+			reg = <0 0x16000000 0 0x1000>,		/* VDEC_SYS */
+			      <0 0x16020000 0 0x1000>,		/* VDEC_MISC */
+			      <0 0x16021000 0 0x800>,		/* VDEC_VLD */
+			      <0 0x16021800 0 0x800>,		/* VDEC_TOP */
+			      <0 0x16022000 0 0x1000>,		/* VDEC_MC */
+			      <0 0x16023000 0 0x1000>,		/* VDEC_AVC_VLD */
+			      <0 0x16024000 0 0x1000>,		/* VDEC_AVC_MV */
+			      <0 0x16025000 0 0x1000>,		/* VDEC_PP */
+			      <0 0x16026800 0 0x800>,		/* VP8_VLD */
+			      <0 0x16027000 0 0x800>,		/* VP6_VD */
+			      <0 0x16027800 0 0x800>,		/* VP8_VLD2 */
+			      <0 0x16028000 0 0x400>,		/* HEVC_VLD */
+			      <0 0x16028400 0 0x400>,		/* VP9_VLD */
+			      <0 0x16030000 0 0x1000>;		/* IMAGE_RESZ */
+			interrupts = <GIC_SPI 250 IRQ_TYPE_LEVEL_LOW>;
+			mediatek,larb = <&larb1>;
+			iommus = <&iommu M4U_PORT_HW_VDEC_MC_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_PP_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_VLD_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_AVC_MV_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_PRED_RD_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_PRED_WR_EXT>,
+				 <&iommu M4U_PORT_HW_VDEC_PPWRAP_EXT>;
+			mediatek,vpu = <&vcu>;
+			power-domains = <&scpsys MT8183_POWER_DOMAIN_VDEC>;
+			clocks = <&vdecsys CLK_VDEC_VDEC>, <&vdecsys CLK_VDEC_VDEC>;
+			clock-names = "vdec_sel", "normal";
+		};
+
 		vencsys: syscon@17000000 {
 			compatible = "mediatek,mt8183-vencsys", "syscon";
 			reg = <0 0x17000000 0 0x1000>;
@@ -1790,6 +1845,24 @@
 			power-domains = <&scpsys MT8183_POWER_DOMAIN_VENC>;
 		};
 
+		vcodec_enc: codec@17020000 {
+			compatible = "mediatek,mt8183-vcodec-enc";
+			reg = <0 0x17020000 0 0x1000>,
+			      <0 0x17000000 0 0x1000>;
+			interrupts = <GIC_SPI 247 IRQ_TYPE_LEVEL_LOW>;
+			mediatek,larb = <&larb4>;
+			iommus = <&iommu M4U_PORT_VENC_REC>,
+				 <&iommu M4U_PORT_VENC_BSDMA>,
+				 <&iommu M4U_PORT_VENC_RD_COMV>,
+				 <&iommu M4U_PORT_VENC_CUR_LUMA>,
+				 <&iommu M4U_PORT_VENC_CUR_CHROMA>,
+				 <&iommu M4U_PORT_VENC_REF_LUMA>,
+				 <&iommu M4U_PORT_VENC_REF_CHROMA>;
+			mediatek,vpu = <&vcu>;
+			power-domains = <&scpsys MT8183_POWER_DOMAIN_VENC>;
+			clocks = <&vencsys CLK_VENC_VENC>;
+			clock-names = "img_venc";
+		};
 
 		ipu_conn: syscon@19000000 {
 			compatible = "mediatek,mt8183-ipu_conn", "syscon";

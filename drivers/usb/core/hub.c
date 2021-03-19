@@ -4680,6 +4680,19 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
 				continue;
 			}
 
+			// Extra reset is required for musbfsh-hdrc on
+			// software reset.
+			if (udev->config && strncmp(driver_name, "musbfsh-hdrc",
+						    strlen(driver_name)) == 0) {
+				dev_info(&udev->dev,
+					"%s %d: extra reset for musbfsh-hdrc\n",
+					__func__, __LINE__);
+				retval = hub_port_reset(hub, port1, udev, delay,
+							false);
+				if (retval < 0) /* error or disconnect */
+					goto fail;
+			}
+
 			/* Retry on all errors; some devices are flakey.
 			 * 255 is for WUSB devices, we actually need to use
 			 * 512 (WUSB1.0[4.8.1]).

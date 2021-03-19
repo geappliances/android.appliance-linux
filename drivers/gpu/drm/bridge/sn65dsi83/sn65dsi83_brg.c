@@ -61,6 +61,12 @@
 
 #define SN65DSI83_LVDS_SIGN           0x19
 #define SN65DSI83_LVDS_TERM           0x1A
+#define CHB_LVDS_TERM		0
+#define CHA_LVDS_TERM		1
+#define CHB_REVERSE_LVDS	4
+#define CHB_REVERSE_LVDS	5
+#define EVEN_ODD_SWAP		6
+
 #define SN65DSI83_LVDS_CM_ADJ         0x1B
 #define SN65DSI83_CHA_LINE_LEN_LO     0x20
 #define SN65DSI83_CHA_LINE_LEN_HI     0x21
@@ -78,15 +84,15 @@
 #define SN65DSI83_CHA_VERT_FRONTPORCH 0x3A
 #define SN65DSI83_CHA_ERR             0xE5
 #define SN65DSI83_TEST_PATTERN        0x3C
-#define SN65DSI83_REG_3D              0x3D
-#define SN65DSI83_REG_3E              0x3E
+#define SN65DSI83_RIGHT_CROP          0x3D
+#define SN65DSI83_LEFT_CROP           0x3E
 
 static int sn65dsi83_brg_power_on(struct sn65dsi83_brg *brg)
 {
 	dev_info(&brg->client->dev, "%s\n", __func__);
 	gpiod_set_value_cansleep(brg->gpio_enable, 1);
 	/* Wait for 1ms for the internal voltage regulator to stabilize */
-	msleep(1);
+	msleep(10);
 
 	return 0;
 }
@@ -123,7 +129,6 @@ static int sn65dsi83_read(struct i2c_client *client, u8 reg)
 {
 	int ret;
 
-	dev_info(&client->dev, "client 0x%p", client);
 	ret = i2c_smbus_read_byte_data(client, reg);
 
 	if (ret < 0) {
@@ -144,14 +149,8 @@ static int sn65dsi83_brg_start_stream(struct sn65dsi83_brg *brg)
 	int regval;
 	struct i2c_client *client = I2C_CLIENT(brg);
 
-	dev_info(&client->dev, "%s\n", __func__);
-	/* Set the PLL_EN bit (CSR 0x0D.0) */
-	SN65DSI83_WRITE(SN65DSI83_PLL_EN, 0x1);
-	/* Wait for the PLL_LOCK bit to be set (CSR 0x0A.7) */
-	msleep(200);
-
-	/* Perform SW reset to apply changes */
-	SN65DSI83_WRITE(SN65DSI83_SOFT_RESET, 0x01);
+	SN65DSI83_WRITE(SN65DSI83_CHA_ERR, 0xFF);
+	msleep(1);
 
 	/* Read CHA Error register */
 	regval = SN65DSI83_READ(SN65DSI83_CHA_ERR);
@@ -215,23 +214,23 @@ static int sn65dsi83_brg_configure(struct sn65dsi83_brg *brg)
 	int regval = 0;
 	struct i2c_client *client = I2C_CLIENT(brg);
 	struct videomode *vm = VM(brg);
+	unsigned int lvds_clk = PIXCLK;
 
 	u32 dsi_clk = (((PIXCLK * BPP(brg)) / DSI_LANES(brg)) >> 1);
 
 	dev_info(&client->dev, "DSI clock [ %u ] Hz\n", dsi_clk);
 	dev_info(&client->dev, "GeoMetry [ %d x %d ] Hz\n", HACTIVE, VACTIVE);
 
-	/* Reset PLL_EN and SOFT_RESET registers */
-	SN65DSI83_WRITE(SN65DSI83_SOFT_RESET, 0x00);
-	SN65DSI83_WRITE(SN65DSI83_PLL_EN, 0x00);
-
 	/* LVDS clock setup */
-	if ((25000000 <= PIXCLK) && (PIXCLK < 37500000))
+	if (CHNUM(brg) == 2)
+		lvds_clk = lvds_clk / 2;
+
+	if ((lvds_clk >= 25000000) && (lvds_clk < 37500000))
 		regval = 0;
 	else
 		regval =
 		    sn65dsi83_calk_clk_range(0x01, 0x05, 37500000, 25000000,
-					     PIXCLK);
+					     lvds_clk);
 
 	if (regval < 0) {
 		dev_err(&client->dev, "failed to configure LVDS clock");
@@ -252,7 +251,7 @@ static int sn65dsi83_brg_configure(struct sn65dsi83_brg *brg)
 	SN65DSI83_WRITE(SN65DSI83_CHA_DSI_CLK_RNG, regval);
 
 	/* DSI clock divider */
-	regval = sn65dsi83_calk_div(0x0, 0x18, 1, 1, dsi_clk, PIXCLK);
+	regval = sn65dsi83_calk_div(0x0, 0x18, 1, 1, dsi_clk, lvds_clk);
 	if (regval < 0) {
 		dev_err(&client->dev, "failed to calculate DSI clock divider");
 		return -EINVAL;
@@ -294,40 +293,48 @@ static int sn65dsi83_brg_configure(struct sn65dsi83_brg *brg)
 			regval |= (1 << CHB_24BPP_FMT1_SHIFT);
 	}
 
-	regval |= (1 << LVDS_LINK_CFG_SHIFT);
+	if (CHNUM(brg) == 1)
+		regval |= (1 << LVDS_LINK_CFG_SHIFT);
 	SN65DSI83_WRITE(SN65DSI83_LVDS_MODE, regval);
 
 	/* Voltage and pins */
 	SN65DSI83_WRITE(SN65DSI83_LVDS_SIGN, 0x00);
-	SN65DSI83_WRITE(SN65DSI83_LVDS_TERM, 0x03);
+
+	regval = 0;
+	regval |= (1 << CHA_LVDS_TERM);
+	if (CHNUM(brg) == 2)
+		regval |= (1 << CHB_LVDS_TERM);
+	if (brg->even_odd_swap)
+		regval |= (1 << EVEN_ODD_SWAP);
+
+	SN65DSI83_WRITE(SN65DSI83_LVDS_TERM, regval);
 	SN65DSI83_WRITE(SN65DSI83_LVDS_CM_ADJ, 0x00);
 
 	/* Configure sync delay to minimal allowed value */
-	SN65DSI83_WRITE(SN65DSI83_CHA_SYNC_DELAY_LO, 0x20);
+	SN65DSI83_WRITE(SN65DSI83_CHA_SYNC_DELAY_LO, 0x21);
 	SN65DSI83_WRITE(SN65DSI83_CHA_SYNC_DELAY_HI, 0x00);
 
 	/* Geometry */
 	SN65DSI83_WRITE(SN65DSI83_CHA_LINE_LEN_LO, LOW(HACTIVE));
 	SN65DSI83_WRITE(SN65DSI83_CHA_LINE_LEN_HI, HIGH(HACTIVE));
-
-	SN65DSI83_WRITE(SN65DSI83_CHA_VERT_LINES_LO, LOW(VACTIVE));
-	SN65DSI83_WRITE(SN65DSI83_CHA_VERT_LINES_HI, HIGH(VACTIVE));
-
-	SN65DSI83_WRITE(SN65DSI83_CHA_HSYNC_WIDTH_LO, LOW(HPW));
-	SN65DSI83_WRITE(SN65DSI83_CHA_HSYNC_WIDTH_HI, HIGH(HPW));
-
+	SN65DSI83_WRITE(SN65DSI83_CHA_HSYNC_WIDTH_LO, LOW(HPW/CHNUM(brg)));
+	SN65DSI83_WRITE(SN65DSI83_CHA_HSYNC_WIDTH_HI, HIGH(HPW/CHNUM(brg)));
 	SN65DSI83_WRITE(SN65DSI83_CHA_VSYNC_WIDTH_LO, LOW(VPW));
 	SN65DSI83_WRITE(SN65DSI83_CHA_VSYNC_WIDTH_HI, HIGH(VPW));
-
-	SN65DSI83_WRITE(SN65DSI83_CHA_HORZ_BACKPORCH, LOW(HBP));
-	SN65DSI83_WRITE(SN65DSI83_CHA_VERT_BACKPORCH, LOW(VBP));
-
-	SN65DSI83_WRITE(SN65DSI83_CHA_HORZ_FRONTPORCH, LOW(HFP));
-	SN65DSI83_WRITE(SN65DSI83_CHA_VERT_FRONTPORCH, LOW(VFP));
+	SN65DSI83_WRITE(SN65DSI83_CHA_HORZ_BACKPORCH, LOW(HBP/CHNUM(brg)));
+	SN65DSI83_WRITE(SN65DSI83_RIGHT_CROP, 0x00);
+	SN65DSI83_WRITE(SN65DSI83_LEFT_CROP, 0x00);
 
 	SN65DSI83_WRITE(SN65DSI83_TEST_PATTERN, 0x00);
-	SN65DSI83_WRITE(SN65DSI83_REG_3D, 0x00);
-	SN65DSI83_WRITE(SN65DSI83_REG_3E, 0x00);
+
+	/* Set the PLL_EN bit (CSR 0x0D.0) */
+	SN65DSI83_WRITE(SN65DSI83_PLL_EN, 0x1);
+	/* Wait for the PLL_LOCK bit to be set (CSR 0x0A.7) */
+	msleep(10);
+
+	/* Perform SW reset to apply changes */
+	SN65DSI83_WRITE(SN65DSI83_SOFT_RESET, 0x01);
+	msleep(10);
 
 	return 0;
 }
@@ -335,7 +342,9 @@ static int sn65dsi83_brg_configure(struct sn65dsi83_brg *brg)
 static int sn65dsi83_brg_setup(struct sn65dsi83_brg *brg)
 {
 	struct i2c_client *client = I2C_CLIENT(brg);
+
 	dev_info(&client->dev, "%s\n", __func__);
+	sn65dsi83_brg_power_off(brg);
 	sn65dsi83_brg_power_on(brg);
 	return sn65dsi83_brg_configure(brg);
 }
@@ -345,6 +354,7 @@ static int sn65dsi83_brg_reset(struct sn65dsi83_brg *brg)
 	/* Soft Reset reg value at power on should be 0x00 */
 	struct i2c_client *client = I2C_CLIENT(brg);
 	int ret = SN65DSI83_READ(SN65DSI83_SOFT_RESET);
+
 	dev_info(&client->dev, "%s\n", __func__);
 	if (ret != 0x00) {
 		dev_err(&client->dev, "Failed to reset the device");

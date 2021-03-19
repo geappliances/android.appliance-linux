@@ -9,6 +9,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/firmware.h>
 #include <linux/gpio.h>
@@ -29,10 +30,12 @@
 #define AP1302_FW_WINDOW_SIZE			0x2000
 #define AP1302_FW_WINDOW_OFFSET			0x8000
 
-#define AP1302_REG_16BIT(n)			((2 << 16) | (n))
-#define AP1302_REG_32BIT(n)			((4 << 16) | (n))
-#define AP1302_REG_SIZE(n)			((n) >> 16)
-#define AP1302_REG_ADDR(n)			((n) & 0xffff)
+#define AP1302_REG_16BIT(n)			((2 << 24) | (n))
+#define AP1302_REG_32BIT(n)			((4 << 24) | (n))
+#define AP1302_REG_SIZE(n)			((n) >> 24)
+#define AP1302_REG_ADDR(n)			((n) & 0x0000ffff)
+#define AP1302_REG_PAGE(n)			((n) & 0x00ff0000)
+#define AP1302_REG_PAGE_MASK			0x00ff0000
 
 /* Info Registers */
 #define AP1302_CHIP_VERSION			AP1302_REG_16BIT(0x0000)
@@ -230,11 +233,90 @@
 #define AP1302_SYS_START_GO			BIT(4)
 #define AP1302_SYS_START_PATCH_FUN		BIT(1)
 #define AP1302_SYS_START_PLL_INIT		BIT(0)
+#define AP1302_DMA_SRC				AP1302_REG_32BIT(0x60a0)
+#define AP1302_DMA_DST				AP1302_REG_32BIT(0x60a4)
+#define AP1302_DMA_SIP_SIPM(n)			((n) << 26)
+#define AP1302_DMA_SIP_DATA_16_BIT		BIT(25)
+#define AP1302_DMA_SIP_ADDR_16_BIT		BIT(24)
+#define AP1302_DMA_SIP_ID(n)			((n) << 17)
+#define AP1302_DMA_SIP_REG(n)			((n) << 0)
+#define AP1302_DMA_SIZE				AP1302_REG_32BIT(0x60a8)
+#define AP1302_DMA_CTRL				AP1302_REG_16BIT(0x60ac)
+#define AP1302_DMA_CTRL_SCH_NORMAL		(0 << 12)
+#define AP1302_DMA_CTRL_SCH_NEXT		(1 << 12)
+#define AP1302_DMA_CTRL_SCH_NOW			(2 << 12)
+#define AP1302_DMA_CTRL_DST_REG			(0 << 8)
+#define AP1302_DMA_CTRL_DST_SRAM		(1 << 8)
+#define AP1302_DMA_CTRL_DST_SPI			(2 << 8)
+#define AP1302_DMA_CTRL_DST_SIP			(3 << 8)
+#define AP1302_DMA_CTRL_SRC_REG			(0 << 4)
+#define AP1302_DMA_CTRL_SRC_SRAM		(1 << 4)
+#define AP1302_DMA_CTRL_SRC_SPI			(2 << 4)
+#define AP1302_DMA_CTRL_SRC_SIP			(3 << 4)
+#define AP1302_DMA_CTRL_MODE_32_BIT		BIT(3)
+#define AP1302_DMA_CTRL_MODE_MASK		(7 << 0)
+#define AP1302_DMA_CTRL_MODE_IDLE		(0 << 0)
+#define AP1302_DMA_CTRL_MODE_SET		(1 << 0)
+#define AP1302_DMA_CTRL_MODE_COPY		(2 << 0)
+#define AP1302_DMA_CTRL_MODE_MAP		(3 << 0)
+#define AP1302_DMA_CTRL_MODE_UNPACK		(4 << 0)
+#define AP1302_DMA_CTRL_MODE_OTP_READ		(5 << 0)
+#define AP1302_DMA_CTRL_MODE_SIP_PROBE		(6 << 0)
 
 /* Misc Registers */
-#define AP1302_REG_ADV_START			AP1302_REG_32BIT(0xe000)
+#define AP1302_REG_ADV_START			0xe000
 #define AP1302_ADVANCED_BASE			AP1302_REG_32BIT(0xf038)
 #define AP1302_SIP_CRC				AP1302_REG_16BIT(0xf052)
+
+/* Advanced System Registers */
+#define AP1302_ADV_IRQ_SYS_INTE			AP1302_REG_32BIT(0x00230000)
+#define AP1302_ADV_IRQ_SYS_INTE_TEST_COUNT	BIT(25)
+#define AP1302_ADV_IRQ_SYS_INTE_HINF_1		BIT(24)
+#define AP1302_ADV_IRQ_SYS_INTE_HINF_0		BIT(23)
+#define AP1302_ADV_IRQ_SYS_INTE_SINF_B_MIPI_L	(7U << 20)
+#define AP1302_ADV_IRQ_SYS_INTE_SINF_B_MIPI	BIT(19)
+#define AP1302_ADV_IRQ_SYS_INTE_SINF_A_MIPI_L	(15U << 14)
+#define AP1302_ADV_IRQ_SYS_INTE_SINF_A_MIPI	BIT(13)
+#define AP1302_ADV_IRQ_SYS_INTE_SINF		BIT(12)
+#define AP1302_ADV_IRQ_SYS_INTE_IPIPE_S		BIT(11)
+#define AP1302_ADV_IRQ_SYS_INTE_IPIPE_B		BIT(10)
+#define AP1302_ADV_IRQ_SYS_INTE_IPIPE_A		BIT(9)
+#define AP1302_ADV_IRQ_SYS_INTE_IP		BIT(8)
+#define AP1302_ADV_IRQ_SYS_INTE_TIMER		BIT(7)
+#define AP1302_ADV_IRQ_SYS_INTE_SIPM		(3U << 6)
+#define AP1302_ADV_IRQ_SYS_INTE_SIPS_ADR_RANGE	BIT(5)
+#define AP1302_ADV_IRQ_SYS_INTE_SIPS_DIRECT_WRITE	BIT(4)
+#define AP1302_ADV_IRQ_SYS_INTE_SIPS_FIFO_WRITE	BIT(3)
+#define AP1302_ADV_IRQ_SYS_INTE_SPI		BIT(2)
+#define AP1302_ADV_IRQ_SYS_INTE_GPIO_CNT	BIT(1)
+#define AP1302_ADV_IRQ_SYS_INTE_GPIO_PIN	BIT(0)
+
+/* Advanced Slave MIPI Registers */
+#define AP1302_ADV_SINF_MIPI_INTERNAL_p_LANE_n_STAT(p, n) \
+	AP1302_REG_32BIT(0x00420008 + (p) * 0x50000 + (n) * 0x20)
+#define AP1302_LANE_ERR_LP_VAL(n)		(((n) >> 30) & 3)
+#define AP1302_LANE_ERR_STATE(n)		(((n) >> 24) & 0xf)
+#define AP1302_LANE_ERR				BIT(18)
+#define AP1302_LANE_ABORT			BIT(17)
+#define AP1302_LANE_LP_VAL(n)			(((n) >> 6) & 3)
+#define AP1302_LANE_STATE(n)			((n) & 0xf)
+#define AP1302_LANE_STATE_STOP_S		0x0
+#define AP1302_LANE_STATE_HS_REQ_S		0x1
+#define AP1302_LANE_STATE_LP_REQ_S		0x2
+#define AP1302_LANE_STATE_HS_S			0x3
+#define AP1302_LANE_STATE_LP_S			0x4
+#define AP1302_LANE_STATE_ESC_REQ_S		0x5
+#define AP1302_LANE_STATE_TURN_REQ_S		0x6
+#define AP1302_LANE_STATE_ESC_S			0x7
+#define AP1302_LANE_STATE_ESC_0			0x8
+#define AP1302_LANE_STATE_ESC_1			0x9
+#define AP1302_LANE_STATE_TURN_S		0xa
+#define AP1302_LANE_STATE_TURN_MARK		0xb
+#define AP1302_LANE_STATE_ERROR_S		0xc
+
+#define AP1302_ADV_CAPTURE_A_FV_CNT		AP1302_REG_32BIT(0x00490040)
+
+struct ap1302_device;
 
 enum ap1302_context {
 	AP1302_CTX_PREVIEW = 0,
@@ -252,15 +334,24 @@ struct ap1302_size {
 	unsigned int height;
 };
 
-struct ap1302_sensor_info {
-	const char *compatible;
+struct ap1302_sensor_supply {
 	const char *name;
+	unsigned int post_delay_us;
+};
+
+struct ap1302_sensor_info {
+	const char *model;
+	const char *name;
+	unsigned int i2c_addr;
 	struct ap1302_size resolution;
-	const char * const *supplies;
+	const struct ap1302_sensor_supply *supplies;
 };
 
 struct ap1302_sensor {
-	const struct ap1302_sensor_info *info;
+	struct ap1302_device *ap1302;
+	unsigned int index;
+
+	struct device_node *of_node;
 	struct device *dev;
 	unsigned int num_supplies;
 	struct regulator_bulk_data *supplies;
@@ -275,6 +366,7 @@ struct ap1302_device {
 	struct clk *clock;
 	struct regmap *regmap16;
 	struct regmap *regmap32;
+	u32 reg_page;
 
 	const struct firmware *fw;
 
@@ -289,7 +381,14 @@ struct ap1302_device {
 
 	struct v4l2_ctrl_handler ctrls;
 
+	const struct ap1302_sensor_info *sensor_info;
 	struct ap1302_sensor sensors[2];
+
+	struct {
+		struct dentry *dir;
+		struct mutex lock;
+		u32 sipm_addr;
+	} debugfs;
 };
 
 static inline struct ap1302_device *to_ap1302(struct v4l2_subdev *sd)
@@ -342,29 +441,39 @@ static const struct ap1302_size ap1302_sizes[] = {
 
 static const struct ap1302_sensor_info ap1302_sensor_info[] = {
 	{
-		.compatible = "onnn,ar0144",
-		.name = "ar0114",
-		.resolution = { 2560, 800 },
-	}, {
-		.compatible = "onnn,ar0330",
-		.name = "ar0330",
-		.resolution = { 2304, 1536 },
-		.supplies = (const char * const[]) {
-			"vddpll",
-			"vaa",
-			"vddio",
-			NULL,
+		.model = "onnn,ar0144",
+		.name = "ar0144",
+		.i2c_addr = 0x10,
+		.resolution = { 1280, 800 },
+		.supplies = (const struct ap1302_sensor_supply[]) {
+			{ "vaa", 0 },
+			{ "vddio", 0 },
+			{ "vdd", 0 },
+			{ NULL, 0 },
 		},
 	}, {
-		.compatible = "onnn,ar1335",
+		.model = "onnn,ar0330",
+		.name = "ar0330",
+		.i2c_addr = 0x10,
+		.resolution = { 2304, 1536 },
+		.supplies = (const struct ap1302_sensor_supply[]) {
+			{ "vddpll", 0 },
+			{ "vaa", 0 },
+			{ "vdd", 0 },
+			{ "vddio", 0 },
+			{ NULL, 0 },
+		},
+	}, {
+		.model = "onnn,ar1335",
 		.name = "ar1335",
-		.resolution = { 1920, 1080 },
+		.i2c_addr = 0x36,
+		.resolution = { 4208, 3120 },
 	},
 };
 
-static const struct ap1302_sensor_info ap1302_sensor_info_none = {
-	.compatible = "",
-	.name = "none",
+static const struct ap1302_sensor_info ap1302_sensor_info_tpg = {
+	.model = "",
+	.name = "tpg",
 	.resolution = { 1920, 1080 },
 };
 
@@ -390,7 +499,71 @@ static const struct regmap_config ap1302_reg32_config = {
 	.cache_type = REGCACHE_NONE,
 };
 
-static int ap1302_read(struct ap1302_device *ap1302, u32 reg, u32 *val)
+static int __ap1302_write(struct ap1302_device *ap1302, u32 reg, u32 val)
+{
+	unsigned int size = AP1302_REG_SIZE(reg);
+	u16 addr = AP1302_REG_ADDR(reg);
+	int ret;
+
+	switch (size) {
+	case 2:
+		ret = regmap_write(ap1302->regmap16, addr, val);
+		break;
+	case 4:
+		ret = regmap_write(ap1302->regmap32, addr, val);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (ret) {
+		dev_err(ap1302->dev, "%s: register 0x%04x %s failed: %d\n",
+			__func__, addr, "write", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int ap1302_write(struct ap1302_device *ap1302, u32 reg, u32 val)
+{
+	u32 page = AP1302_REG_PAGE(reg);
+	int ret;
+
+	if (page) {
+		if (ap1302->reg_page != page) {
+			ret = ap1302_write(ap1302, AP1302_ADVANCED_BASE, page);
+			if (ret < 0)
+				return ret;
+
+			ap1302->reg_page = page;
+		}
+
+		reg &= ~AP1302_REG_PAGE_MASK;
+		reg += AP1302_REG_ADV_START;
+	}
+
+	return __ap1302_write(ap1302, reg, val);
+}
+
+static int ap1302_write_ctx(struct ap1302_device *ap1302,
+			    enum ap1302_context ctx, u32 reg, u32 val)
+{
+	/*
+	 * The snapshot context is missing the S1_SENSOR_MODE register,
+	 * shifting all the addresses for the registers that come after it.
+	 */
+	if (ctx == AP1302_CTX_SNAPSHOT) {
+		if (AP1302_REG_ADDR(reg) >= AP1302_CTX_S1_SENSOR_MODE)
+			reg -= 2;
+	}
+
+	reg += ctx * AP1302_CTX_OFFSET;
+
+	return ap1302_write(ap1302, reg, val);
+}
+
+static int __ap1302_read(struct ap1302_device *ap1302, u32 reg, u32 *val)
 {
 	unsigned int size = AP1302_REG_SIZE(reg);
 	u16 addr = AP1302_REG_ADDR(reg);
@@ -419,47 +592,311 @@ static int ap1302_read(struct ap1302_device *ap1302, u32 reg, u32 *val)
 	return 0;
 }
 
-static int ap1302_write(struct ap1302_device *ap1302, u32 reg, u32 val)
+static int ap1302_read(struct ap1302_device *ap1302, u32 reg, u32 *val)
 {
-	unsigned int size = AP1302_REG_SIZE(reg);
-	u16 addr = AP1302_REG_ADDR(reg);
+	u32 page = AP1302_REG_PAGE(reg);
 	int ret;
 
-	switch (size) {
-	case 2:
-		ret = regmap_write(ap1302->regmap16, addr, val);
-		break;
-	case 4:
-		ret = regmap_write(ap1302->regmap32, addr, val);
-		break;
-	default:
-		return -EINVAL;
+	if (page) {
+		if (ap1302->reg_page != page) {
+			ret = ap1302_write(ap1302, AP1302_ADVANCED_BASE, page);
+			if (ret < 0)
+				return ret;
+
+			ap1302->reg_page = page;
+		}
+
+		reg &= ~AP1302_REG_PAGE_MASK;
+		reg += AP1302_REG_ADV_START;
 	}
 
-	if (ret) {
-		dev_err(ap1302->dev, "%s: register 0x%04x %s failed: %d\n",
-			__func__, addr, "write", ret);
-		return ret;
+	return __ap1302_read(ap1302, reg, val);
+}
+
+/* -----------------------------------------------------------------------------
+ * Sensor Registers Access
+ *
+ * Read and write sensor registers through the AP1302 DMA interface.
+ */
+
+static int ap1302_dma_wait_idle(struct ap1302_device *ap1302)
+{
+	unsigned int i;
+	u32 ctrl;
+	int ret;
+
+	for (i = 50; i > 0; i--) {
+		ret = ap1302_read(ap1302, AP1302_DMA_CTRL, &ctrl);
+		if (ret < 0)
+			return ret;
+
+		if ((ctrl & AP1302_DMA_CTRL_MODE_MASK) ==
+		    AP1302_DMA_CTRL_MODE_IDLE)
+			break;
+
+		usleep_range(1000, 1500);
+	}
+
+	if (!i) {
+		dev_err(ap1302->dev, "DMA timeout\n");
+		return -ETIMEDOUT;
 	}
 
 	return 0;
 }
 
-static int ap1302_write_ctx(struct ap1302_device *ap1302,
-			    enum ap1302_context ctx, u32 reg, u32 val)
+static int ap1302_sipm_read(struct ap1302_device *ap1302, unsigned int port,
+			    u32 reg, u32 *val)
 {
+	unsigned int size = AP1302_REG_SIZE(reg);
+	u32 src;
+	int ret;
+
+	if (size > 2)
+		return -EINVAL;
+
+	ret = ap1302_dma_wait_idle(ap1302);
+	if (ret < 0)
+		return ret;
+
+	ret = ap1302_write(ap1302, AP1302_DMA_SIZE, size);
+	if (ret < 0)
+		return ret;
+
+	src = AP1302_DMA_SIP_SIPM(port)
+	    | (size == 2 ? AP1302_DMA_SIP_DATA_16_BIT : 0)
+	    | AP1302_DMA_SIP_ADDR_16_BIT
+	    | AP1302_DMA_SIP_ID(ap1302->sensor_info->i2c_addr)
+	    | AP1302_DMA_SIP_REG(AP1302_REG_ADDR(reg));
+	ret = ap1302_write(ap1302, AP1302_DMA_SRC, src);
+	if (ret < 0)
+		return ret;
+
 	/*
-	 * The snapshot context is missing the S1_SENSOR_MODE register,
-	 * shifting all the addresses for the registers that come after it.
+	 * Use the AP1302_DMA_DST register as both the destination address, and
+	 * the scratch pad to store the read value.
 	 */
-	if (ctx == AP1302_CTX_SNAPSHOT) {
-		if (AP1302_REG_ADDR(reg) >= AP1302_CTX_S1_SENSOR_MODE)
-			reg -= 2;
+	ret = ap1302_write(ap1302, AP1302_DMA_DST,
+			   AP1302_REG_ADDR(AP1302_DMA_DST));
+	if (ret < 0)
+		return ret;
+
+	ret = ap1302_write(ap1302, AP1302_DMA_CTRL,
+			   AP1302_DMA_CTRL_SCH_NORMAL |
+			   AP1302_DMA_CTRL_DST_REG |
+			   AP1302_DMA_CTRL_SRC_SIP |
+			   AP1302_DMA_CTRL_MODE_COPY);
+	if (ret < 0)
+		return ret;
+
+	ret = ap1302_dma_wait_idle(ap1302);
+	if (ret < 0)
+		return ret;
+
+	ret = ap1302_read(ap1302, AP1302_DMA_DST, val);
+	if (ret < 0)
+		return ret;
+
+	/*
+	 * The value is stored in big-endian at the DMA_DST address. The regmap
+	 * uses big-endian, so 8-bit values are stored in bits 31:24 and 16-bit
+	 * values in bits 23:16.
+	 */
+	*val >>= 32 - size * 8;
+
+	return 0;
+}
+
+static int ap1302_sipm_write(struct ap1302_device *ap1302, unsigned int port,
+			     u32 reg, u32 val)
+{
+	unsigned int size = AP1302_REG_SIZE(reg);
+	u32 dst;
+	int ret;
+
+	if (size > 2)
+		return -EINVAL;
+
+	ret = ap1302_dma_wait_idle(ap1302);
+	if (ret < 0)
+		return ret;
+
+	ret = ap1302_write(ap1302, AP1302_DMA_SIZE, size);
+	if (ret < 0)
+		return ret;
+
+	/*
+	 * Use the AP1302_DMA_SRC register as both the source address, and the
+	 * scratch pad to store the write value.
+	 *
+	 * As the AP1302 uses big endian, to store the value at address DMA_SRC
+	 * it must be written in the high order bits of the registers. However,
+	 * 8-bit values seem to be incorrectly handled by the AP1302, which
+	 * expects them to be stored at DMA_SRC + 1 instead of DMA_SRC. The
+	 * value is thus unconditionally shifted by 16 bits, unlike for DMA
+	 * reads.
+	 */
+	ret = ap1302_write(ap1302, AP1302_DMA_SRC,
+			   (val << 16) | AP1302_REG_ADDR(AP1302_DMA_SRC));
+	if (ret < 0)
+		return ret;
+
+	dst = AP1302_DMA_SIP_SIPM(port)
+	    | (size == 2 ? AP1302_DMA_SIP_DATA_16_BIT : 0)
+	    | AP1302_DMA_SIP_ADDR_16_BIT
+	    | AP1302_DMA_SIP_ID(ap1302->sensor_info->i2c_addr)
+	    | AP1302_DMA_SIP_REG(AP1302_REG_ADDR(reg));
+	ret = ap1302_write(ap1302, AP1302_DMA_DST, dst);
+	if (ret < 0)
+		return ret;
+
+	ret = ap1302_write(ap1302, AP1302_DMA_CTRL,
+			   AP1302_DMA_CTRL_SCH_NORMAL |
+			   AP1302_DMA_CTRL_DST_SIP |
+			   AP1302_DMA_CTRL_SRC_REG |
+			   AP1302_DMA_CTRL_MODE_COPY);
+	if (ret < 0)
+		return ret;
+
+	ret = ap1302_dma_wait_idle(ap1302);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
+/* -----------------------------------------------------------------------------
+ * Debugfs
+ */
+
+static int ap1302_sipm_addr_get(void *arg, u64 *val)
+{
+	struct ap1302_device *ap1302 = arg;
+
+	mutex_lock(&ap1302->debugfs.lock);
+	*val = ap1302->debugfs.sipm_addr;
+	mutex_unlock(&ap1302->debugfs.lock);
+
+	return 0;
+}
+
+static int ap1302_sipm_addr_set(void *arg, u64 val)
+{
+	struct ap1302_device *ap1302 = arg;
+
+	if (val & ~0x8700ffff)
+		return -EINVAL;
+
+	switch ((val >> 24) & 7) {
+	case 1:
+	case 2:
+		break;
+	default:
+		return -EINVAL;
 	}
 
-	reg += ctx * AP1302_CTX_OFFSET;
+	mutex_lock(&ap1302->debugfs.lock);
+	ap1302->debugfs.sipm_addr = val;
+	mutex_unlock(&ap1302->debugfs.lock);
 
-	return ap1302_write(ap1302, reg, val);
+	return 0;
+}
+
+static int ap1302_sipm_data_get(void *arg, u64 *val)
+{
+	struct ap1302_device *ap1302 = arg;
+	u32 value;
+	u32 addr;
+	int ret;
+
+	mutex_lock(&ap1302->debugfs.lock);
+
+	addr = ap1302->debugfs.sipm_addr;
+	if (!addr) {
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	ret = ap1302_sipm_read(ap1302, addr >> 30, addr & ~BIT(31),
+			       &value);
+	if (!ret)
+		*val = value;
+
+unlock:
+	mutex_unlock(&ap1302->debugfs.lock);
+
+	return ret;
+}
+
+static int ap1302_sipm_data_set(void *arg, u64 val)
+{
+	struct ap1302_device *ap1302 = arg;
+	u32 addr;
+	int ret;
+
+	mutex_lock(&ap1302->debugfs.lock);
+
+	addr = ap1302->debugfs.sipm_addr;
+	if (!addr) {
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	ret = ap1302_sipm_write(ap1302, addr >> 30, addr & ~BIT(31),
+				val);
+
+unlock:
+	mutex_unlock(&ap1302->debugfs.lock);
+
+	return ret;
+}
+
+/*
+ * The sipm_addr and sipm_data attributes expose access to the sensor I2C bus.
+ *
+ * To read or write a register, sipm_addr has to first be written with the
+ * register address. The address is a 32-bit integer formatted as follows.
+ *
+ * I000 0SSS 0000 0000 RRRR RRRR RRRR RRRR
+ *
+ * I: SIPM index (0 or 1)
+ * S: Size (1: 8-bit, 2: 16-bit)
+ * R: Register address (16-bit)
+ *
+ * The sipm_data attribute can then be read to read the register value, or
+ * written to write it.
+ */
+
+DEFINE_DEBUGFS_ATTRIBUTE(ap1302_sipm_addr_fops, ap1302_sipm_addr_get,
+			 ap1302_sipm_addr_set, "0x%08llx\n");
+DEFINE_DEBUGFS_ATTRIBUTE(ap1302_sipm_data_fops, ap1302_sipm_data_get,
+			 ap1302_sipm_data_set, "0x%08llx\n");
+
+static void ap1302_debugfs_init(struct ap1302_device *ap1302)
+{
+	struct dentry *dir;
+	char name[16];
+
+	mutex_init(&ap1302->debugfs.lock);
+
+	snprintf(name, sizeof(name), "ap1302.%s", dev_name(ap1302->dev));
+
+	dir = debugfs_create_dir(name, NULL);
+	if (IS_ERR(dir))
+		return;
+
+	ap1302->debugfs.dir = dir;
+
+	debugfs_create_file_unsafe("sipm_addr", 0600, ap1302->debugfs.dir,
+				   ap1302, &ap1302_sipm_addr_fops);
+	debugfs_create_file_unsafe("sipm_data", 0600, ap1302->debugfs.dir,
+				   ap1302, &ap1302_sipm_data_fops);
+}
+
+static void ap1302_debugfs_cleanup(struct ap1302_device *ap1302)
+{
+	debugfs_remove_recursive(ap1302->debugfs.dir);
+	mutex_destroy(&ap1302->debugfs.lock);
 }
 
 /* -----------------------------------------------------------------------------
@@ -468,27 +905,46 @@ static int ap1302_write_ctx(struct ap1302_device *ap1302,
 
 static int ap1302_power_on_sensors(struct ap1302_device *ap1302)
 {
-	unsigned int i;
+	struct ap1302_sensor *sensor;
+	unsigned int i, j;
 	int ret;
 
-	for (i = 0; i < ARRAY_SIZE(ap1302->sensors); ++i) {
-		struct ap1302_sensor *sensor = &ap1302->sensors[i];
+	if (!ap1302->sensor_info->supplies)
+		return 0;
 
-		ret = regulator_bulk_enable(sensor->num_supplies,
-					    sensor->supplies);
-		if (ret) {
-			dev_err(ap1302->dev,
-				"Failed to enable supplies for sensor %u\n", i);
-			goto error;
+	for (i = 0; i < ARRAY_SIZE(ap1302->sensors); ++i) {
+		sensor = &ap1302->sensors[i];
+		ret = 0;
+
+		for (j = 0; j < sensor->num_supplies; ++j) {
+			unsigned int delay;
+
+			/*
+			 * We can't use regulator_bulk_enable() as it would
+			 * enable all supplies in parallel, breaking the sensor
+			 * power sequencing constraints.
+			 */
+			ret = regulator_enable(sensor->supplies[j].consumer);
+			if (ret < 0) {
+				dev_err(ap1302->dev,
+					"Failed to enable supply %u for sensor %u\n",
+					j, i);
+				goto error;
+			}
+
+			delay = ap1302->sensor_info->supplies[j].post_delay_us;
+			usleep_range(delay, delay + 100);
 		}
 	}
 
 	return 0;
 
 error:
-	for (; i > 0; --i) {
-		struct ap1302_sensor *sensor = &ap1302->sensors[i - 1];
+	for (; j > 0; --j)
+		regulator_disable(sensor->supplies[j - 1].consumer);
 
+	for (; i > 0; --i) {
+		sensor = &ap1302->sensors[i - 1];
 		regulator_bulk_disable(sensor->num_supplies, sensor->supplies);
 	}
 
@@ -498,6 +954,9 @@ error:
 static void ap1302_power_off_sensors(struct ap1302_device *ap1302)
 {
 	unsigned int i;
+
+	if (!ap1302->sensor_info->supplies)
+		return;
 
 	for (i = 0; i < ARRAY_SIZE(ap1302->sensors); ++i) {
 		struct ap1302_sensor *sensor = &ap1302->sensors[i];
@@ -596,7 +1055,7 @@ static int ap1302_dump_console(struct ap1302_device *ap1302)
 
 	buffer[AP1302_CON_BUF_SIZE] = '\0';
 
-	for (p = buffer; p < buffer + AP1302_CON_BUF_SIZE; p = endp + 1) {
+	for (p = buffer; p < buffer + AP1302_CON_BUF_SIZE && *p; p = endp + 1) {
 		endp = strchrnul(p, '\n');
 		*endp = '\0';
 
@@ -654,11 +1113,9 @@ static int ap1302_stall(struct ap1302_device *ap1302, bool stall)
 
 		msleep(200);
 
-		ret = ap1302_write(ap1302, AP1302_ADVANCED_BASE, 0x00230000);
-		if (ret < 0)
-			return ret;
-
-		ret = ap1302_write(ap1302, AP1302_REG_ADV_START, 0x000000c8);
+		ret = ap1302_write(ap1302, AP1302_ADV_IRQ_SYS_INTE,
+				   AP1302_ADV_IRQ_SYS_INTE_SIPM |
+				   AP1302_ADV_IRQ_SYS_INTE_SIPS_FIFO_WRITE);
 		if (ret < 0)
 			return ret;
 
@@ -896,7 +1353,7 @@ static int ap1302_init_cfg(struct v4l2_subdev *sd,
 	u32 which = cfg ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
 	struct ap1302_device *ap1302 = to_ap1302(sd);
 	const struct ap1302_size *sensor_resolution =
-		&ap1302->sensors[0].info->resolution;
+		&ap1302->sensor_info->resolution;
 	struct v4l2_mbus_framefmt *format;
 	int i;
 
@@ -951,8 +1408,8 @@ static int ap1302_enum_frame_size(struct v4l2_subdev *sd,
 		return -EINVAL;
 
 	size = &ap1302_sizes[fse->index];
-	if (size->width > ap1302->sensors[0].info->resolution.width ||
-	    size->height > ap1302->sensors[0].info->resolution.height)
+	if (size->width > ap1302->sensor_info->resolution.width ||
+	    size->height > ap1302->sensor_info->resolution.height)
 		return -EINVAL;
 
 	/* Validate the media bus code. */
@@ -992,7 +1449,7 @@ static void ap1302_find_best_size(struct ap1302_device *ap1302,
 				  u32 *width, u32 *height)
 {
 	const struct ap1302_size *sensor_resolution =
-		&ap1302->sensors[0].info->resolution;
+		&ap1302->sensor_info->resolution;
 	const struct ap1302_size *best_size;
 	unsigned int best_score = UINT_MAX;
 	unsigned int i;
@@ -1010,8 +1467,8 @@ static void ap1302_find_best_size(struct ap1302_device *ap1302,
 		 * function.
 		 */
 		score = *width * *height + size->width * size->height
-		      - 2 * abs(min(size->width, *width) *
-				min(size->height, *height));
+		      - 2 * min(size->width, *width) *
+			    min(size->height, *height);
 
 		if (score < best_score) {
 			best_score = score;
@@ -1137,9 +1594,125 @@ static const char * const ap1302_warnings[] = {
 	"FRAME_LOST",
 };
 
+static const char * const ap1302_lane_states[] = {
+	"stop_s",
+	"hs_req_s",
+	"lp_req_s",
+	"hs_s",
+	"lp_s",
+	"esc_req_s",
+	"turn_req_s",
+	"esc_s",
+	"esc_0",
+	"esc_1",
+	"turn_s",
+	"turn_mark",
+	"error_s",
+};
+
+static void ap1302_log_lane_state(struct ap1302_sensor *sensor,
+				  unsigned int index)
+{
+	static const char *lp_states[] = {
+		"00", "10", "01", "11",
+	};
+
+	unsigned int counts[4][ARRAY_SIZE(ap1302_lane_states)];
+	unsigned int samples = 0;
+	unsigned int lane;
+	unsigned int i;
+	u32 first[4] = { 0, };
+	u32 last[4] = { 0, };
+	int ret;
+
+	memset(counts, 0, sizeof(counts));
+
+	for (i = 0; i < 1000; ++i) {
+		u32 values[4];
+
+		/*
+		 * Read the state of all lanes and skip read errors and invalid
+		 * values.
+		 */
+		for (lane = 0; lane < 4; ++lane) {
+			ret = ap1302_read(sensor->ap1302,
+					  AP1302_ADV_SINF_MIPI_INTERNAL_p_LANE_n_STAT(index, lane),
+					  &values[lane]);
+			if (ret < 0)
+				break;
+
+			if (AP1302_LANE_STATE(values[lane]) >=
+			    ARRAY_SIZE(ap1302_lane_states)) {
+				ret = -EINVAL;
+				break;
+			}
+		}
+
+		if (ret < 0)
+			continue;
+
+		/* Accumulate the samples and save the first and last states. */
+		for (lane = 0; lane < 4; ++lane)
+			counts[lane][AP1302_LANE_STATE(values[lane])]++;
+
+		if (!samples)
+			memcpy(first, values, sizeof(first));
+		memcpy(last, values, sizeof(last));
+
+		samples++;
+	}
+
+	if (!samples)
+		return;
+
+	/*
+	 * Print the LP state from the first sample, the error state from the
+	 * last sample, and the states accumulators for each lane.
+	 */
+	for (lane = 0; lane < 4; ++lane) {
+		u32 state = last[lane];
+		char error_msg[25] = "";
+
+		if (state & (AP1302_LANE_ERR | AP1302_LANE_ABORT)) {
+			unsigned int err = AP1302_LANE_ERR_STATE(state);
+			const char *err_state = NULL;
+
+			err_state = err < ARRAY_SIZE(ap1302_lane_states)
+				  ? ap1302_lane_states[err] : "INVALID";
+
+			snprintf(error_msg, sizeof(error_msg), "ERR (%s%s) %s LP%s",
+				 state & AP1302_LANE_ERR ? "E" : "",
+				 state & AP1302_LANE_ABORT ? "A" : "",
+				 err_state,
+				 lp_states[AP1302_LANE_ERR_LP_VAL(state)]);
+		}
+
+		dev_info(sensor->ap1302->dev, "SINF%u L%u state: LP%s %s",
+			 index, lane, lp_states[AP1302_LANE_LP_VAL(first[lane])],
+			 error_msg);
+
+		for (i = 0; i < ARRAY_SIZE(ap1302_lane_states); ++i) {
+			if (counts[lane][i])
+				printk(KERN_CONT " %s:%u",
+				       ap1302_lane_states[i],
+				       counts[lane][i]);
+		}
+		printk(KERN_CONT "\n");
+	}
+
+	/* Reset the error flags. */
+	for (lane = 0; lane < 4; ++lane)
+		ap1302_write(sensor->ap1302,
+			     AP1302_ADV_SINF_MIPI_INTERNAL_p_LANE_n_STAT(index, lane),
+			     AP1302_LANE_ERR | AP1302_LANE_ABORT);
+}
+
 static int ap1302_log_status(struct v4l2_subdev *sd)
 {
 	struct ap1302_device *ap1302 = to_ap1302(sd);
+	u16 frame_count_icp;
+	u16 frame_count_brac;
+	u16 frame_count_hinf;
 	u32 warning[4];
 	u32 error[3];
 	unsigned int i;
@@ -1201,8 +1774,28 @@ static int ap1302_log_status(struct v4l2_subdev *sd)
 	if (ret < 0)
 		return ret;
 
-	dev_info(ap1302->dev, "Frame counters: HINF %u, BRAC %u\n",
-		 value >> 8, value & 0xff);
+	frame_count_hinf = value >> 8;
+	frame_count_brac = value & 0xff;
+
+	ret = ap1302_read(ap1302, AP1302_ADV_CAPTURE_A_FV_CNT, &value);
+	if (ret < 0)
+		return ret;
+
+	frame_count_icp = value & 0xffff;
+
+	dev_info(ap1302->dev, "Frame counters: ICP %u, HINF %u, BRAC %u\n",
+		 frame_count_icp, frame_count_hinf, frame_count_brac);
+
+	
+	/* Sample the lane state. */
+	for (i = 0; i < ARRAY_SIZE(ap1302->sensors); ++i) {
+		struct ap1302_sensor *sensor = &ap1302->sensors[i];
+
+		if (!sensor->ap1302)
+			continue;
+
+		ap1302_log_lane_state(sensor, i);
+	}
 
 	return 0;
 }
@@ -1234,19 +1827,150 @@ static const struct v4l2_subdev_ops ap1302_subdev_ops = {
 };
 
 /* -----------------------------------------------------------------------------
+ * Sensor
+ */
+
+static int ap1302_sensor_parse_of(struct ap1302_device *ap1302,
+				  struct device_node *node)
+{
+	struct ap1302_sensor *sensor;
+	u32 reg;
+	int ret;
+
+	/* Retrieve the sensor index from the reg property. */
+	ret = of_property_read_u32(node, "reg", &reg);
+	if (ret < 0) {
+		dev_warn(ap1302->dev,
+			 "'reg' property missing in sensor node\n");
+		return -EINVAL;
+	}
+
+	if (reg >= ARRAY_SIZE(ap1302->sensors)) {
+		dev_warn(ap1302->dev, "Out-of-bounds 'reg' value %u\n",
+			 reg);
+		return -EINVAL;
+	}
+
+	sensor = &ap1302->sensors[reg];
+	if (sensor->ap1302) {
+		dev_warn(ap1302->dev, "Duplicate entry for sensor %u\n", reg);
+		return -EINVAL;
+	}
+
+	sensor->ap1302 = ap1302;
+	sensor->of_node = of_node_get(node);
+
+	return 0;
+}
+
+static void ap1302_sensor_dev_release(struct device *dev)
+{
+	of_node_put(dev->of_node);
+	kfree(dev);
+}
+
+static int ap1302_sensor_init(struct ap1302_sensor *sensor, unsigned int index)
+{
+	struct ap1302_device *ap1302 = sensor->ap1302;
+	unsigned int i;
+	int ret;
+
+	sensor->index = index;
+
+	/*
+	 * Register a device for the sensor, to support usage of the regulator
+	 * API.
+	 */
+	sensor->dev = kzalloc(sizeof(*sensor->dev), GFP_KERNEL);
+	if (!sensor->dev)
+		return -ENOMEM;
+
+	sensor->dev->parent = ap1302->dev;
+	sensor->dev->of_node = of_node_get(sensor->of_node);
+	sensor->dev->release = &ap1302_sensor_dev_release;
+	dev_set_name(sensor->dev, "%s-%s.%u", dev_name(ap1302->dev),
+		     ap1302->sensor_info->name, index);
+
+	ret = device_register(sensor->dev);
+	if (ret < 0) {
+		dev_err(ap1302->dev,
+			"Failed to register device for sensor %u\n", index);
+		goto error;
+	}
+
+	/* Retrieve the power supplies for the sensor, if any. */
+	if (ap1302->sensor_info->supplies) {
+		const struct ap1302_sensor_supply *supplies =
+			ap1302->sensor_info->supplies;
+		unsigned int num_supplies;
+
+		for (num_supplies = 0; supplies[num_supplies].name; ++num_supplies)
+			;
+
+		sensor->supplies = devm_kcalloc(ap1302->dev, num_supplies,
+						sizeof(*sensor->supplies),
+						GFP_KERNEL);
+		if (!sensor->supplies) {
+			ret = -ENOMEM;
+			goto error;
+		}
+
+		for (i = 0; i < num_supplies; ++i)
+			sensor->supplies[i].supply = supplies[i].name;
+
+		ret = regulator_bulk_get(sensor->dev, num_supplies,
+					 sensor->supplies);
+		if (ret < 0) {
+			dev_err(ap1302->dev,
+				"Failed to get supplies for sensor %u\n", index);
+			goto error;
+		}
+
+		sensor->num_supplies = i;
+	}
+
+	return 0;
+
+error:
+	put_device(sensor->dev);
+	return ret;
+}
+
+static void ap1302_sensor_cleanup(struct ap1302_sensor *sensor)
+{
+	if (sensor->num_supplies)
+		regulator_bulk_free(sensor->num_supplies, sensor->supplies);
+
+	put_device(sensor->dev);
+	of_node_put(sensor->of_node);
+}
+
+/* -----------------------------------------------------------------------------
  * Boot & Firmware Handling
  */
 
 static int ap1302_request_firmware(struct ap1302_device *ap1302)
 {
+	static const char * const suffixes[] = {
+		"",
+		"_single",
+		"_dual",
+	};
+
 	const struct ap1302_firmware_header *fw_hdr;
+	unsigned int num_sensors;
 	unsigned int fw_size;
+	unsigned int i;
 	char name[64];
 	int ret;
 
-	ret = snprintf(name, sizeof(name), "ap1302_%s_%s_fw.bin",
-		       ap1302->sensors[0].info->name,
-		       ap1302->sensors[1].info->name);
+	for (i = 0, num_sensors = 0; i < ARRAY_SIZE(ap1302->sensors); ++i) {
+		if (ap1302->sensors[i].dev)
+			num_sensors++;
+	}
+
+	ret = snprintf(name, sizeof(name), "ap1302_%s%s_fw.bin",
+		       ap1302->sensor_info->name, suffixes[num_sensors]);
 	if (ret >= sizeof(name)) {
 		dev_err(ap1302->dev, "Firmware name too long\n");
 		return -EINVAL;
@@ -1457,7 +2181,7 @@ static int ap1302_hw_init(struct ap1302_device *ap1302)
 		dev_err(ap1302->dev,
 			"Firmware load retries exceeded, aborting\n");
 		ret = -ETIMEDOUT;
-		goto error_power;
+		goto error_power_sensors;
 	}
 
 	return 0;
@@ -1533,116 +2257,14 @@ error_media:
 	return ret;
 }
 
-static void ap1302_sensor_dev_release(struct device *dev)
-{
-	kfree(dev);
-}
-
-static int ap1302_parse_of_sensor(struct ap1302_device *ap1302,
-				  struct device_node *node)
-{
-	struct ap1302_sensor *sensor;
-	const char *compat;
-	unsigned int i;
-	u32 reg;
-	int ret;
-
-	/*
-	 * Retrieve the sensor index and model from the reg property and
-	 * compatible properties.
-	 */
-	ret = of_property_read_u32(node, "reg", &reg);
-	if (ret < 0) {
-		dev_warn(ap1302->dev,
-			 "'reg' property missing in sensor node\n");
-		return -EINVAL;
-	}
-
-	if (reg >= ARRAY_SIZE(ap1302->sensors)) {
-		dev_warn(ap1302->dev, "Out-of-bounds 'reg' value %u\n",
-			 reg);
-		return -EINVAL;
-	}
-
-	sensor = &ap1302->sensors[reg];
-
-	ret = of_property_read_string(node, "compatible", &compat);
-	if (ret < 0)
-		return 0;
-
-	for (i = 0; i < ARRAY_SIZE(ap1302_sensor_info); ++i) {
-		const struct ap1302_sensor_info *info =
-			&ap1302_sensor_info[i];
-
-		if (!strcmp(info->compatible, compat)) {
-			sensor->info = info;
-			break;
-		}
-	}
-
-	if (sensor->info == &ap1302_sensor_info_none) {
-		dev_warn(ap1302->dev, "Unsupported sensor %s, ignoring\n",
-			 compat);
-		return -EINVAL;
-	}
-
-	/*
-	 * Register a device for the sensor, to support usage of the regulator
-	 * API.
-	 */
-	sensor->dev = kzalloc(sizeof(*sensor->dev), GFP_KERNEL);
-	if (!sensor->dev)
-		return -ENOMEM;
-
-	sensor->dev->parent = ap1302->dev;
-	sensor->dev->of_node = node;
-	sensor->dev->release = &ap1302_sensor_dev_release;
-	dev_set_name(sensor->dev, "%s-%s.%u", dev_name(ap1302->dev),
-		     sensor->info->name, reg);
-
-	ret = device_register(sensor->dev);
-	if (ret < 0) {
-		dev_err(ap1302->dev,
-			"Failed to register device for sensor %u\n", reg);
-		return ret;
-	}
-
-	/* Retrieve the power supplies for the sensor, if any. */
-	if (sensor->info->supplies) {
-		unsigned int num_supplies;
-
-		for (num_supplies = 0; sensor->info->supplies[num_supplies];
-		     ++num_supplies)
-			;
-
-		sensor->supplies = devm_kcalloc(ap1302->dev, num_supplies,
-						sizeof(*sensor->supplies),
-						GFP_KERNEL);
-		if (!sensor->supplies)
-			return -ENOMEM;
-
-		for (i = 0; i < num_supplies; ++i)
-			sensor->supplies[i].supply = sensor->info->supplies[i];
-
-		ret = regulator_bulk_get(sensor->dev, num_supplies,
-					 sensor->supplies);
-		if (ret < 0) {
-			dev_err(ap1302->dev,
-				"Failed to get supplies for sensor %u\n", reg);
-			return ret;
-		}
-
-		sensor->num_supplies = i;
-	}
-
-	return 0;
-}
-
 static int ap1302_parse_of(struct ap1302_device *ap1302)
 {
 	struct device_node *sensors;
 	struct device_node *node;
+	unsigned int num_sensors = 0;
+	const char *model;
 	unsigned int i;
+	int ret;
 
 	/* Clock */
 	ap1302->clock = devm_clk_get(ap1302->dev, NULL);
@@ -1670,23 +2292,54 @@ static int ap1302_parse_of(struct ap1302_device *ap1302)
 	}
 
 	/* Sensors */
-	for (i = 0; i < ARRAY_SIZE(ap1302->sensors); ++i)
-		ap1302->sensors[i].info = &ap1302_sensor_info_none;
-
 	sensors = of_get_child_by_name(ap1302->dev->of_node, "sensors");
 	if (!sensors) {
 		dev_err(ap1302->dev, "'sensors' child node not found\n");
 		return -EINVAL;
 	}
 
-	for_each_child_of_node(sensors, node) {
-		if (of_node_name_eq(node, "sensor"))
-			ap1302_parse_of_sensor(ap1302, node);
+	ret = of_property_read_string(sensors, "onnn,model", &model);
+	if (ret < 0) {
+		/*
+		 * If no sensor is connected, we can still support operation
+		 * with the test pattern generator.
+		 */
+		ap1302->sensor_info = &ap1302_sensor_info_tpg;
+		ret = 0;
+		goto done;
 	}
 
-	of_node_put(sensors);
+	for (i = 0; i < ARRAY_SIZE(ap1302_sensor_info); ++i) {
+		const struct ap1302_sensor_info *info =
+			&ap1302_sensor_info[i];
 
-	return 0;
+		if (!strcmp(info->model, model)) {
+			ap1302->sensor_info = info;
+			break;
+		}
+	}
+
+	if (!ap1302->sensor_info) {
+		dev_warn(ap1302->dev, "Unsupported sensor model %s\n", model);
+		ret = -EINVAL;
+		goto done;
+	}
+
+	for_each_child_of_node(sensors, node) {
+		if (of_node_name_eq(node, "sensor")) {
+			if (!ap1302_sensor_parse_of(ap1302, node))
+				num_sensors++;
+		}
+	}
+
+	if (!num_sensors) {
+		dev_err(ap1302->dev, "No sensor found\n");
+		ret = -EINVAL;
+	}
+
+done:
+	of_node_put(sensors);
+	return ret;
 }
 
 static void ap1302_cleanup(struct ap1302_device *ap1302)
@@ -1696,11 +2349,10 @@ static void ap1302_cleanup(struct ap1302_device *ap1302)
 	for (i = 0; i < ARRAY_SIZE(ap1302->sensors); ++i) {
 		struct ap1302_sensor *sensor = &ap1302->sensors[i];
 
-		if (sensor->num_supplies)
-			regulator_bulk_free(sensor->num_supplies,
-					    sensor->supplies);
+		if (!sensor->ap1302)
+			continue;
 
-		put_device(sensor->dev);
+		ap1302_sensor_cleanup(sensor);
 	}
 
 	mutex_destroy(&ap1302->lock);
@@ -1709,6 +2361,7 @@ static void ap1302_cleanup(struct ap1302_device *ap1302)
 static int ap1302_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	struct ap1302_device *ap1302;
+	unsigned int i;
 	int ret;
 
 	ap1302 = devm_kzalloc(&client->dev, sizeof(*ap1302), GFP_KERNEL);
@@ -1740,9 +2393,22 @@ static int ap1302_probe(struct i2c_client *client, const struct i2c_device_id *i
 	if (ret < 0)
 		goto error;
 
+	for (i = 0; i < ARRAY_SIZE(ap1302->sensors); ++i) {
+		struct ap1302_sensor *sensor = &ap1302->sensors[i];
+
+		if (!sensor->ap1302)
+			continue;
+
+		ret = ap1302_sensor_init(sensor, i);
+		if (ret < 0)
+			goto error;
+	}
+
 	ret = ap1302_hw_init(ap1302);
 	if (ret)
 		goto error;
+
+	ap1302_debugfs_init(ap1302);
 
 	ret = ap1302_config_v4l2(ap1302);
 	if (ret)
@@ -1761,6 +2427,8 @@ static int ap1302_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 	struct ap1302_device *ap1302 = to_ap1302(sd);
+
+	ap1302_debugfs_cleanup(ap1302);
 
 	ap1302_hw_cleanup(ap1302);
 
