@@ -23,7 +23,7 @@
 #include "mtk_camsv.h"
 
 static inline struct mtk_camsv_video_device *
-file_to_mtk_camsv_node(struct file *__file)
+file_to_mtk_camsv_video_device(struct file *__file)
 {
 	return container_of(video_devdata(__file),
 			    struct mtk_camsv_video_device, vdev);
@@ -510,7 +510,7 @@ static int mtk_camsv_vidioc_querycap(struct file *file, void *fh,
 static int mtk_camsv_vidioc_enum_fmt(struct file *file, void *fh,
 				     struct v4l2_fmtdesc *f)
 {
-	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_node(file);
+	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_video_device(file);
 	const struct mtk_camsv_format_info *fmtinfo;
 	unsigned int i;
 
@@ -551,7 +551,7 @@ static int mtk_camsv_vidioc_enum_fmt(struct file *file, void *fh,
 static int mtk_camsv_vidioc_g_fmt(struct file *file, void *fh,
 				  struct v4l2_format *f)
 {
-	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_node(file);
+	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_video_device(file);
 
 	f->fmt.pix_mp = vdev->format;
 
@@ -562,7 +562,7 @@ static int mtk_camsv_vidioc_try_fmt(struct file *file, void *fh,
 				    struct v4l2_format *f)
 {
 	struct mtk_camsv_dev *cam = video_drvdata(file);
-	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_node(file);
+	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_video_device(file);
 	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
 	const struct mtk_camsv_format_info *fmtinfo;
 
@@ -593,7 +593,7 @@ static int mtk_camsv_vidioc_s_fmt(struct file *file, void *fh,
 				  struct v4l2_format *f)
 {
 	struct mtk_camsv_dev *cam = video_drvdata(file);
-	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_node(file);
+	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_video_device(file);
 	int ret;
 
 	if (vb2_is_busy(vdev->vdev.queue)) {
@@ -613,10 +613,10 @@ static int mtk_camsv_vidioc_s_fmt(struct file *file, void *fh,
 	return 0;
 }
 
-static int mtk_camsv_vidioc_enum_framesizes(struct file *filp, void *priv,
+static int mtk_camsv_vidioc_enum_framesizes(struct file *file, void *priv,
 					    struct v4l2_frmsizeenum *sizes)
 {
-	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_node(filp);
+	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_video_device(file);
 
 	if (sizes->index)
 		return -EINVAL;
