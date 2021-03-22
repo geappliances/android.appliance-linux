@@ -58,18 +58,9 @@
 
 enum TEST_MODE { TEST_PATTERN_DISABLED = 0x0, TEST_PATTERN_SENINF };
 
-/*
- * ID enum value for struct mtk_camsv_dev_node_desc:id
- * or mtk_camsv_video_device:id
- */
-enum {
-	MTK_CAMSV_MAIN_STREAM_OUT = 0,
-	MTK_CAMSV_TOTAL_NODES
-};
-
 #define MTK_CAMSV_CIO_PAD_SENINF	0
-#define MTK_CAMSV_CIO_PAD_NODE(n)	((n) + 1)
-#define MTK_CAMSV_CIO_NUM_PADS		(MTK_CAMSV_TOTAL_NODES + 1)
+#define MTK_CAMSV_CIO_PAD_VIDEO		1
+#define MTK_CAMSV_CIO_NUM_PADS		2
 
 struct mtk_camsv_format_info {
 	u32 code;
@@ -94,9 +85,8 @@ struct mtk_camsv_sparams {
 };
 
 /*
- * struct mtk_camsv_dev_node_desc - MTK camera device node descriptor
+ * struct mtk_camsv_vdev_desc - MTK camera device descriptor
  *
- * @id: id of the node
  * @name: name of the node
  * @cap: supported V4L2 capabilities
  * @buf_type: supported V4L2 buffer type
@@ -110,8 +100,7 @@ struct mtk_camsv_sparams {
  * @frmsizes: supported V4L2 frame size number
  *
  */
-struct mtk_camsv_dev_node_desc {
-	u8 id;
+struct mtk_camsv_vdev_desc {
 	const char *name;
 	u32 cap;
 	u32 buf_type;
@@ -128,7 +117,6 @@ struct mtk_camsv_dev_node_desc {
 /*
  * struct mtk_camsv_video_device - Mediatek video device structure
  *
- * @id: Id for index of mtk_camsv_dev:vdev_nodes array
  * @desc: The node description of video device
  * @vdev_pad: The media pad graph object of video device
  * @vdev: The video device instance
@@ -139,8 +127,7 @@ struct mtk_camsv_dev_node_desc {
  * @fmtinfo: Information about the current format
  */
 struct mtk_camsv_video_device {
-	unsigned int id;
-	const struct mtk_camsv_dev_node_desc *desc;
+	const struct mtk_camsv_vdev_desc *desc;
 
 	struct media_pad vdev_pad;
 	struct video_device vdev;
@@ -162,7 +149,7 @@ struct mtk_camsv_video_device {
  * @subdev: The V4L2 sub-device instance.
  * @subdev_pads: Media pads of this sub-device.
  * @formats: Media bus format for all pads.
- * @vdev_nodes: The array list of mtk_camsv_video_device nodes.
+ * @vdev: The video device node.
  * @seninf: Pointer to the seninf sub-device.
  * @streaming: Indicate the overall streaming status is on or off.
  * @stream_count: Number of streaming video nodes
@@ -185,7 +172,7 @@ struct mtk_camsv_dev {
 	struct v4l2_subdev subdev;
 	struct media_pad subdev_pads[MTK_CAMSV_CIO_NUM_PADS];
 	struct v4l2_mbus_framefmt formats[MTK_CAMSV_CIO_NUM_PADS];
-	struct mtk_camsv_video_device vdev_nodes[MTK_CAMSV_TOTAL_NODES];
+	struct mtk_camsv_video_device vdev;
 	struct v4l2_subdev *seninf;
 	unsigned int streaming;
 	unsigned int stream_count;
@@ -210,14 +197,10 @@ struct mtk_camsv_conf {
 
 void mtk_camsv_setup(struct mtk_camsv_dev *camsv_dev, u32 width, u32 height,
 		     u32 bpl, u32 mbus_fmt);
-
 int mtk_camsv_dev_init(struct mtk_camsv_dev *camsv_dev);
-
 void mtk_camsv_dev_cleanup(struct mtk_camsv_dev *camsv_dev);
-
-int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
-			     struct mtk_camsv_video_device *node);
-void mtk_camsv_video_unregister(struct mtk_camsv_video_device *node);
+int mtk_camsv_video_register(struct mtk_camsv_dev *camsv_dev);
+void mtk_camsv_video_unregister(struct mtk_camsv_video_device *vdev);
 void mtk_camsv_video_init_nodes(struct mtk_camsv_dev *cam);
 
 #endif /* __MTK_CAMSV_H__ */
