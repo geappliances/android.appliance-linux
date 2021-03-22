@@ -248,21 +248,7 @@ static const struct v4l2_subdev_internal_ops mtk_camsv_internal_ops = {
  * Media Entity Operations
  */
 
-static int mtk_camsv_media_link_setup(struct media_entity *entity,
-				      const struct media_pad *local,
-				      const struct media_pad *remote, u32 flags)
-{
-	struct mtk_camsv_dev *cam =
-		container_of(entity, struct mtk_camsv_dev, subdev.entity);
-
-	if (local->index > MTK_CAMSV_CIO_PAD_SENINF)
-		cam->vdev.enabled = !!(flags & MEDIA_LNK_FL_ENABLED);
-
-	return 0;
-}
-
 static const struct media_entity_operations mtk_camsv_media_entity_ops = {
-	.link_setup = mtk_camsv_media_link_setup,
 	.link_validate = v4l2_subdev_link_validate,
 	.get_fwnode_pad = v4l2_subdev_get_fwnode_pad_1_to_1,
 };

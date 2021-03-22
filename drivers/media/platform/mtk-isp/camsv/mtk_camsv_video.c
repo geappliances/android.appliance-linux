@@ -400,12 +400,6 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 	struct device *dev = cam->dev;
 	int ret;
 
-	if (!vdev->enabled) {
-		dev_err(dev, "Video device is not enabled\n");
-		ret = -ENOLINK;
-		goto fail_ret_buf;
-	}
-
 	/* Enable CMOS and VF */
 	mtk_camsv_cmos_vf_enable(cam, true, vdev->fmtinfo->packed);
 
@@ -444,7 +438,6 @@ fail_no_stream:
 		media_pipeline_stop(vdev->vdev.entity.pads);
 fail_unlock:
 	mutex_unlock(&cam->op_lock);
-fail_ret_buf:
 	mtk_camsv_vb2_return_all_buffers(cam, VB2_BUF_STATE_QUEUED);
 
 	return ret;
@@ -728,10 +721,6 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam)
 	link_flags = cam_vdev->desc->link_flags;
 
 	/* Initialize mtk_camsv_video_device */
-	if (link_flags & MEDIA_LNK_FL_IMMUTABLE)
-		cam_vdev->enabled = true;
-	else
-		cam_vdev->enabled = false;
 	mtk_camsv_dev_load_default_fmt(cam);
 
 	cam->subdev_pads[MTK_CAMSV_CIO_PAD_VIDEO].flags =
