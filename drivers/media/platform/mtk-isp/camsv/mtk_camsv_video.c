@@ -780,6 +780,7 @@ void mtk_camsv_video_unregister(struct mtk_camsv_video_device *vdev)
 	vb2_queue_release(&vdev->vbq);
 	media_entity_cleanup(&vdev->vdev.entity);
 	mutex_destroy(&vdev->vdev_lock);
+	vb2_dma_contig_clear_max_seg_size(&vdev->vdev.dev);
 }
 
 static const u32 stream_out_fmts[] = {
