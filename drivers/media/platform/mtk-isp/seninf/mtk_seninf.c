@@ -23,6 +23,8 @@
 
 #include "mtk_seninf_reg.h"
 
+#define MTK_MEDIA_DEV_MODEL			"mtk-camsys-5.0"
+
 #define SENINF_TIMESTAMP_STEP		0x67
 #define SENINF_SETTLE_DELAY		0x15
 #define SENINF_HS_TRAIL_PARAMETER	0x8
@@ -1106,7 +1108,7 @@ static int mtk_seninf_media_init(struct mtk_seninf *priv)
 	int ret;
 
 	media_dev->dev = dev;
-	strscpy(media_dev->model, dev_driver_string(dev), sizeof(media_dev->model));
+	strscpy(media_dev->model, MTK_MEDIA_DEV_MODEL, sizeof(media_dev->model));
 	snprintf(media_dev->bus_info, sizeof(media_dev->bus_info),
 		 "platform:%s", dev_name(dev));
 	media_dev->hw_revision = 0;
