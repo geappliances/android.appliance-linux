@@ -710,21 +710,16 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam)
 	struct mtk_camsv_video_device *cam_vdev = &cam->vdev;
 	struct video_device *vdev = &cam_vdev->vdev;
 	struct vb2_queue *vbq = &cam_vdev->vbq;
-	unsigned int output = V4L2_TYPE_IS_OUTPUT(cam_vdev->desc->buf_type);
-	unsigned int link_flags;
 	int ret;
 
 	vb2_dma_contig_set_max_seg_size(cam->dev, DMA_BIT_MASK(32));
 
 	cam_vdev->desc = &video_stream;
 
-	link_flags = cam_vdev->desc->link_flags;
-
 	/* Initialize mtk_camsv_video_device */
 	mtk_camsv_dev_load_default_fmt(cam);
 
-	cam->subdev_pads[MTK_CAMSV_CIO_PAD_VIDEO].flags =
-		output ? MEDIA_PAD_FL_SINK : MEDIA_PAD_FL_SOURCE;
+	cam->subdev_pads[MTK_CAMSV_CIO_PAD_VIDEO].flags = MEDIA_PAD_FL_SOURCE;
 
 	/* Initialize media entities */
 	ret = media_entity_pads_init(&vdev->entity, 1, &cam_vdev->vdev_pad);
@@ -732,7 +727,7 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam)
 		dev_err(dev, "failed to initialize media pad:%d\n", ret);
 		return ret;
 	}
-	cam_vdev->vdev_pad.flags = output ? MEDIA_PAD_FL_SOURCE : MEDIA_PAD_FL_SINK;
+	cam_vdev->vdev_pad.flags = MEDIA_PAD_FL_SINK;
 
 	vbq->type = cam_vdev->desc->buf_type;
 	vbq->io_modes = VB2_MMAP | VB2_DMABUF;
@@ -772,7 +767,7 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam)
 	vdev->lock = &cam_vdev->vdev_lock;
 	vdev->v4l2_dev = cam->subdev.v4l2_dev;
 	vdev->queue = &cam_vdev->vbq;
-	vdev->vfl_dir = output ? VFL_DIR_TX : VFL_DIR_RX;
+	vdev->vfl_dir = VFL_DIR_RX;
 	vdev->entity.function = MEDIA_ENT_F_IO_V4L;
 	vdev->entity.ops = NULL;
 	video_set_drvdata(vdev, cam);
@@ -788,15 +783,9 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam)
 	}
 
 	/* Create link between the video pad and the subdev pad. */
-	if (output)
-		ret = media_create_pad_link(&vdev->entity, 0,
-					    &cam->subdev.entity,
-					    MTK_CAMSV_CIO_PAD_VIDEO,
-					    link_flags);
-	else
-		ret = media_create_pad_link(&cam->subdev.entity,
-					    MTK_CAMSV_CIO_PAD_VIDEO,
-					    &vdev->entity, 0, link_flags);
+	ret = media_create_pad_link(&cam->subdev.entity,
+				    MTK_CAMSV_CIO_PAD_VIDEO,
+				    &vdev->entity, 0, cam_vdev->desc->link_flags);
 
 	if (ret)
 		goto fail_vdev_ureg;
