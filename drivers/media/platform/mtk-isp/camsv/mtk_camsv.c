@@ -206,15 +206,11 @@ static int mtk_camsv_set_fmt(struct v4l2_subdev *sd,
 
 	fmt->format = *format;
 
-	/* Propagate the format to the source pads. */
-	for (i = 0; i < MTK_CAMSV_TOTAL_NODES; ++i) {
-		unsigned int pad = MTK_CAMSV_CIO_PAD_NODE(i);
-
-		format = mtk_camsv_get_pad_format(cam, cfg, pad, fmt->which);
-		format->width = fmt->format.width;
-		format->height = fmt->format.height;
-		format->code = fmt->format.code;
-	}
+	/* Propagate the format to the source pad. */
+	format = mtk_camsv_get_pad_format(cam, cfg, MTK_CAMSV_CIO_PAD_VIDEO, fmt->which);
+	format->width = fmt->format.width;
+	format->height = fmt->format.height;
+	format->code = fmt->format.code;
 
 	return 0;
 }
@@ -222,25 +218,9 @@ static int mtk_camsv_set_fmt(struct v4l2_subdev *sd,
 static int mtk_camsv_subdev_registered(struct v4l2_subdev *sd)
 {
 	struct mtk_camsv_dev *cam = to_mtk_camsv_dev(sd);
-	int i, ret;
 
-	/* Create video nodes and links */
-	for (i = 0; i < MTK_CAMSV_TOTAL_NODES; ++i) {
-		struct mtk_camsv_video_device *node = &cam->vdev_nodes[i];
-
-		node->id = node->desc->id;
-		ret = mtk_camsv_video_register(cam, node);
-		if (ret)
-			goto fail_vdev_unreg;
-	}
-
-	return 0;
-
-fail_vdev_unreg:
-	for (i--; i >= 0; --i)
-		mtk_camsv_video_unregister(&cam->vdev_nodes[i]);
-
-	return ret;
+	/* Create the video device and link. */
+	return mtk_camsv_video_register(cam);
 }
 
 static const struct v4l2_subdev_video_ops mtk_camsv_subdev_video_ops = {
@@ -274,14 +254,9 @@ static int mtk_camsv_media_link_setup(struct media_entity *entity,
 {
 	struct mtk_camsv_dev *cam =
 		container_of(entity, struct mtk_camsv_dev, subdev.entity);
-	u32 pad = local->index;
 
-	/*
-	 * The video nodes exposed by the driver have pads indexes
-	 * from 0 to MTK_CAMSV_TOTAL_NODES - 1.
-	 */
-	if (pad < MTK_CAMSV_TOTAL_NODES)
-		cam->vdev_nodes[pad].enabled = !!(flags & MEDIA_LNK_FL_ENABLED);
+	if (local->index > MTK_CAMSV_CIO_PAD_SENINF)
+		cam->vdev.enabled = !!(flags & MEDIA_LNK_FL_ENABLED);
 
 	return 0;
 }
@@ -300,7 +275,6 @@ static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 {
 	struct device *dev = cam->dev;
 	int ret;
-	unsigned int i;
 
 	/* Initialize subdev pads */
 	ret = media_entity_pads_init(&cam->subdev.entity,
@@ -312,9 +286,7 @@ static int mtk_camsv_v4l2_register(struct mtk_camsv_dev *cam)
 	}
 
 	cam->subdev_pads[MTK_CAMSV_CIO_PAD_SENINF].flags = MEDIA_PAD_FL_SINK;
-	for (i = 0; i < MTK_CAMSV_TOTAL_NODES; ++i)
-		cam->subdev_pads[MTK_CAMSV_CIO_PAD_NODE(i)].flags =
-			MEDIA_PAD_FL_SOURCE;
+	cam->subdev_pads[MTK_CAMSV_CIO_PAD_VIDEO].flags = MEDIA_PAD_FL_SOURCE;
 
 	/* Initialize subdev */
 	v4l2_subdev_init(&cam->subdev, &mtk_camsv_subdev_ops);
@@ -345,10 +317,7 @@ fail_clean_media_entiy:
 
 static void mtk_camsv_v4l2_unregister(struct mtk_camsv_dev *cam)
 {
-	int i;
-
-	for (i = 0; i < MTK_CAMSV_TOTAL_NODES; i++)
-		mtk_camsv_video_unregister(&cam->vdev_nodes[i]);
+	mtk_camsv_video_unregister(&cam->vdev);
 
 	vb2_dma_contig_clear_max_seg_size(cam->dev);
 
