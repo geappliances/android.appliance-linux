@@ -666,6 +666,51 @@ static const struct v4l2_file_operations mtk_camsv_v4l2_fops = {
  * Init & Cleanup
  */
 
+static const u32 stream_out_fmts[] = {
+	/* The 1st entry is the default image format */
+	V4L2_PIX_FMT_MTISP_SGRBG12,
+	V4L2_PIX_FMT_MTISP_SBGGR12,
+	V4L2_PIX_FMT_MTISP_SGBRG12,
+	V4L2_PIX_FMT_MTISP_SRGGB12,
+	V4L2_PIX_FMT_MTISP_SGRBG10,
+	V4L2_PIX_FMT_MTISP_SBGGR10,
+	V4L2_PIX_FMT_MTISP_SGBRG10,
+	V4L2_PIX_FMT_MTISP_SRGGB10,
+	V4L2_PIX_FMT_SBGGR8,
+	V4L2_PIX_FMT_SGBRG8,
+	V4L2_PIX_FMT_SGRBG8,
+	V4L2_PIX_FMT_SRGGB8,
+	V4L2_PIX_FMT_UYVY,
+	V4L2_PIX_FMT_VYUY,
+	V4L2_PIX_FMT_YUYV,
+	V4L2_PIX_FMT_YVYU,
+};
+
+static const struct mtk_camsv_vdev_desc video_stream = {
+	.name = "video stream",
+	.cap = V4L2_CAP_VIDEO_CAPTURE_MPLANE,
+	.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+	.link_flags = MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED,
+	.fmts = stream_out_fmts,
+	.num_fmts = ARRAY_SIZE(stream_out_fmts),
+	.def_width = 1920,
+	.def_height = 1080,
+	.ioctl_ops = &mtk_camsv_v4l2_vcap_ioctl_ops,
+	.frmsizes =
+		&(struct v4l2_frmsizeenum){
+			.index = 0,
+			.type = V4L2_FRMSIZE_TYPE_CONTINUOUS,
+			.stepwise = {
+				.max_width = IMG_MAX_WIDTH,
+				.min_width = IMG_MIN_WIDTH,
+				.max_height = IMG_MAX_HEIGHT,
+				.min_height = IMG_MIN_HEIGHT,
+				.step_height = 1,
+				.step_width = 1,
+			},
+		},
+};
+
 int mtk_camsv_video_register(struct mtk_camsv_dev *cam)
 {
 	struct device *dev = cam->dev;
@@ -673,8 +718,14 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam)
 	struct video_device *vdev = &cam_vdev->vdev;
 	struct vb2_queue *vbq = &cam_vdev->vbq;
 	unsigned int output = V4L2_TYPE_IS_OUTPUT(cam_vdev->desc->buf_type);
-	unsigned int link_flags = cam_vdev->desc->link_flags;
+	unsigned int link_flags;
 	int ret;
+
+	vb2_dma_contig_set_max_seg_size(cam->dev, DMA_BIT_MASK(32));
+
+	cam_vdev->desc = &video_stream;
+
+	link_flags = cam_vdev->desc->link_flags;
 
 	/* Initialize mtk_camsv_video_device */
 	if (link_flags & MEDIA_LNK_FL_IMMUTABLE)
@@ -781,55 +832,4 @@ void mtk_camsv_video_unregister(struct mtk_camsv_video_device *vdev)
 	media_entity_cleanup(&vdev->vdev.entity);
 	mutex_destroy(&vdev->vdev_lock);
 	vb2_dma_contig_clear_max_seg_size(&vdev->vdev.dev);
-}
-
-static const u32 stream_out_fmts[] = {
-	/* The 1st entry is the default image format */
-	V4L2_PIX_FMT_MTISP_SGRBG12,
-	V4L2_PIX_FMT_MTISP_SBGGR12,
-	V4L2_PIX_FMT_MTISP_SGBRG12,
-	V4L2_PIX_FMT_MTISP_SRGGB12,
-	V4L2_PIX_FMT_MTISP_SGRBG10,
-	V4L2_PIX_FMT_MTISP_SBGGR10,
-	V4L2_PIX_FMT_MTISP_SGBRG10,
-	V4L2_PIX_FMT_MTISP_SRGGB10,
-	V4L2_PIX_FMT_SBGGR8,
-	V4L2_PIX_FMT_SGBRG8,
-	V4L2_PIX_FMT_SGRBG8,
-	V4L2_PIX_FMT_SRGGB8,
-	V4L2_PIX_FMT_UYVY,
-	V4L2_PIX_FMT_VYUY,
-	V4L2_PIX_FMT_YUYV,
-	V4L2_PIX_FMT_YVYU,
-};
-
-static const struct mtk_camsv_vdev_desc video_stream = {
-	.name = "video stream",
-	.cap = V4L2_CAP_VIDEO_CAPTURE_MPLANE,
-	.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
-	.link_flags = MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED,
-	.fmts = stream_out_fmts,
-	.num_fmts = ARRAY_SIZE(stream_out_fmts),
-	.def_width = 1920,
-	.def_height = 1080,
-	.ioctl_ops = &mtk_camsv_v4l2_vcap_ioctl_ops,
-	.frmsizes =
-		&(struct v4l2_frmsizeenum){
-			.index = 0,
-			.type = V4L2_FRMSIZE_TYPE_CONTINUOUS,
-			.stepwise = {
-				.max_width = IMG_MAX_WIDTH,
-				.min_width = IMG_MIN_WIDTH,
-				.max_height = IMG_MAX_HEIGHT,
-				.min_height = IMG_MIN_HEIGHT,
-				.step_height = 1,
-				.step_width = 1,
-			},
-		},
-};
-
-void mtk_camsv_video_init_nodes(struct mtk_camsv_dev *cam)
-{
-	cam->vdev.desc = &video_stream;
-	vb2_dma_contig_set_max_seg_size(cam->dev, DMA_BIT_MASK(32));
 }

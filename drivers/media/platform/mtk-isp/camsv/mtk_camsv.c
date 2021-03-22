@@ -327,8 +327,6 @@ int mtk_camsv_dev_init(struct mtk_camsv_dev *camsv_dev)
 {
 	int ret;
 
-	mtk_camsv_video_init_nodes(camsv_dev);
-
 	mutex_init(&camsv_dev->op_lock);
 
 	/* v4l2 sub-device registration */
