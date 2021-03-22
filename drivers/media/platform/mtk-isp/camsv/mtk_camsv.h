@@ -122,7 +122,6 @@ struct mtk_camsv_vdev_desc {
  * @vdev: The video device instance
  * @vbq: A videobuf queue of video device
  * @vdev_lock: Serializes vb2 queue and video device operations
- * @enabled: Indicate the video device is enabled or not
  * @format: The V4L2 format of video device
  * @fmtinfo: Information about the current format
  */
@@ -136,7 +135,6 @@ struct mtk_camsv_video_device {
 	/* Serializes vb2 queue and video device operations */
 	struct mutex vdev_lock;
 
-	unsigned int enabled;
 	struct v4l2_pix_format_mplane format;
 	const struct mtk_camsv_format_info *fmtinfo;
 };
