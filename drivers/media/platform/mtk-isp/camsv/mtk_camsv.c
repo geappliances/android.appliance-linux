@@ -319,8 +319,6 @@ static void mtk_camsv_v4l2_unregister(struct mtk_camsv_dev *cam)
 {
 	mtk_camsv_video_unregister(&cam->vdev);
 
-	vb2_dma_contig_clear_max_seg_size(cam->dev);
-
 	media_entity_cleanup(&cam->subdev.entity);
 	v4l2_async_unregister_subdev(&cam->subdev);
 }
