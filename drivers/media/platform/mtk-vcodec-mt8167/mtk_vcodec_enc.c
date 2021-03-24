@@ -1399,14 +1399,35 @@ void mtk_vcodec_enc_set_default_params(struct mtk_vcodec_ctx *ctx)
 		(q_data->coded_height + 32) <= MTK_VENC_MAX_H)
 		q_data->coded_height += 32;
 
-	q_data->sizeimage[0] =
-		q_data->coded_width * q_data->coded_height+
-		((ALIGN(q_data->coded_width, 16) * 2) * 16);
-	q_data->bytesperline[0] = q_data->coded_width;
-	q_data->sizeimage[1] =
-		(q_data->coded_width * q_data->coded_height) / 2 +
-		(ALIGN(q_data->coded_width, 16) * 16);
-	q_data->bytesperline[1] = q_data->coded_width;
+	if (ctx->out_fmt_default->num_planes == 1) {
+		q_data->sizeimage[0] =
+			(q_data->coded_width * q_data->coded_height) +
+			(q_data->coded_width * q_data->coded_height) / 2 +
+			((ALIGN(q_data->coded_width, 16) * 2) * 16);
+		q_data->bytesperline[0] = q_data->coded_width;
+	} else if (ctx->out_fmt_default->num_planes == 2) {
+		q_data->sizeimage[0] =
+			q_data->coded_width * q_data->coded_height+
+			((ALIGN(q_data->coded_width, 16) * 2) * 16);
+		q_data->bytesperline[0] = q_data->coded_width;
+		q_data->sizeimage[1] =
+			(q_data->coded_width * q_data->coded_height) / 2 +
+			(ALIGN(q_data->coded_width, 16) * 16);
+		q_data->bytesperline[1] = q_data->coded_width;
+	} else if (ctx->out_fmt_default->num_planes == 3) {
+		q_data->sizeimage[0] =
+			q_data->coded_width * q_data->coded_height+
+			((ALIGN(q_data->coded_width, 16) * 2) * 16);
+		q_data->bytesperline[0] = q_data->coded_width;
+		q_data->sizeimage[1] =
+			(q_data->coded_width * q_data->coded_height) / 4 +
+			(ALIGN(q_data->coded_width, 16) * 16);
+		q_data->bytesperline[1] = q_data->coded_width / 2;
+		q_data->sizeimage[2] =
+			(q_data->coded_width * q_data->coded_height) / 4 +
+			(ALIGN(q_data->coded_width, 16) * 16);
+		q_data->bytesperline[2] = q_data->coded_width / 2;
+	}
 
 	q_data = &ctx->q_data[MTK_Q_DATA_DST];
 	memset(q_data, 0, sizeof(struct mtk_q_data));
