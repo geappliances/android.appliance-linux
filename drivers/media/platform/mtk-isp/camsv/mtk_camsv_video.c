@@ -722,8 +722,9 @@ int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
 
 	/* Initialize vdev */
 	snprintf(vdev->name, sizeof(vdev->name), "%s %s",
-		 dev_driver_string(dev), node->desc->name);
-	/* set cap/type/ioctl_ops of the video device */
+		 dev_name(dev), node->desc->name);
+
+	/* Set cap/type/ioctl_ops of the video device */
 	vdev->device_caps = node->desc->cap | V4L2_CAP_STREAMING
 			  | V4L2_CAP_IO_MC;
 	vdev->ioctl_ops = node->desc->ioctl_ops;
