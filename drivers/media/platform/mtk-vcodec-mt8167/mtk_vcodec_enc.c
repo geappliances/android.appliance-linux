@@ -927,9 +927,22 @@ static int vb2ops_venc_start_streaming(struct vb2_queue *q, unsigned int count)
 	/* Once state turn into MTK_STATE_ABORT, we need stop_streaming
 	  * to clear it
 	  */
-	if ((ctx->state == MTK_STATE_ABORT) || (ctx->state == MTK_STATE_FREE)) {
+	if (ctx->state == MTK_STATE_ABORT) {
 		ret = -EIO;
 		goto err_set_param;
+	}
+
+	/* If S_FMT hasn't been called, setup VENC IF here */
+	if (ctx->state == MTK_STATE_FREE) {
+		struct mtk_q_data *q_data = &ctx->q_data[MTK_Q_DATA_DST];
+
+		ret = venc_if_init(ctx, q_data->fmt->fourcc);
+		if (ret) {
+			mtk_v4l2_err("venc_if_init failed=%d, codec type=%x",
+					ret, q_data->fmt->fourcc);
+			return -EBUSY;
+		}
+		ctx->state = MTK_STATE_INIT;
 	}
 
 	/* Do the initialization when both start_streaming have been called */
