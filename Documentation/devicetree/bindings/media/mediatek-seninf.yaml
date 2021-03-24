@@ -72,6 +72,8 @@ properties:
             unevaluatedProperties: false
 
             properties:
+              clock-lanes:
+                minItems: 1
               data-lanes:
                 minItems: 1
                 maxItems: 4
@@ -87,6 +89,8 @@ properties:
             unevaluatedProperties: false
 
             properties:
+              clock-lanes:
+                minItems: 1
               data-lanes:
                 minItems: 1
                 maxItems: 4
@@ -102,6 +106,8 @@ properties:
             unevaluatedProperties: false
 
             properties:
+              clock-lanes:
+                minItems: 1
               data-lanes:
                 minItems: 1
                 maxItems: 4
@@ -117,6 +123,8 @@ properties:
             unevaluatedProperties: false
 
             properties:
+              clock-lanes:
+                minItems: 1
               data-lanes:
                 minItems: 1
                 maxItems: 2
@@ -124,7 +132,37 @@ properties:
       port@4:
         $ref: /schemas/graph.yaml#/$defs/port-base
         unevaluatedProperties: false
-        description: connection point for camsys
+        description: connection point for camsv0
+
+        patternProperties:
+          endpoint:
+            $ref: video-interfaces.yaml#
+            unevaluatedProperties: false
+
+      port@5:
+        $ref: /schemas/graph.yaml#/$defs/port-base
+        unevaluatedProperties: false
+        description: connection point for camsv1
+
+        patternProperties:
+          endpoint:
+            $ref: video-interfaces.yaml#
+            unevaluatedProperties: false
+
+      port@6:
+        $ref: /schemas/graph.yaml#/$defs/port-base
+        unevaluatedProperties: false
+        description: connection point for camsv2
+
+        patternProperties:
+          endpoint:
+            $ref: video-interfaces.yaml#
+            unevaluatedProperties: false
+
+      port@7:
+        $ref: /schemas/graph.yaml#/$defs/port-base
+        unevaluatedProperties: false
+        description: connection point for camsv3
 
         patternProperties:
           endpoint:
@@ -137,6 +175,9 @@ properties:
       - port@2
       - port@3
       - port@4
+      - port@5
+      - port@6
+      - port@7
 
 required:
   - compatible
@@ -157,39 +198,41 @@ examples:
 
     seninf: seninf@1a040000 {
         compatible = "mediatek,mt8183-seninf";
-        reg = <0x1a040000 0x8000>;
+        reg = <0 0x1a040000 0 0x8000>;
         interrupts = <GIC_SPI 251 IRQ_TYPE_LEVEL_LOW>;
-        power-domains = <&scpsys MT8183_POWER_DOMAIN_CAM>;
         clocks = <&camsys CLK_CAM_SENINF>,
-                 <&topckgen CLK_TOP_MUX_SENINF>;
+        <&topckgen CLK_TOP_MUX_SENINF>;
         clock-names = "cam_seninf", "top_mux_seninf";
+        power-domains = <&scpsys MT8183_POWER_DOMAIN_CAM>;
 
-        phys = <&mipi_dphy 0>, <&mipi_dphy 1>, <&mipi_dphy 2>,
-               <&mipi_dphy 3>, <&mipi_dphy 4>;
+        phys = <&mipi_rx 0>, <&mipi_rx 1>, <&mipi_rx 2>,
+               <&mipi_rx 3>, <&mipi_rx 4>;
         phy-names = "csi0", "csi1", "csi2", "csi0a", "csi0b";
+
+        status = "disabled";
 
         ports {
             #address-cells = <1>;
             #size-cells = <0>;
 
             port@0 {
-                reg = <0>;
-                mipi_in_bcam: endpoint {
-                    data-lanes = <0 1 3 4>;
-                    remote-endpoint = <&bcam_out>;
+                mipi_ar0330_1: endpoint {
+                    clock-lanes = <1>;
+                    data-lanes = <0 2>;
+                    remote-endpoint = <&ar0330_1_endpoint>;
                 };
             };
 
             port@1 {
-                reg = <1>;
-                mipi_in_fcam: endpoint {
-                    data-lanes = <1>;
-                    remote-endpoint = <&fcam_out>;
+                mipi_ar0330_2: endpoint {
+                    clock-lanes = <2>;
+                    data-lanes = <1 3>;
+                    remote-endpoint = <&ar0330_2_endpoint>;
                 };
             };
 
             port@2 {
-                reg = <2>;
+                reg = <3>;
             };
 
             port@3 {
@@ -198,52 +241,95 @@ examples:
 
             port@4 {
                 reg = <4>;
-                seninf_camisp_endpoint: endpoint {
-                    remote-endpoint = <&camisp_endpoint>;
+                seninf_camsv0_endpoint: endpoint {
+                    remote-endpoint = <&camsv0_endpoint>;
+                };
+            };
+
+            port@5 {
+                reg = <5>;
+                seninf_camsv1_endpoint: endpoint {
+                    remote-endpoint = <&camsv1_endpoint>;
+                };
+            };
+
+            port@6 {
+                reg = <6>;
+                seninf_camsv2_endpoint: endpoint {
+                    remote-endpoint = <&camsv2_endpoint>;
+                };
+            };
+
+            port@7 {
+                reg = <7>;
+                seninf_camsv3_endpoint: endpoint {
+                    remote-endpoint = <&camsv3_endpoint>;
                 };
             };
         };
     };
 
-    mipi_dphy: phy@11c80000 {
-        compatible = "mediatek,mt8183-mipi_dphy";
-        reg = <0x11c80000 0x6000>;
+    mipi_rx: mipi-dphy@11c80000 {
+        compatible = "mediatek,mt8183-mipi-dphy";
+        reg = <0 0x11C80000 0 0x6000>;
         #phy-cells = <1>;
     };
 
-    i2c2: i2c@11009000 {
-        reg = <0x11009000 0x1000>;
-        clock-frequency = <400000>;
+    i2c2 {
         #address-cells = <1>;
         #size-cells = <0>;
+        sensor@10 {
+            compatible = "onnn,ar0330";
+            reg = <0x10>;
 
-        wcam: camera@36 {
-            compatible = "ovti,ov5695";
-            reg = <0x36>;
+            pinctrl-names = "default";
+            pinctrl-0 = <&cam0_pins_default>;
 
-            port {
-                bcam_out: endpoint {
-                    remote-endpoint = <&mipi_in_bcam>;
-                    data-lanes = <0 1 3 4>;
+            clocks = <&topckgen CLK_TOP_MUX_CAMTG>;
+            clock-frequency = <24000000>;
+
+            reset-gpios = <&pio 157 GPIO_ACTIVE_LOW>;
+
+            vddpll-supply = <&mt6358_vldo28_reg>;
+            vaa-supply = <&mt6358_vcama1_reg>;
+            vddio-supply = <&mt6358_vcamio_reg>;
+
+            port@0 {
+                ar0330_1_endpoint: endpoint {
+                    remote-endpoint = <&mipi_ar0330_1>;
+                    bus-type = <4>;
+                    clock-lanes = <0>;
+                    data-lanes = <1 2>;
                 };
             };
         };
     };
 
-    i2c4: i2c@11008000 {
-        reg = <0x11008000 0x1000>;
-        clock-frequency = <400000>;
+    i2c4 {
         #address-cells = <1>;
         #size-cells = <0>;
+        sensor@10 {
+            compatible = "onnn,ar0330";
+            reg = <0x10>;
 
-        ucam: camera@3c {
-            compatible = "ovti,ov2685";
-            reg = <0x3c>;
+            pinctrl-names = "default";
+            pinctrl-0 = <&cam1_pins_default>;
 
-            port {
-                fcam_out: endpoint {
-                    remote-endpoint = <&mipi_in_fcam>;
-                    data-lanes = <1>;
+            clocks = <&topckgen CLK_TOP_MUX_CAMTG2>;
+            clock-frequency = <24000000>;
+
+            reset-gpios = <&pio 102 GPIO_ACTIVE_LOW>;
+
+            vddpll-supply = <&mt6358_vldo28_reg>;
+            vaa-supply = <&mt6358_vcama2_reg>;
+            vddio-supply = <&mt6358_vcamio_reg>;
+
+            port@0 {
+                ar0330_2_endpoint: endpoint {
+                    remote-endpoint = <&mipi_ar0330_2>;
+                    bus-type = <4>;
+                    clock-lanes = <0>;
+                    data-lanes = <1 2>;
                 };
             };
         };
