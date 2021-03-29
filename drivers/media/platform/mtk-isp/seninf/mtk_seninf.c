@@ -85,14 +85,6 @@ enum mtk_seninf_phy_mode {
 	SENINF_PHY_MODE_2D1C,
 };
 
-#define SENINF_BITS(base, reg, field, val) do { \
-		u32 __iomem *__p = (base) + (reg); \
-		u32 __v = *__p; \
-		__v &= ~reg##_##field##_MASK; \
-		__v |= ((val) << reg##_##field##_SHIFT); \
-		*__p = __v; \
-	} while (0)
-
 enum mtk_seninf_format_flag {
 	MTK_SENINF_FORMAT_BAYER = BIT(0),
 	MTK_SENINF_FORMAT_DPCM = BIT(1),
@@ -270,6 +262,18 @@ static void mtk_seninf_write(struct mtk_seninf *priv, u32 reg, u32 value)
 	writel(value, priv->base + reg);
 }
 
+static void __mtk_seninf_update(struct mtk_seninf *priv, u32 reg,
+				u32 mask, u32 shift, u32 value)
+{
+	u32 val = mtk_seninf_read(priv, reg);
+
+	mtk_seninf_write(priv, reg, (val & ~mask) | (value << shift));
+}
+
+#define mtk_seninf_update(priv, reg, field, val)			\
+	__mtk_seninf_update(priv, reg, reg##_##field##_MASK,		\
+			    reg##_##field##_SHIFT, val)
+
 static u32 mtk_seninf_input_read(struct mtk_seninf_input *input, u32 reg)
 {
 	return readl(input->base + reg);
@@ -280,6 +284,18 @@ static void mtk_seninf_input_write(struct mtk_seninf_input *input, u32 reg,
 {
 	writel(value, input->base + reg);
 }
+
+static void __mtk_seninf_input_update(struct mtk_seninf_input *input, u32 reg,
+				      u32 mask, u32 shift, u32 value)
+{
+	u32 val = mtk_seninf_input_read(input, reg);
+
+	mtk_seninf_input_write(input, reg, (val & ~mask) | (value << shift));
+}
+
+#define mtk_seninf_input_update(input, reg, field, val)			\
+	__mtk_seninf_input_update(input, reg, reg##_##field##_MASK,	\
+				  reg##_##field##_SHIFT, val)
 
 static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 			       struct mtk_seninf_input *input)
@@ -295,11 +311,11 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	fmtinfo = mtk_seninf_format_info(input->format.code);
 
 	/* Enable mux */
-	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
-	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_SRC_SEL,
-		    SENINF_MIPI_SENSOR);
-	SENINF_BITS(input->base, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
-		    SENINF_NORMAL_MODEL);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_SRC_SEL,
+				SENINF_MIPI_SENSOR);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
+				SENINF_NORMAL_MODEL);
 
 	switch (pixel_mode) {
 	case 1: /* 2 Pixel */
@@ -316,22 +332,22 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 		break;
 	}
 
-	SENINF_BITS(input->base, SENINF_MUX_CTRL_EXT, SENINF_PIX_SEL_EXT,
-		    pix_sel_ext);
-	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT, SENINF_PIX_SEL_EXT,
+				pix_sel_ext);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
 
 	if (!(fmtinfo->flags & MTK_SENINF_FORMAT_JPEG)) {
-		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
-		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1b);
-		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1f);
+		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
+		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1b);
+		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1f);
 	} else {
-		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 0);
-		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x18);
-		SENINF_BITS(input->base, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1e);
+		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 0);
+		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x18);
+		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1e);
 	}
 
-	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
-	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
 
 	val = mtk_seninf_input_read(input, SENINF_MUX_CTRL);
 	mtk_seninf_input_write(input, SENINF_MUX_CTRL, val | 0x00000003);
@@ -377,38 +393,38 @@ static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
 		 */
 		dphy_mode = input_a->phy_mode == SENINF_PHY_MODE_4D1C ? 0 : 1;
 
-		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    DPHY_MODE, dphy_mode);
-		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    CK_SEL_1, input_a->bus.clock_lane);
-		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    CK_SEL_2, csi0b_clock);
-		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-			    PHY_SENINF_LANE_MUX_CSI0_EN, 1);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+				  DPHY_MODE, dphy_mode);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+				  CK_SEL_1, input_a->bus.clock_lane);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+				  CK_SEL_2, csi0b_clock);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+				  PHY_SENINF_LANE_MUX_CSI0_EN, 1);
 	}
 
 	/* CSI1 */
 	if (priv->inputs[CSI_PORT_1].phy_mode) {
 		struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_1];
 
-		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
-			    DPHY_MODE, 0 /* 4D1C */);
-		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
-			    CK_SEL_1, input->bus.clock_lane);
-		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI1,
-			    PHY_SENINF_LANE_MUX_CSI1_EN, 1);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI1,
+				  DPHY_MODE, 0 /* 4D1C */);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI1,
+				  CK_SEL_1, input->bus.clock_lane);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI1,
+				  PHY_SENINF_LANE_MUX_CSI1_EN, 1);
 	}
 
 	/* CSI2 */
 	if (priv->inputs[CSI_PORT_2].phy_mode) {
 		struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_2];
 
-		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
-			    DPHY_MODE, 0 /* 4D1C */);
-		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
-			    CK_SEL_1, input->bus.clock_lane);
-		SENINF_BITS(priv->base, SENINF_TOP_PHY_SENINF_CTL_CSI2,
-			    PHY_SENINF_LANE_MUX_CSI2_EN, 1);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI2,
+				  DPHY_MODE, 0 /* 4D1C */);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI2,
+				  CK_SEL_1, input->bus.clock_lane);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI2,
+				  PHY_SENINF_LANE_MUX_CSI2_EN, 1);
 	}
 }
 
@@ -436,14 +452,14 @@ static void mtk_seninf_rx_config(struct mtk_seninf *priv,
 			lanes[i]--;
 	}
 
-	SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-		    CSI0_BIST_LN0_MUX, lanes[0]);
-	SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-		    CSI0_BIST_LN1_MUX, lanes[1]);
-	SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-		    CSI0_BIST_LN2_MUX, lanes[2]);
-	SENINF_BITS(input->base, MIPI_RX_CON24_CSI0,
-		    CSI0_BIST_LN3_MUX, lanes[3]);
+	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
+				CSI0_BIST_LN0_MUX, lanes[0]);
+	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
+				CSI0_BIST_LN1_MUX, lanes[1]);
+	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
+				CSI0_BIST_LN2_MUX, lanes[2]);
+	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
+				CSI0_BIST_LN3_MUX, lanes[3]);
 }
 
 static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
@@ -465,11 +481,11 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	mtk_seninf_input_write(input, SENINF_TG1_SEN_CK, 0x10001);
 
 	/* First Enable Sensor interface and select pad (0x1a04_0200) */
-	SENINF_BITS(input->base, SENINF_CTRL, SENINF_EN, 1);
-	SENINF_BITS(input->base, SENINF_CTRL, PAD2CAM_DATA_SEL, SENINF_PAD_10BIT);
-	SENINF_BITS(input->base, SENINF_CTRL, SENINF_SRC_SEL, 0);
-	SENINF_BITS(input->base, SENINF_CTRL_EXT, SENINF_CSI2_IP_EN, 1);
-	SENINF_BITS(input->base, SENINF_CTRL_EXT, SENINF_NCSI2_IP_EN, 0);
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CTRL, PAD2CAM_DATA_SEL, SENINF_PAD_10BIT);
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_SRC_SEL, 0);
+	mtk_seninf_input_update(input, SENINF_CTRL_EXT, SENINF_CSI2_IP_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CTRL_EXT, SENINF_NCSI2_IP_EN, 0);
 
 	/* DPCM Enable */
 	dpcm = fmtinfo->flags & MTK_SENINF_FORMAT_DPCM ? 0x2a : 0;
@@ -477,8 +493,8 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	mtk_seninf_input_write(input, SENINF_CSI2_DPCM, val);
 
 	/* Settle delay */
-	SENINF_BITS(input->base, SENINF_CSI2_LNRD_TIMING,
-		    DATA_SETTLE_PARAMETER, SENINF_SETTLE_DELAY);
+	mtk_seninf_input_update(input, SENINF_CSI2_LNRD_TIMING,
+				DATA_SETTLE_PARAMETER, SENINF_SETTLE_DELAY);
 
 	/* HQ */
 	mtk_seninf_input_write(input, SENINF_CSI2_LNRC_FSM, 0x10);
@@ -488,25 +504,25 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	    | (data_header_order << 16) | 0x10 | ((1 << data_lane_num) - 1);
 	mtk_seninf_input_write(input, SENINF_CSI2_CTL, val);
 
-	SENINF_BITS(input->base, SENINF_CSI2_RESYNC_MERGE_CTL,
-		    BYPASS_LANE_RESYNC, 0);
-	SENINF_BITS(input->base, SENINF_CSI2_RESYNC_MERGE_CTL, CDPHY_SEL, 0);
-	SENINF_BITS(input->base, SENINF_CSI2_RESYNC_MERGE_CTL,
-		    CPHY_LANE_RESYNC_CNT, 3);
-	SENINF_BITS(input->base, SENINF_CSI2_MODE, CSR_CSI2_MODE, 0);
-	SENINF_BITS(input->base, SENINF_CSI2_MODE, CSR_CSI2_HEADER_LEN, 0);
-	SENINF_BITS(input->base, SENINF_CSI2_DPHY_SYNC, SYNC_SEQ_MASK_0, 0xff00);
-	SENINF_BITS(input->base, SENINF_CSI2_DPHY_SYNC, SYNC_SEQ_PAT_0, 0x001d);
+	mtk_seninf_input_update(input, SENINF_CSI2_RESYNC_MERGE_CTL,
+				BYPASS_LANE_RESYNC, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_RESYNC_MERGE_CTL, CDPHY_SEL, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_RESYNC_MERGE_CTL,
+				CPHY_LANE_RESYNC_CNT, 3);
+	mtk_seninf_input_update(input, SENINF_CSI2_MODE, CSR_CSI2_MODE, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_MODE, CSR_CSI2_HEADER_LEN, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_DPHY_SYNC, SYNC_SEQ_MASK_0, 0xff00);
+	mtk_seninf_input_update(input, SENINF_CSI2_DPHY_SYNC, SYNC_SEQ_PAT_0, 0x001d);
 
-	SENINF_BITS(input->base, SENINF_CSI2_CTL, CLOCK_HS_OPTION, 0);
-	SENINF_BITS(input->base, SENINF_CSI2_CTL, HSRX_DET_EN, 0);
-	SENINF_BITS(input->base, SENINF_CSI2_CTL, HS_TRAIL_EN, 1);
-	SENINF_BITS(input->base, SENINF_CSI2_HS_TRAIL, HS_TRAIL_PARAMETER,
-		    SENINF_HS_TRAIL_PARAMETER);
+	mtk_seninf_input_update(input, SENINF_CSI2_CTL, CLOCK_HS_OPTION, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_CTL, HSRX_DET_EN, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_CTL, HS_TRAIL_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CSI2_HS_TRAIL, HS_TRAIL_PARAMETER,
+				SENINF_HS_TRAIL_PARAMETER);
 
 	/* Set debug port to output packet number */
-	SENINF_BITS(input->base, SENINF_CSI2_DGB_SEL, DEBUG_EN, 1);
-	SENINF_BITS(input->base, SENINF_CSI2_DGB_SEL, DEBUG_SEL, 0x1a);
+	mtk_seninf_input_update(input, SENINF_CSI2_DGB_SEL, DEBUG_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CSI2_DGB_SEL, DEBUG_SEL, 0x1a);
 
 	/* HQ */
 	mtk_seninf_input_write(input, SENINF_CSI2_SPARE0, 0xfffffffe);
@@ -518,15 +534,14 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	mtk_seninf_input_write(input, SENINF_CSI2_INT_STATUS, 0xffffffff);
 	/* Enable CSI2 Extend IRQ mask */
 	/* Turn on all interrupt */
-	SENINF_BITS(input->base, SENINF_CTRL, CSI2_SW_RST, 1);
+	mtk_seninf_input_update(input, SENINF_CTRL, CSI2_SW_RST, 1);
 	udelay(1);
-	SENINF_BITS(input->base, SENINF_CTRL, CSI2_SW_RST, 0);
+	mtk_seninf_input_update(input, SENINF_CTRL, CSI2_SW_RST, 0);
 }
 
 static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
-	void __iomem *pseninf = priv->base;
 	unsigned int val;
 	unsigned int pixel_mode = TWO_PIXEL_MODE;
 	unsigned int pix_sel_ext;
@@ -546,24 +561,24 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 		return ret;
 	}
 
-	SENINF_BITS(pseninf, SENINF_TOP_CTRL, MUX_LP_MODE, 0);
+	mtk_seninf_update(priv, SENINF_TOP_CTRL, MUX_LP_MODE, 0);
 
-	SENINF_BITS(pseninf, SENINF_TOP_CTRL, SENINF_PCLK_EN, 1);
-	SENINF_BITS(pseninf, SENINF_TOP_CTRL, SENINF2_PCLK_EN, 1);
+	mtk_seninf_update(priv, SENINF_TOP_CTRL, SENINF_PCLK_EN, 1);
+	mtk_seninf_update(priv, SENINF_TOP_CTRL, SENINF2_PCLK_EN, 1);
 
-	SENINF_BITS(pseninf, SENINF_CTRL, SENINF_EN, 1);
-	SENINF_BITS(pseninf, SENINF_CTRL, SENINF_SRC_SEL, 1);
-	SENINF_BITS(pseninf, SENINF_CTRL_EXT, SENINF_TESTMDL_IP_EN, 1);
+	mtk_seninf_update(priv, SENINF_CTRL, SENINF_EN, 1);
+	mtk_seninf_update(priv, SENINF_CTRL, SENINF_SRC_SEL, 1);
+	mtk_seninf_update(priv, SENINF_CTRL_EXT, SENINF_TESTMDL_IP_EN, 1);
 
-	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_EN, 1);
-	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_PAT, 0xc);
-	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_VSYNC, 4);
-	SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_DUMMYPXL, 0x28);
+	mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_EN, 1);
+	mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_PAT, 0xc);
+	mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_VSYNC, 4);
+	mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_DUMMYPXL, 0x28);
 
 	if (fmtinfo->flags & MTK_SENINF_FORMAT_BAYER)
-		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x0);
+		mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_FMT, 0x0);
 	else
-		SENINF_BITS(pseninf, SENINF_TG1_TM_CTL, TM_FMT, 0x1);
+		mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_FMT, 0x1);
 
 	switch (priv->source_format.code) {
 	case MEDIA_BUS_FMT_UYVY8_1X16:
@@ -590,10 +605,10 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, val);
 
 	/* TODO : if mux != 0 => use pseninf + 0x1000 * mux */
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
-		    SENINF_TEST_MODEL);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_SRC_SEL, 1);
+	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
+	mtk_seninf_update(priv, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
+			  SENINF_TEST_MODEL);
+	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_SRC_SEL, 1);
 
 	switch (pixel_mode) {
 	case 1:
@@ -609,20 +624,20 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 		pix_sel = 0;
 		break;
 	}
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL_EXT, SENINF_PIX_SEL_EXT,
+	mtk_seninf_update(priv, SENINF_MUX_CTRL_EXT, SENINF_PIX_SEL_EXT,
 		    pix_sel_ext);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
+	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
 
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_PUSH_EN,
+	mtk_seninf_update(priv, SENINF_MUX_CTRL, FIFO_PUSH_EN,
 		    0x1f);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FLUSH_EN,
+	mtk_seninf_update(priv, SENINF_MUX_CTRL, FIFO_FLUSH_EN,
 		    0x1b);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, FIFO_FULL_WR_EN,
+	mtk_seninf_update(priv, SENINF_MUX_CTRL, FIFO_FULL_WR_EN,
 		    2);
 
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
-	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_HSYNC_MASK, 1);
+	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
+	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
+	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_HSYNC_MASK, 1);
 
 	mtk_seninf_write(priv, SENINF_MUX_INTEN,
 			 SENINF_IRQ_CLR_SEL | SENINF_ALL_ERR_IRQ_EN);
