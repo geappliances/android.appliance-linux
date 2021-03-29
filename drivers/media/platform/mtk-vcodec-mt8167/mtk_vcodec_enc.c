@@ -1092,6 +1092,9 @@ static int vb2ops_venc_start_streaming(struct vb2_queue *q, unsigned int count)
 		ctx->state = MTK_STATE_HEADER;
 	}
 
+	if (ctx->oal_vcodec == 1)
+		ctx->pend_src_buf = NULL;
+
 	ctx->last_src_buf = NULL;
 
 	return 0;
@@ -1360,52 +1363,6 @@ static void mtk_venc_worker(struct work_struct *work)
 	bs_buf.dma_addr = vb2_dma_contig_plane_dma_addr(&dst_buf->vb2_buf, 0);
 	bs_buf.size = (size_t)dst_buf->vb2_buf.planes[0].length;
 
-	if (src_buf->planes[0].bytesused == 0U) {
-
-		if (ctx->oal_vcodec == 1) {
-			ret = venc_if_encode(ctx, VENC_START_OPT_ENCODE_FRAME_FINAL,
-				     NULL, &bs_buf, &enc_result);
-
-			pend_src_vb2_v4l2 = to_vb2_v4l2_buffer(ctx->pend_src_buf);
-			dst_buf->vb2_buf.timestamp = ctx->pend_src_buf->timestamp;
-			if (pend_src_vb2_v4l2->flags & V4L2_BUF_FLAG_TIMECODE)
-				dst_buf->timecode = pend_src_vb2_v4l2->timecode;
-			dst_buf->field = pend_src_vb2_v4l2->field;
-			dst_buf->flags |= pend_src_vb2_v4l2->flags &
-				(V4L2_BUF_FLAG_TIMECODE |
-				 V4L2_BUF_FLAG_KEYFRAME |
-				 V4L2_BUF_FLAG_PFRAME |
-				 V4L2_BUF_FLAG_BFRAME |
-				 V4L2_BUF_FLAG_TSTAMP_SRC_MASK);
-
-			pend_src_vb2_v4l2->sequence = ctx->sequence_out++;
-			dst_buf->sequence = ctx->sequence_cap++;
-
-			if (enc_result.is_key_frm)
-					dst_buf->flags |= V4L2_BUF_FLAG_KEYFRAME;
-
-			if (ret) {
-				dst_buf->vb2_buf.planes[0].bytesused = 0;
-				v4l2_m2m_buf_done(pend_src_vb2_v4l2, VB2_BUF_STATE_ERROR);
-				v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_ERROR);
-				mtk_v4l2_err("last venc_if_encode failed=%d", ret);
-			} else {
-				dst_buf->vb2_buf.planes[0].bytesused = enc_result.bs_size;
-				v4l2_m2m_buf_done(pend_src_vb2_v4l2, VB2_BUF_STATE_DONE);
-				v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_DONE);
-			}
-
-			ctx->pend_src_buf = NULL;
-		} else {
-			dst_buf->vb2_buf.planes[0].bytesused = 0;
-			v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_ERROR);
-		}
-
-		v4l2_m2m_buf_done(src_buf, VB2_BUF_STATE_DONE);
-		v4l2_m2m_job_finish(ctx->dev->m2m_dev_enc, ctx->m2m_ctx);
-		return;
-	}
-
 	memset(&frm_buf, 0, sizeof(frm_buf));
 	mtk_v4l2_debug(2,"src_buf->vb2_buf.num_planes is %d\n",src_buf->vb2_buf.num_planes);
 	for (i = 0; i < src_buf->vb2_buf.num_planes ; i++) {
@@ -1443,7 +1400,7 @@ static void mtk_venc_worker(struct work_struct *work)
 	if (enc_result.is_key_frm)
 		dst_buf->flags |= V4L2_BUF_FLAG_KEYFRAME;
 
-	if (src_buf == ctx->last_src_buf) {
+	if (!ctx->oal_vcodec && src_buf == ctx->last_src_buf) {
 		dst_buf->flags |= V4L2_BUF_FLAG_LAST;
 		v4l2_event_queue_fh(&ctx->fh, &eos_event);
 	}
@@ -1475,8 +1432,59 @@ static void mtk_venc_worker(struct work_struct *work)
 					  VB2_BUF_STATE_DONE);
 				v4l2_m2m_buf_done(dst_buf,
 					  VB2_BUF_STATE_DONE);
-				/* pending current src buf for hybrid encoder */
-	            ctx->pend_src_buf = &src_buf->vb2_buf;
+
+				if (src_buf == ctx->last_src_buf) {
+					dst_buf = v4l2_m2m_dst_buf_remove(ctx->m2m_ctx);
+					if (!dst_buf) {
+						mtk_v4l2_err("missing dst buf got last venc_if_encode failed=%d", ret);
+						return;
+					}
+
+					bs_buf.va = vb2_plane_vaddr(&dst_buf->vb2_buf, 0);
+					bs_buf.dma_addr = vb2_dma_contig_plane_dma_addr(&dst_buf->vb2_buf, 0);
+					bs_buf.size = (size_t)dst_buf->vb2_buf.planes[0].length;
+
+					ret = venc_if_encode(ctx, VENC_START_OPT_ENCODE_FRAME_FINAL,
+							NULL, &bs_buf, &enc_result);
+
+					if (enc_result.is_key_frm)
+						dst_buf->flags |= V4L2_BUF_FLAG_KEYFRAME;
+
+					dst_buf->flags |= V4L2_BUF_FLAG_LAST;
+					v4l2_event_queue_fh(&ctx->fh, &eos_event);
+
+					dst_buf->vb2_buf.timestamp = src_buf->vb2_buf.timestamp;
+					if (src_buf->flags & V4L2_BUF_FLAG_TIMECODE)
+						dst_buf->timecode = src_buf->timecode;
+					dst_buf->field = src_buf->field;
+					dst_buf->flags |= src_buf->flags &
+						(V4L2_BUF_FLAG_TIMECODE |
+						 V4L2_BUF_FLAG_KEYFRAME |
+						 V4L2_BUF_FLAG_PFRAME |
+						 V4L2_BUF_FLAG_BFRAME |
+						 V4L2_BUF_FLAG_TSTAMP_SRC_MASK);
+
+					src_buf->sequence = ctx->sequence_out++;
+					dst_buf->sequence = ctx->sequence_cap++;
+
+					if (enc_result.is_key_frm)
+						dst_buf->flags |= V4L2_BUF_FLAG_KEYFRAME;
+
+					if (ret) {
+						dst_buf->vb2_buf.planes[0].bytesused = 0;
+						v4l2_m2m_buf_done(src_buf, VB2_BUF_STATE_ERROR);
+						v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_ERROR);
+						mtk_v4l2_err("last venc_if_encode failed=%d", ret);
+					} else {
+						dst_buf->vb2_buf.planes[0].bytesused = enc_result.bs_size;
+						v4l2_m2m_buf_done(src_buf, VB2_BUF_STATE_DONE);
+						v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_DONE);
+					}
+
+					ctx->pend_src_buf = NULL;
+				} else
+					/* pending current src buf for hybrid encoder */
+					ctx->pend_src_buf = &src_buf->vb2_buf;
 		    } else {
 				/* for hybrid encoder, first src buffer will not be
 				 * encoded in the first encode cycle, so put the
