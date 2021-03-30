@@ -1144,7 +1144,7 @@ static void vb2ops_venc_stop_streaming(struct vb2_queue *q)
 
 	if (q->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
 		while ((dst_buf = v4l2_m2m_dst_buf_remove(ctx->m2m_ctx))) {
-			dst_buf->planes[0].bytesused = 0;
+			dst_buf->vb2_buf.planes[0].bytesused = 0;
 			v4l2_m2m_buf_done(dst_buf,
 					VB2_BUF_STATE_ERROR);
 		}
@@ -1225,7 +1225,7 @@ static int mtk_venc_encode_header(void *priv)
 			NULL, &bs_buf, &enc_result);
 
 	if (ret) {
-		dst_buf->planes[0].bytesused = 0;
+		dst_buf->vb2_buf.planes[0].bytesused = 0;
 		ctx->state = MTK_STATE_ABORT;
 		v4l2_m2m_buf_done(dst_buf,
 				  VB2_BUF_STATE_ERROR);
@@ -1251,7 +1251,7 @@ static int mtk_venc_encode_header(void *priv)
 	}
 
 	ctx->state = MTK_STATE_HEADER;
-	dst_buf->planes[0].bytesused = enc_result.bs_size;
+	dst_buf->vb2_buf.planes[0].bytesused = enc_result.bs_size;
 	v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_DONE);
 
 	return 0;
@@ -1385,19 +1385,19 @@ static void mtk_venc_worker(struct work_struct *work)
 					dst_buf->flags |= V4L2_BUF_FLAG_KEYFRAME;
 
 			if (ret) {
-				dst_buf->planes[0].bytesused = 0;
+				dst_buf->vb2_buf.planes[0].bytesused = 0;
 				v4l2_m2m_buf_done(pend_src_vb2_v4l2, VB2_BUF_STATE_ERROR);
 				v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_ERROR);
 				mtk_v4l2_err("last venc_if_encode failed=%d", ret);
 			} else {
-				dst_buf->planes[0].bytesused = enc_result.bs_size;
+				dst_buf->vb2_buf.planes[0].bytesused = enc_result.bs_size;
 				v4l2_m2m_buf_done(pend_src_vb2_v4l2, VB2_BUF_STATE_DONE);
 				v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_DONE);
 			}
 
 			ctx->pend_src_buf = NULL;
 		} else {
-			dst_buf->planes[0].bytesused = 0;
+			dst_buf->vb2_buf.planes[0].bytesused = 0;
 			v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_ERROR);
 		}
 
@@ -1449,7 +1449,7 @@ static void mtk_venc_worker(struct work_struct *work)
 	}
 
 	if (ret) {
-		dst_buf->planes[0].bytesused = 0;
+		dst_buf->vb2_buf.planes[0].bytesused = 0;
 		v4l2_m2m_buf_done(src_buf, VB2_BUF_STATE_ERROR);
 		v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_ERROR);
 		mtk_v4l2_err("venc_if_encode failed=%d", ret);
@@ -1470,7 +1470,7 @@ static void mtk_venc_worker(struct work_struct *work)
 
 				pend_src_vb2_v4l2->sequence = ctx->sequence_out++;
 				dst_buf->sequence = ctx->sequence_cap++;
-	            dst_buf->planes[0].bytesused = enc_result.bs_size;
+				dst_buf->vb2_buf.planes[0].bytesused = enc_result.bs_size;
 				v4l2_m2m_buf_done(pend_src_vb2_v4l2,
 					  VB2_BUF_STATE_DONE);
 				v4l2_m2m_buf_done(dst_buf,
@@ -1499,7 +1499,7 @@ static void mtk_venc_worker(struct work_struct *work)
 
 			src_buf->sequence = ctx->sequence_out++;
 			dst_buf->sequence = ctx->sequence_cap++;
-			dst_buf->planes[0].bytesused = enc_result.bs_size;
+			dst_buf->vb2_buf.planes[0].bytesused = enc_result.bs_size;
 			v4l2_m2m_buf_done(src_buf,
 					VB2_BUF_STATE_DONE);
 			v4l2_m2m_buf_done(dst_buf,
