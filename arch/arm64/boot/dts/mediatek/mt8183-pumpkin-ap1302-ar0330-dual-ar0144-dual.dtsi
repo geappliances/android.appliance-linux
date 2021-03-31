@@ -199,6 +199,10 @@
 	};
 };
 
-&camsv0 {
+&camsv1 {
+	status = "okay";
+};
+
+&camsv2 {
 	status = "okay";
 };

@@ -20,3 +20,7 @@
 		};
 	};
 };
+
+&camsv1 {
+	status = "disabled";
+};

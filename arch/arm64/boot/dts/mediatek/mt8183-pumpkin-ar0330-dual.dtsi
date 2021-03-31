@@ -151,3 +151,7 @@
 &camsv0 {
 	status = "okay";
 };
+
+&camsv1 {
+	status = "okay";
+};
