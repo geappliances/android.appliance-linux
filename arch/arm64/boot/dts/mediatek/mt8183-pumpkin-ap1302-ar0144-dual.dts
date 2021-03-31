@@ -10,3 +10,7 @@
 		status = "disabled";
 	};
 };
+
+&camsv2 {
+	status = "disabled";
+};
