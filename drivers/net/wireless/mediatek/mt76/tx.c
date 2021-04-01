@@ -175,12 +175,8 @@ EXPORT_SYMBOL_GPL(mt76_tx_status_check);
 static void
 mt76_tx_check_non_aql(struct mt76_dev *dev, u16 wcid_idx, struct sk_buff *skb)
 {
-	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
 	struct mt76_wcid *wcid;
 	int pending;
-
-	if (info->tx_time_est)
-		return;
 
 	if (wcid_idx >= ARRAY_SIZE(dev->wcid))
 		return;
@@ -229,15 +225,12 @@ __mt76_tx_queue_skb(struct mt76_dev *dev, int qid, struct sk_buff *skb,
 		    struct mt76_wcid *wcid, struct ieee80211_sta *sta,
 		    bool *stop)
 {
-	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
 	struct mt76_queue *q;
-	bool non_aql;
 	int pending;
 	int idx;
 
-	non_aql = !info->tx_time_est;
 	idx = dev->queue_ops->tx_queue_skb(dev, qid, skb, wcid, sta);
-	if (idx < 0 || !sta || !non_aql)
+	if (idx < 0 || !sta)
 		return idx;
 
 	wcid = (struct mt76_wcid *)sta->drv_priv;
