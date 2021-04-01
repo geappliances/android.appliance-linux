@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 config MT76_CORE
 	tristate
+	select LOCKDEP
+	select DEBUG_LOCK_ALLOC
 
 config MT76_LEDS
 	bool
