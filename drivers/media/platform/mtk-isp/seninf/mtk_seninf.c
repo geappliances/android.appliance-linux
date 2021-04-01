@@ -260,6 +260,27 @@ static const struct mtk_seninf_format_info *mtk_seninf_format_info(u32 code)
  * Hardware Configuration
  */
 
+static u32 mtk_seninf_read(struct mtk_seninf *priv, u32 reg)
+{
+	return readl(priv->base + reg);
+}
+
+static void mtk_seninf_write(struct mtk_seninf *priv, u32 reg, u32 value)
+{
+	writel(value, priv->base + reg);
+}
+
+static u32 mtk_seninf_input_read(struct mtk_seninf_input *input, u32 reg)
+{
+	return readl(input->base + reg);
+}
+
+static void mtk_seninf_input_write(struct mtk_seninf_input *input, u32 reg,
+				   u32 value)
+{
+	writel(value, input->base + reg);
+}
+
 static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 			       struct mtk_seninf_input *input)
 {
@@ -312,14 +333,14 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
 	SENINF_BITS(input->base, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
 
-	val = readl(input->base + SENINF_MUX_CTRL);
-	writel(val | 0x00000003, input->base + SENINF_MUX_CTRL);
-	writel(val & 0xfffffffc, input->base + SENINF_MUX_CTRL);
+	val = mtk_seninf_input_read(input, SENINF_MUX_CTRL);
+	mtk_seninf_input_write(input, SENINF_MUX_CTRL, val | 0x00000003);
+	mtk_seninf_input_write(input, SENINF_MUX_CTRL, val & 0xfffffffc);
 
-	writel(0x00043210, priv->base + SENINF_TOP_MUX_CTRL);
+	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, 0x00043210);
 
 	/* HQ */
-	writel(0xc2000, input->base + SENINF_MUX_SPARE);
+	mtk_seninf_input_write(input, SENINF_MUX_SPARE, 0xc2000);
 
 	/*
 	 * Hardcode the top mux (from SENINF input to async FIFO) with a direct
@@ -327,9 +348,9 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	 * FIFOs to the outputs (CAM and CAMSV).
 	 */
 	pos = input->source_pad - SENINF_NUM_INPUTS + 2;
-	val = (readl(priv->base + SENINF_TOP_CAM_MUX_CTRL) & ~(0xF << (pos * 4))) |
+	val = (mtk_seninf_read(priv, SENINF_TOP_CAM_MUX_CTRL) & ~(0xF << (pos * 4))) |
 		((input->seninf & 0xF) << (pos * 4));
-	writel(val, priv->base + SENINF_TOP_CAM_MUX_CTRL);
+	mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, val);
 }
 
 static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
@@ -437,11 +458,11 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	fmtinfo = mtk_seninf_format_info(input->format.code);
 
 	/* Configure timestamp */
-	writel(SENINF_TIMESTAMP_STEP, input->base + SENINF_TG1_TM_STP);
+	mtk_seninf_input_write(input, SENINF_TG1_TM_STP, SENINF_TIMESTAMP_STEP);
 
 	/* HQ */
-	writel(0x0, input->base + SENINF_TG1_PH_CNT);
-	writel(0x10001, input->base + SENINF_TG1_SEN_CK);
+	mtk_seninf_input_write(input, SENINF_TG1_PH_CNT, 0x0);
+	mtk_seninf_input_write(input, SENINF_TG1_SEN_CK, 0x10001);
 
 	/* First Enable Sensor interface and select pad (0x1a04_0200) */
 	SENINF_BITS(input->base, SENINF_CTRL, SENINF_EN, 1);
@@ -453,19 +474,19 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	/* DPCM Enable */
 	dpcm = fmtinfo->flags & MTK_SENINF_FORMAT_DPCM ? 0x2a : 0;
 	val = 1 << ((dpcm == 0x2a) ? 15 : ((dpcm & 0xF) + 7));
-	writel(val, input->base + SENINF_CSI2_DPCM);
+	mtk_seninf_input_write(input, SENINF_CSI2_DPCM, val);
 
 	/* Settle delay */
 	SENINF_BITS(input->base, SENINF_CSI2_LNRD_TIMING,
 		    DATA_SETTLE_PARAMETER, SENINF_SETTLE_DELAY);
 
 	/* HQ */
-	writel(0x10, input->base + SENINF_CSI2_LNRC_FSM);
+	mtk_seninf_input_write(input, SENINF_CSI2_LNRC_FSM, 0x10);
 
 	/* CSI2 control */
-	val = readl(input->base + SENINF_CSI2_CTL) | (data_header_order << 16) |
-		0x10 | ((1 << data_lane_num) - 1);
-	writel(val, input->base + SENINF_CSI2_CTL);
+	val = mtk_seninf_input_read(input, SENINF_CSI2_CTL)
+	    | (data_header_order << 16) | 0x10 | ((1 << data_lane_num) - 1);
+	mtk_seninf_input_write(input, SENINF_CSI2_CTL, val);
 
 	SENINF_BITS(input->base, SENINF_CSI2_RESYNC_MERGE_CTL,
 		    BYPASS_LANE_RESYNC, 0);
@@ -488,13 +509,13 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	SENINF_BITS(input->base, SENINF_CSI2_DGB_SEL, DEBUG_SEL, 0x1a);
 
 	/* HQ */
-	writel(0xfffffffe, input->base + SENINF_CSI2_SPARE0);
+	mtk_seninf_input_write(input, SENINF_CSI2_SPARE0, 0xfffffffe);
 
 	/* Enable CSI2 IRQ mask */
 	/* Turn on all interrupt */
-	writel(0xffffffff, input->base + SENINF_CSI2_INT_EN);
+	mtk_seninf_input_write(input, SENINF_CSI2_INT_EN, 0xffffffff);
 	/* Write clear CSI2 IRQ */
-	writel(0xffffffff, input->base + SENINF_CSI2_INT_STATUS);
+	mtk_seninf_input_write(input, SENINF_CSI2_INT_STATUS, 0xffffffff);
 	/* Enable CSI2 Extend IRQ mask */
 	/* Turn on all interrupt */
 	SENINF_BITS(input->base, SENINF_CTRL, CSI2_SW_RST, 1);
@@ -549,24 +570,24 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	case MEDIA_BUS_FMT_VYUY8_1X16:
 	case MEDIA_BUS_FMT_YUYV8_1X16:
 	case MEDIA_BUS_FMT_YVYU8_1X16:
-		writel((priv->source_format.height + 8) << 16 |
-		       priv->source_format.width * 2,
-		       pseninf + SENINF_TG1_TM_SIZE);
+		mtk_seninf_write(priv, SENINF_TG1_TM_SIZE,
+				 (priv->source_format.height + 8) << 16 |
+				 priv->source_format.width * 2);
 		break;
 	default:
-		writel((priv->source_format.height + 8) << 16 |
-		       priv->source_format.width,
-		       pseninf + SENINF_TG1_TM_SIZE);
+		mtk_seninf_write(priv, SENINF_TG1_TM_SIZE,
+				 (priv->source_format.height + 8) << 16 |
+				 priv->source_format.width);
 		break;
 	}
 
-	writel(0x8, pseninf + SENINF_TG1_TM_CLK);
-	writel(0x1, pseninf + SENINF_TG1_TM_STP);
+	mtk_seninf_write(priv, SENINF_TG1_TM_CLK, 0x8);
+	mtk_seninf_write(priv, SENINF_TG1_TM_STP, 0x1);
 
 	/* Set top mux */
-	val = (readl(pseninf + SENINF_TOP_MUX_CTRL) & (~(0xf << (mux * 4)))) |
+	val = (mtk_seninf_read(priv, SENINF_TOP_MUX_CTRL) & (~(0xf << (mux * 4)))) |
 	      ((seninf & 0xf) << (mux * 4));
-	writel(val, pseninf + SENINF_TOP_MUX_CTRL);
+	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, val);
 
 	/* TODO : if mux != 0 => use pseninf + 0x1000 * mux */
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
@@ -603,16 +624,16 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
 	SENINF_BITS(pseninf, SENINF_MUX_CTRL, SENINF_HSYNC_MASK, 1);
 
-	writel(SENINF_IRQ_CLR_SEL | SENINF_ALL_ERR_IRQ_EN,
-	       pseninf + SENINF_MUX_INTEN);
+	mtk_seninf_write(priv, SENINF_MUX_INTEN,
+			 SENINF_IRQ_CLR_SEL | SENINF_ALL_ERR_IRQ_EN);
 
-	writel(0x3 | readl(pseninf + SENINF_MUX_CTRL),
-	       pseninf + SENINF_MUX_CTRL);
+	mtk_seninf_write(priv, SENINF_MUX_CTRL,
+			 mtk_seninf_read(priv, SENINF_MUX_CTRL) | 0x3);
 	udelay(1);
-	writel(~(0x3) & readl(pseninf + SENINF_MUX_CTRL),
-	       pseninf + SENINF_MUX_CTRL);
+	mtk_seninf_write(priv, SENINF_MUX_CTRL,
+			 mtk_seninf_read(priv, SENINF_MUX_CTRL) & ~0x3);
 
-	writel(0x76543010, pseninf + SENINF_TOP_CAM_MUX_CTRL);
+	mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76543010);
 
 	dev_dbg(priv->dev, "%s: OK\n", __func__);
 	return 0;
@@ -647,8 +668,8 @@ static void mtk_seninf_power_off(struct mtk_seninf *priv)
 		struct mtk_seninf_input *input = priv->active_input;
 
 		/* Disable CSI2(2.5G) first */
-		writel(readl(input->base + SENINF_CSI2_CTL) & 0xffffffe0,
-		       input->base + SENINF_CSI2_CTL);
+		mtk_seninf_input_write(input, SENINF_CSI2_CTL,
+				       mtk_seninf_input_read(input, SENINF_CSI2_CTL) & 0xffffffe0);
 
 		if (!priv->is_testmode)
 			phy_power_off(input->phy);
