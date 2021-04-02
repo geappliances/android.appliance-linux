@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 config MT76_CORE
 	tristate
+	select LOCKDEP
+	select DEBUG_LOCK_ALLOC
 
 config MT76_LEDS
 	bool
@@ -9,6 +11,10 @@ config MT76_LEDS
 	default y
 
 config MT76_USB
+	tristate
+	depends on MT76_CORE
+
+config MT76_SDIO
 	tristate
 	depends on MT76_CORE
 
@@ -24,3 +30,4 @@ source "drivers/net/wireless/mediatek/mt76/mt76x0/Kconfig"
 source "drivers/net/wireless/mediatek/mt76/mt76x2/Kconfig"
 source "drivers/net/wireless/mediatek/mt76/mt7603/Kconfig"
 source "drivers/net/wireless/mediatek/mt76/mt7615/Kconfig"
+source "drivers/net/wireless/mediatek/mt76/mt7915/Kconfig"
