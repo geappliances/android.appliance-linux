@@ -106,7 +106,7 @@ struct mtk_seninf_format_info {
 };
 
 struct mtk_seninf_input {
-	enum mtk_seninf_port port;
+	enum mtk_seninf_port pad;
 	enum SENINF_ID seninf;
 	void __iomem *base;
 
@@ -1067,7 +1067,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 
 	input = &priv->inputs[port];
 
-	input->port = port;
+	input->pad = port;
 	input->seninf = port_to_seninf[port];
 	input->base = priv->base + 0x1000 * input->seninf;
 	input->bus = vep->bus.mipi_csi2;
@@ -1151,7 +1151,7 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
 		struct mtk_seninf_input *input = s_asd->input;
 
 		input->subdev = sd;
-		ret = v4l2_create_fwnode_links_to_pad(sd, &priv->pads[input->port], 0);
+		ret = v4l2_create_fwnode_links_to_pad(sd, &priv->pads[input->pad], 0);
 	} else
 		ret = v4l2_create_fwnode_links_to_pad(&priv->subdev,
 					&sd->entity.pads[0],
