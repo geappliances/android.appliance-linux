@@ -680,6 +680,8 @@ void mtk_vcodec_dec_set_default_params(struct mtk_vcodec_ctx *ctx)
 	memset(q_data, 0, sizeof(struct mtk_q_data));
 	q_data->visible_width = DFT_CFG_WIDTH;
 	q_data->visible_height = DFT_CFG_HEIGHT;
+	q_data->coded_width = DFT_CFG_WIDTH;
+	q_data->coded_height = DFT_CFG_HEIGHT;
 	q_data->fmt = &mtk_video_formats[OUT_FMT_IDX];
 	q_data->field = V4L2_FIELD_NONE;
 
@@ -970,8 +972,11 @@ static int vidioc_vdec_s_selection(struct file *file, void *priv,
 	return 0;
 }
 
-static int vidioc_vdec_s_fmt(struct file *file, void *priv,
-			     struct v4l2_format *f)
+static int vidioc_vdec_g_fmt(struct file *file, void *priv,
+			     struct v4l2_format *f);
+
+static int vidioc_vdec_s_fmt_out(struct file *file, void *priv,
+				  struct v4l2_format *f)
 {
 	struct mtk_vcodec_ctx *ctx = fh_to_ctx(priv);
 	struct v4l2_pix_format_mplane *pix_mp;
@@ -986,30 +991,34 @@ static int vidioc_vdec_s_fmt(struct file *file, void *priv,
 	if (!q_data)
 		return -EINVAL;
 
-	pix_mp = &f->fmt.pix_mp;
-	if ((f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) &&
-	    vb2_is_busy(&ctx->m2m_ctx->out_q_ctx.q)) {
-		mtk_v4l2_err("out_q_ctx buffers already requested");
-		ret = -EBUSY;
+	if (ctx->state >= MTK_STATE_HEADER) {
+		ret = vidioc_vdec_g_fmt(file, priv, f);
+		if (ret)
+			return ret;
+
+		ctx->colorspace = f->fmt.pix_mp.colorspace;
+		ctx->ycbcr_enc = f->fmt.pix_mp.ycbcr_enc;
+		ctx->quantization = f->fmt.pix_mp.quantization;
+		ctx->xfer_func = f->fmt.pix_mp.xfer_func;
+
+		size[0] = q_data->visible_width;
+		size[1] = q_data->visible_height;
+		vdec_if_set_param(ctx, SET_PARAM_FRAME_SIZE, (void *) size);
+
+		return 0;
 	}
 
-	if ((f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) &&
-	    vb2_is_busy(&ctx->m2m_ctx->cap_q_ctx.q)) {
-		mtk_v4l2_err("cap_q_ctx buffers already requested");
+	pix_mp = &f->fmt.pix_mp;
+	if (vb2_is_busy(&ctx->m2m_ctx->out_q_ctx.q)) {
+		mtk_v4l2_err("out_q_ctx buffers already requested");
 		ret = -EBUSY;
 	}
 
 	fmt = mtk_vdec_find_format(f);
 	if (fmt == NULL) {
-		if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
-			f->fmt.pix.pixelformat =
-				mtk_video_formats[OUT_FMT_IDX].fourcc;
-			fmt = mtk_vdec_find_format(f);
-		} else if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
-			f->fmt.pix.pixelformat =
-				mtk_video_formats[CAP_FMT_IDX].fourcc;
-			fmt = mtk_vdec_find_format(f);
-		}
+		f->fmt.pix.pixelformat =
+			mtk_video_formats[OUT_FMT_IDX].fourcc;
+		fmt = mtk_vdec_find_format(f);
 	}
 
 	q_data->fmt = fmt;
@@ -1017,48 +1026,95 @@ static int vidioc_vdec_s_fmt(struct file *file, void *priv,
 
 
 	q_data->sizeimage[0] = pix_mp->plane_fmt[0].sizeimage;
-	q_data->sizeimage[1] = pix_mp->plane_fmt[1].sizeimage;
 	q_data->coded_width = pix_mp->width;
 	q_data->coded_height = pix_mp->height;
 
-	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
-		size[0] = pix_mp->width;
-		size[1] = pix_mp->height;
+	size[0] = q_data->coded_width;
+	size[1] = q_data->coded_height;
 
-		ctx->colorspace = f->fmt.pix_mp.colorspace;
-		ctx->ycbcr_enc = f->fmt.pix_mp.ycbcr_enc;
-		ctx->quantization = f->fmt.pix_mp.quantization;
-		ctx->xfer_func = f->fmt.pix_mp.xfer_func;
+	ctx->colorspace = f->fmt.pix_mp.colorspace;
+	ctx->ycbcr_enc = f->fmt.pix_mp.ycbcr_enc;
+	ctx->quantization = f->fmt.pix_mp.quantization;
+	ctx->xfer_func = f->fmt.pix_mp.xfer_func;
 
-		if (ctx->state == MTK_STATE_FREE) {
-			ret = vdec_if_init(ctx, q_data->fmt->fourcc);
-			if (ret) {
-				mtk_v4l2_err("[%d]: vdec_if_init() fail ret=%d",
+	if (ctx->state == MTK_STATE_FREE) {
+		ret = vdec_if_init(ctx, q_data->fmt->fourcc);
+		if (ret) {
+			mtk_v4l2_err("[%d]: vdec_if_init() fail ret=%d",
 					ctx->id, ret);
-				return -EINVAL;
-			}
-			ctx->state = MTK_STATE_INIT;
+			return -EINVAL;
 		}
-
-		if (ctx->state == MTK_STATE_INIT)
-			vdec_if_set_param(ctx, SET_PARAM_FRAME_SIZE, (void *) size);
+		ctx->state = MTK_STATE_INIT;
 	}
 
-	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
-		if (ctx->state == MTK_STATE_FREE) {
-			ret = vdec_if_init(ctx, q_data->fmt->fourcc);
-			if (ret) {
-				mtk_v4l2_err("[%d]: vdec_if_init() fail ret=%d",
-					ctx->id, ret);
-				return -EINVAL;
-			}
-			ctx->state = MTK_STATE_INIT;
-		}
-		
-		if (ctx->state == MTK_STATE_INIT)
-			vdec_if_set_param(ctx, SET_PARAM_FB_NUM_PLANES,
-					(void *) &q_data->fmt->num_planes);
+	if (ctx->state != MTK_STATE_FREE)
+		vdec_if_set_param(ctx, SET_PARAM_FRAME_SIZE, (void *) size);
+
+	return 0;
+}
+
+static int vidioc_vdec_s_fmt_cap(struct file *file, void *priv,
+				 struct v4l2_format *f)
+{
+	struct mtk_vcodec_ctx *ctx = fh_to_ctx(priv);
+	struct v4l2_pix_format_mplane *pix_mp;
+	struct mtk_q_data *q_data, *src_q_data;
+	int ret = 0, i;
+	struct mtk_video_fmt *fmt;
+
+	mtk_v4l2_debug(4, "[%d]", ctx->id);
+
+	q_data = mtk_vdec_get_q_data(ctx, f->type);
+	if (!q_data)
+		return -EINVAL;
+
+	if (ctx->state >= MTK_STATE_HEADER) {
+		ret = vidioc_vdec_g_fmt(file, priv, f);
+		if (ret)
+			return ret;
+
+		vdec_if_set_param(ctx, SET_PARAM_FB_NUM_PLANES,
+				(void *) &q_data->fmt->num_planes);
+
+		return 0;
 	}
+
+	src_q_data = mtk_vdec_get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE);
+	if (!q_data)
+		return -EINVAL;
+
+	pix_mp = &f->fmt.pix_mp;
+
+	if (vb2_is_busy(&ctx->m2m_ctx->cap_q_ctx.q)) {
+		mtk_v4l2_err("cap_q_ctx buffers already requested");
+		ret = -EBUSY;
+	}
+
+	fmt = mtk_vdec_find_format(f);
+	if (fmt == NULL) {
+		f->fmt.pix.pixelformat =
+			mtk_video_formats[CAP_FMT_IDX].fourcc;
+		fmt = mtk_vdec_find_format(f);
+	}
+
+	/* use OUTPUT's dimensions */
+	pix_mp->height = src_q_data->coded_height;
+	pix_mp->width = src_q_data->coded_width;
+
+	q_data->fmt = fmt;
+	vidioc_try_fmt(f, q_data->fmt);
+
+	q_data->coded_width = pix_mp->width;
+	q_data->coded_height = pix_mp->height;
+
+	for (i = 0; i < pix_mp->num_planes; i++) {
+		q_data->sizeimage[0] = pix_mp->plane_fmt[0].sizeimage;
+		q_data->sizeimage[1] = pix_mp->plane_fmt[1].sizeimage;
+	}
+
+	if (ctx->state != MTK_STATE_FREE)
+		vdec_if_set_param(ctx, SET_PARAM_FB_NUM_PLANES,
+				(void *) &q_data->fmt->num_planes);
 
 	return 0;
 }
@@ -1155,79 +1211,31 @@ static int vidioc_vdec_g_fmt(struct file *file, void *priv,
 	}
 
 	q_data = mtk_vdec_get_q_data(ctx, f->type);
+	if (!q_data)
+		return -EINVAL;
+
+	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
+		pix_mp->width = q_data->visible_width;
+		pix_mp->height = q_data->visible_height;
+	} else {
+		struct mtk_q_data *src_q_data =
+			mtk_vdec_get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE);
+		pix_mp->width = src_q_data->coded_width;
+		pix_mp->height = src_q_data->coded_height;
+	}
 
 	pix_mp->field = V4L2_FIELD_NONE;
 	pix_mp->colorspace = ctx->colorspace;
 	pix_mp->ycbcr_enc = ctx->ycbcr_enc;
 	pix_mp->quantization = ctx->quantization;
 	pix_mp->xfer_func = ctx->xfer_func;
-
-	if ((f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) &&
-	    (ctx->state >= MTK_STATE_HEADER)) {
-		/* Until STREAMOFF is called on the CAPTURE queue
-		 * (acknowledging the event), the driver operates as if
-		 * the resolution hasn't changed yet.
-		 * So we just return picinfo yet, and update picinfo in
-		 * stop_streaming hook function
-		 */
-		for (i = 0; i < q_data->fmt->num_planes; i++) {
-			q_data->sizeimage[i] = ctx->picinfo.fb_sz[i];
-			q_data->bytesperline[i] =
-				ctx->last_decoded_picinfo.buf_w;
-		}
-		q_data->coded_width = ctx->picinfo.buf_w;
-		q_data->coded_height = ctx->picinfo.buf_h;
-
-		/*
-		 * Width and height are set to the dimensions
-		 * of the movie, the buffer is bigger and
-		 * further processing stages should crop to this
-		 * rectangle.
-		 */
-		pix_mp->width = q_data->coded_width;
-		pix_mp->height = q_data->coded_height;
-
-		/*
-		 * Set pixelformat to the format in which mt vcodec
-		 * outputs the decoded frame
-		 */
-		pix_mp->num_planes = q_data->fmt->num_planes;
-		pix_mp->pixelformat = q_data->fmt->fourcc;
-
-		for (i = 0; i < pix_mp->num_planes; i++) {
-			pix_mp->plane_fmt[i].bytesperline =
-				q_data->bytesperline[i];
-			pix_mp->plane_fmt[i].sizeimage =
-				q_data->sizeimage[i];
-		}
-
-	} else if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
-		/*
-		 * This is run on OUTPUT
-		 * The buffer contains compressed image
-		 * so width and height have no meaning.
-		 * Assign value here to pass v4l2-compliance test
-		 */
-		pix_mp->width = q_data->visible_width;
-		pix_mp->height = q_data->visible_height;
-		pix_mp->plane_fmt[0].bytesperline = q_data->bytesperline[0];
-		pix_mp->plane_fmt[0].sizeimage = q_data->sizeimage[0];
-		pix_mp->pixelformat = q_data->fmt->fourcc;
-		pix_mp->num_planes = q_data->fmt->num_planes;
-	} else {
-		pix_mp->width = q_data->coded_width;
-		pix_mp->height = q_data->coded_height;
-		pix_mp->num_planes = q_data->fmt->num_planes;
-		pix_mp->pixelformat = q_data->fmt->fourcc;
-		for (i = 0; i < pix_mp->num_planes; i++) {
-			pix_mp->plane_fmt[i].bytesperline =
-				q_data->bytesperline[i];
-			pix_mp->plane_fmt[i].sizeimage =
-				q_data->sizeimage[i];
-		}
-
-		mtk_v4l2_debug(1, " [%d] type=%d state=%d Format information could not be read, not ready yet!",
-			ctx->id, f->type, ctx->state);
+	pix_mp->num_planes = q_data->fmt->num_planes;
+	pix_mp->pixelformat = q_data->fmt->fourcc;
+	for (i = 0; i < pix_mp->num_planes; i++) {
+		pix_mp->plane_fmt[i].bytesperline =
+			q_data->bytesperline[i];
+		pix_mp->plane_fmt[i].sizeimage =
+			q_data->sizeimage[i];
 	}
 
 	return 0;
@@ -1315,7 +1323,7 @@ static void vb2ops_vdec_buf_queue(struct vb2_buffer *vb)
 	struct mtk_vcodec_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
 	struct vb2_v4l2_buffer *vb2_v4l2 = NULL;
 	struct mtk_video_dec_buf *buf = NULL;
-	struct mtk_q_data *dst_q_data;
+	struct mtk_q_data *src_q_data, *dst_q_data;
 	static const struct v4l2_event eos_event = {
 		.type = V4L2_EVENT_EOS
 	};
@@ -1470,11 +1478,21 @@ static void vb2ops_vdec_buf_queue(struct vb2_buffer *vb)
 		return;
 	}
 
-	dst_q_data = &ctx->q_data[MTK_Q_DATA_DST];
 	ctx->last_decoded_picinfo = ctx->picinfo;
+
+	src_q_data = &ctx->q_data[MTK_Q_DATA_SRC];
+	src_q_data->visible_width = ctx->picinfo.pic_w;
+	src_q_data->visible_height = ctx->picinfo.pic_h;
+	src_q_data->coded_width = ctx->picinfo.buf_w;
+	src_q_data->coded_height = ctx->picinfo.buf_h;
+
+	dst_q_data = &ctx->q_data[MTK_Q_DATA_DST];
 	fourcc = mtk_vdec_get_capture_fourcc(ctx);
 	dst_q_data->fmt = mtk_find_fmt_by_pixel(fourcc);
-
+	dst_q_data->visible_width = ctx->picinfo.pic_w;
+	dst_q_data->visible_height = ctx->picinfo.pic_h;
+	dst_q_data->coded_width = ctx->picinfo.buf_w;
+	dst_q_data->coded_height = ctx->picinfo.buf_h;
 	for (i = 0; i < dst_q_data->fmt->num_planes; i++) {
 		dst_q_data->sizeimage[i] = ctx->picinfo.fb_sz[i];
 		dst_q_data->bytesperline[i] = ctx->picinfo.buf_w;
@@ -1759,8 +1777,8 @@ const struct v4l2_ioctl_ops mtk_vdec_ioctl_ops = {
 	.vidioc_try_fmt_vid_cap_mplane	= vidioc_try_fmt_vid_cap_mplane,
 	.vidioc_try_fmt_vid_out_mplane	= vidioc_try_fmt_vid_out_mplane,
 
-	.vidioc_s_fmt_vid_cap_mplane	= vidioc_vdec_s_fmt,
-	.vidioc_s_fmt_vid_out_mplane	= vidioc_vdec_s_fmt,
+	.vidioc_s_fmt_vid_cap_mplane	= vidioc_vdec_s_fmt_cap,
+	.vidioc_s_fmt_vid_out_mplane	= vidioc_vdec_s_fmt_out,
 	.vidioc_g_fmt_vid_cap_mplane	= vidioc_vdec_g_fmt,
 	.vidioc_g_fmt_vid_out_mplane	= vidioc_vdec_g_fmt,
 
