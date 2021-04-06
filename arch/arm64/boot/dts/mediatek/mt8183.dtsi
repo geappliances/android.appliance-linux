@@ -1445,6 +1445,8 @@
 
 			opp-300000000 {
 				opp-hz = /bits/ 64 <300000000>;
+				opp-hz-real = /bits/ 64 <300000000>,
+							  /bits/ 64 <300000000>;
 				opp-microvolt = <625000>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1452,6 +1454,8 @@
 
 			opp-320000000 {
 				opp-hz = /bits/ 64 <320000000>;
+				opp-hz-real = /bits/ 64 <320000000>,
+							  /bits/ 64 <320000000>;
 				opp-microvolt = <631250>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1459,6 +1463,8 @@
 
 			opp-340000000 {
 				opp-hz = /bits/ 64 <340000000>;
+				opp-hz-real = /bits/ 64 <340000000>,
+							  /bits/ 64 <340000000>;
 				opp-microvolt = <637500>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1466,6 +1472,8 @@
 
 			opp-360000000 {
 				opp-hz = /bits/ 64 <360000000>;
+				opp-hz-real = /bits/ 64 <360000000>,
+							  /bits/ 64 <360000000>;
 				opp-microvolt = <643750>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1473,6 +1481,8 @@
 
 			opp-380000000 {
 				opp-hz = /bits/ 64 <380000000>;
+				opp-hz-real = /bits/ 64 <380000000>,
+							  /bits/ 64 <380000000>;
 				opp-microvolt = <650000>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1480,6 +1490,8 @@
 
 			opp-400000000 {
 				opp-hz = /bits/ 64 <400000000>;
+				opp-hz-real = /bits/ 64 <400000000>,
+							  /bits/ 64 <400000000>;
 				opp-microvolt = <656250>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1487,6 +1499,8 @@
 
 			opp-420000000 {
 				opp-hz = /bits/ 64 <420000000>;
+				opp-hz-real = /bits/ 64 <420000000>,
+							  /bits/ 64 <420000000>;
 				opp-microvolt = <662500>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1494,6 +1508,8 @@
 
 			opp-460000000 {
 				opp-hz = /bits/ 64 <460000000>;
+				opp-hz-real = /bits/ 64 <460000000>,
+							  /bits/ 64 <460000000>;
 				opp-microvolt = <675000>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1501,6 +1517,8 @@
 
 			opp-500000000 {
 				opp-hz = /bits/ 64 <500000000>;
+				opp-hz-real = /bits/ 64 <500000000>,
+							  /bits/ 64 <500000000>;
 				opp-microvolt = <687500>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1508,6 +1526,8 @@
 
 			opp-540000000 {
 				opp-hz = /bits/ 64 <540000000>;
+				opp-hz-real = /bits/ 64 <540000000>,
+							  /bits/ 64 <540000000>;
 				opp-microvolt = <700000>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1515,6 +1535,8 @@
 
 			opp-580000000 {
 				opp-hz = /bits/ 64 <580000000>;
+				opp-hz-real = /bits/ 64 <580000000>,
+							  /bits/ 64 <580000000>;
 				opp-microvolt = <712500>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1522,6 +1544,8 @@
 
 			opp-620000000 {
 				opp-hz = /bits/ 64 <620000000>;
+				opp-hz-real = /bits/ 64 <620000000>,
+							  /bits/ 64 <620000000>;
 				opp-microvolt = <725000>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1529,6 +1553,8 @@
 
 			opp-653000000 {
 				opp-hz = /bits/ 64 <653000000>;
+				opp-hz-real = /bits/ 64 <653000000>,
+							  /bits/ 64 <653000000>;
 				opp-microvolt = <743750>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1536,6 +1562,8 @@
 
 			opp-698000000 {
 				opp-hz = /bits/ 64 <698000000>;
+				opp-hz-real = /bits/ 64 <698000000>,
+							  /bits/ 64 <698000000>;
 				opp-microvolt = <768750>, /* Supply 0 */
 						<868750>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1543,6 +1571,8 @@
 
 			opp-743000000 {
 				opp-hz = /bits/ 64 <743000000>;
+				opp-hz-real = /bits/ 64 <743000000>,
+							  /bits/ 64 <743000000>;
 				opp-microvolt = <793750>, /* Supply 0 */
 						<893750>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1550,6 +1580,8 @@
 
 			opp-800000000 {
 				opp-hz = /bits/ 64 <800000000>;
+				opp-hz-real = /bits/ 64 <800000000>,
+							  /bits/ 64 <800000000>;
 				opp-microvolt = <825000>, /* Supply 0 */
 						<925000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
