@@ -439,13 +439,8 @@ static void mtk_vdec_worker(struct work_struct *work)
 
 	for (i = 0; i < num_planes; i++) {
 		pfb->fb_base[i].va = vb2_plane_vaddr(&dst_buf->vb2_buf, i);
-#ifdef CONFIG_VB2_MEDIATEK_DMA_SG
-		pfb->fb_base[i].dma_addr =
-			mtk_dma_sg_plane_dma_addr(&dst_buf->vb2_buf, i);
-#else
 		pfb->fb_base[i].dma_addr =
 			vb2_dma_contig_plane_dma_addr(&dst_buf->vb2_buf, i);
-#endif
 		pfb->fb_base[i].size = ctx->picinfo.fb_sz[i];
 		pfb->fb_base[i].length = dst_buf->planes[i].length;
 		pfb->fb_base[i].dmabuf = dst_buf->planes[i].dbuf;
@@ -1708,11 +1703,7 @@ int mtk_vcodec_dec_queue_init(void *priv, struct vb2_queue *src_vq,
 	dst_vq->drv_priv	= ctx;
 	dst_vq->buf_struct_size = sizeof(struct mtk_video_dec_buf);
 	dst_vq->ops		= &mtk_vdec_vb2_ops;
-#ifdef CONFIG_VB2_MEDIATEK_DMA_SG
-	dst_vq->mem_ops		= &mtk_dma_sg_memops;
-#else
 	dst_vq->mem_ops		= &vb2_dma_contig_memops;
-#endif
 	dst_vq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 	dst_vq->lock		= &ctx->dev->dev_mutex;
 	dst_vq->allow_zero_bytesused = 1;
