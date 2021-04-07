@@ -638,69 +638,6 @@ void mtk_vcodec_dec_set_default_params(struct mtk_vcodec_ctx *ctx)
 	q_data->bytesperline[1] = q_data->coded_width;
 }
 
-static int mtk_vdec_set_param(struct mtk_vcodec_ctx *ctx)
-{
-	unsigned long in[8] = {0};
-
-	mtk_v4l2_debug(4, "[%d] param change %d decode mode %d frame width %d frame height %d max width %d max height %d",
-		ctx->id, ctx->dec_param_change, ctx->dec_params.decode_mode,
-		ctx->dec_params.frame_size_width, ctx->dec_params.frame_size_height,
-		ctx->dec_params.fixed_max_frame_size_width, ctx->dec_params.fixed_max_frame_size_height);
-
-	if (ctx->dec_param_change & MTK_DEC_PARAM_DECODE_MODE) {
-		in[0] = ctx->dec_params.decode_mode;
-		if (vdec_if_set_param(ctx, SET_PARAM_DECODE_MODE, in) != 0) {
-			mtk_v4l2_err("[%d] Error!! Cannot set param", ctx->id);
-			return -EINVAL;
-		}
-		ctx->dec_param_change &= (~MTK_DEC_PARAM_DECODE_MODE);
-	}
-
-	if (ctx->dec_param_change & MTK_DEC_PARAM_FRAME_SIZE) {
-		in[0] = ctx->dec_params.frame_size_width;
-		in[1] = ctx->dec_params.frame_size_height;
-		if (in[0] != 0 && in[1] != 0) {
-			if (vdec_if_set_param(ctx, SET_PARAM_FRAME_SIZE, in) != 0) {
-				mtk_v4l2_err("[%d] Error!! Cannot set param", ctx->id);
-				return -EINVAL;
-			}
-		}
-		ctx->dec_param_change &= (~MTK_DEC_PARAM_FRAME_SIZE);
-	}
-
-	if (ctx->dec_param_change & MTK_DEC_PARAM_FIXED_MAX_FRAME_SIZE) {
-		in[0] = ctx->dec_params.fixed_max_frame_size_width;
-		in[1] = ctx->dec_params.fixed_max_frame_size_height;
-		if (in[0] != 0 && in[1] != 0) {
-			if (vdec_if_set_param(ctx, SET_PARAM_SET_FIXED_MAX_OUTPUT_BUFFER, in) != 0) {
-				mtk_v4l2_err("[%d] Error!! Cannot set param", ctx->id);
-				return -EINVAL;
-			}
-		}
-		ctx->dec_param_change &= (~MTK_DEC_PARAM_FIXED_MAX_FRAME_SIZE);
-	}
-
-	if (ctx->dec_param_change & MTK_DEC_PARAM_CRC_PATH) {
-		in[0] = (unsigned long)ctx->dec_params.crc_path;
-		if (vdec_if_set_param(ctx, SET_PARAM_CRC_PATH, in) != 0) {
-			mtk_v4l2_err("[%d] Error!! Cannot set param", ctx->id);
-			return -EINVAL;
-		}
-		ctx->dec_param_change &= (~MTK_DEC_PARAM_CRC_PATH);
-	}
-
-	if (ctx->dec_param_change & MTK_DEC_PARAM_GOLDEN_PATH) {
-		in[0] = (unsigned long)ctx->dec_params.golden_path;
-		if (vdec_if_set_param(ctx, SET_PARAM_GOLDEN_PATH, in) != 0) {
-			mtk_v4l2_err("[%d] Error!! Cannot set param", ctx->id);
-			return -EINVAL;
-		}
-		ctx->dec_param_change &= (~MTK_DEC_PARAM_GOLDEN_PATH);
-	}
-
-	return 0;
-}
-
 static u32 mtk_vdec_get_capture_fourcc(struct mtk_vcodec_ctx *ctx)
 {
 	u32 fourcc;
@@ -1139,7 +1076,6 @@ static int vidioc_vdec_g_fmt(struct file *file, void *priv,
 	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
 	struct vb2_queue *vq;
 	struct mtk_q_data *q_data;
-	u32	fourcc;
 	unsigned int i = 0;
 
 	vq = v4l2_m2m_get_vq(ctx->m2m_ctx, f->type);
@@ -1178,9 +1114,9 @@ static int vidioc_vdec_g_fmt(struct file *file, void *priv,
 		 * further processing stages should crop to this
 		 * rectangle.
 		 */
-		fourcc = ctx->q_data[MTK_Q_DATA_SRC].fmt->fourcc;
-			pix_mp->width = q_data->coded_width;
-			pix_mp->height = q_data->coded_height;
+		pix_mp->width = q_data->coded_width;
+		pix_mp->height = q_data->coded_height;
+
 		/*
 		 * Set pixelformat to the format in which mt vcodec
 		 * outputs the decoded frame
@@ -1188,20 +1124,12 @@ static int vidioc_vdec_g_fmt(struct file *file, void *priv,
 		pix_mp->num_planes = q_data->fmt->num_planes;
 		pix_mp->pixelformat = q_data->fmt->fourcc;
 
-			for (i = 0; i < pix_mp->num_planes; i++) {
-				pix_mp->plane_fmt[i].bytesperline =
-					q_data->bytesperline[i];
-				pix_mp->plane_fmt[i].sizeimage =
-					q_data->sizeimage[i];
-			}
-
-		mtk_v4l2_debug(1, "fourcc:(%d %d),bytesperline:%d,sizeimage:%d,%d,%d\n",
-			ctx->q_data[MTK_Q_DATA_SRC].fmt->fourcc,
-			q_data->fmt->fourcc,
-			pix_mp->plane_fmt[0].bytesperline,
-			pix_mp->plane_fmt[0].sizeimage,
-			pix_mp->plane_fmt[1].bytesperline,
-			pix_mp->plane_fmt[1].sizeimage);
+		for (i = 0; i < pix_mp->num_planes; i++) {
+			pix_mp->plane_fmt[i].bytesperline =
+				q_data->bytesperline[i];
+			pix_mp->plane_fmt[i].sizeimage =
+				q_data->sizeimage[i];
+		}
 
 	} else if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
 		/*
@@ -1217,18 +1145,16 @@ static int vidioc_vdec_g_fmt(struct file *file, void *priv,
 		pix_mp->pixelformat = q_data->fmt->fourcc;
 		pix_mp->num_planes = q_data->fmt->num_planes;
 	} else {
+		pix_mp->width = q_data->coded_width;
+		pix_mp->height = q_data->coded_height;
 		pix_mp->num_planes = q_data->fmt->num_planes;
 		pix_mp->pixelformat = q_data->fmt->fourcc;
-		fourcc = ctx->q_data[MTK_Q_DATA_SRC].fmt->fourcc;
-
-			pix_mp->width = q_data->coded_width;
-			pix_mp->height = q_data->coded_height;
-			for (i = 0; i < pix_mp->num_planes; i++) {
-				pix_mp->plane_fmt[i].bytesperline =
-					q_data->bytesperline[i];
-				pix_mp->plane_fmt[i].sizeimage =
-					q_data->sizeimage[i];
-			}
+		for (i = 0; i < pix_mp->num_planes; i++) {
+			pix_mp->plane_fmt[i].bytesperline =
+				q_data->bytesperline[i];
+			pix_mp->plane_fmt[i].sizeimage =
+				q_data->sizeimage[i];
+		}
 
 		mtk_v4l2_debug(1, " [%d] type=%d state=%d Format information could not be read, not ready yet!",
 			ctx->id, f->type, ctx->state);
@@ -1442,7 +1368,6 @@ static void vb2ops_vdec_buf_queue(struct vb2_buffer *vb)
 	if (res_chg) {
 		mtk_v4l2_debug(3, "[%d] vdec_if_decode() res_chg: %d\n",
 			ctx->id, res_chg);
-		mtk_vdec_queue_res_chg_event(ctx);
 	}
 
 	if (vdec_if_get_param(ctx, GET_PARAM_PIC_INFO, &ctx->picinfo)) {
@@ -1484,7 +1409,7 @@ static void vb2ops_vdec_buf_queue(struct vb2_buffer *vb)
 	ctx->state = MTK_STATE_HEADER;
 	mtk_v4l2_debug(1, "[%d] dpbsize=%d", ctx->id, ctx->dpb_size);
 
-	mtk_vdec_set_param(ctx);
+	mtk_vdec_queue_res_chg_event(ctx);
 }
 
 static void vb2ops_vdec_buf_finish(struct vb2_buffer *vb)
