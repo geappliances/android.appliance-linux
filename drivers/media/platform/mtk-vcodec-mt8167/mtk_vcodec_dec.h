@@ -62,7 +62,6 @@ struct mtk_video_dec_buf {
 	struct list_head	list;
 
 	bool	used;
-	bool	ready_to_display;
 	bool	queued_in_vb2;
 	bool	queued_in_v4l2;
 	bool	lastframe;
