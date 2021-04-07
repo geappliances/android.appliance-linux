@@ -204,6 +204,7 @@ static struct vb2_buffer *get_display_buffer(struct mtk_vcodec_ctx *ctx)
 				dstbuf->vb.vb2_buf.index,
 				dstbuf->queued_in_vb2);
 
+		dstbuf->vb.sequence = ctx->sequence_cap++;
 		v4l2_m2m_buf_done(&dstbuf->vb, VB2_BUF_STATE_DONE);
 		ctx->decoded_frame_cnt++;
 	}
@@ -473,6 +474,7 @@ static void mtk_vdec_worker(struct work_struct *work)
 		clean_display_buffer(ctx);
 		for (i = 0; i < pfb->num_planes; i++)
 			vb2_set_plane_payload(&dst_buf_info->vb.vb2_buf, i, 0);
+		dst_buf->sequence = ctx->sequence_cap++;
 		v4l2_m2m_buf_done(&dst_buf_info->vb, VB2_BUF_STATE_DONE);
 		clean_free_buffer(ctx);
 		v4l2_m2m_job_finish(dev->m2m_dev_dec, ctx->m2m_ctx);
@@ -517,6 +519,7 @@ static void mtk_vdec_worker(struct work_struct *work)
 			ret, src_chg);
 		if (mtk_vcodec_unsupport) {
 			src_buf = v4l2_m2m_src_buf_remove(ctx->m2m_ctx);
+			src_buf->sequence = ctx->sequence_out++;
 			v4l2_m2m_buf_done(&src_buf_info->vb, VB2_BUF_STATE_DONE);
 			/*
 			 * If cncounter the src unsupport during play, egs:
@@ -536,6 +539,7 @@ static void mtk_vdec_worker(struct work_struct *work)
 		 * when decode success without resolution change except rv30/rv40.
 		 */
 		src_buf = v4l2_m2m_src_buf_remove(ctx->m2m_ctx);
+		src_buf->sequence = ctx->sequence_out++;
 		v4l2_m2m_buf_done(&src_buf_info->vb, VB2_BUF_STATE_DONE);
 	} else {
 		mtk_v4l2_debug(1, "Need more capture buffer\n");
@@ -1377,6 +1381,7 @@ static void vb2ops_vdec_buf_queue(struct vb2_buffer *vb)
 		 */
 
 		src_buf = v4l2_m2m_src_buf_remove(ctx->m2m_ctx);
+		src_buf->sequence = ctx->sequence_out++;
 		v4l2_m2m_buf_done(src_buf, VB2_BUF_STATE_DONE);
 		mtk_v4l2_debug(ret ? 0 : 1,
 			       "[%d] vdec_if_decode() src_buf=%d, size=%zu, fail=%d, res_chg=%d, mtk_vcodec_unsupport=%d",
@@ -1481,6 +1486,16 @@ static int vb2ops_vdec_start_streaming(struct vb2_queue *q, unsigned int count)
 	if (ctx->state == MTK_STATE_FLUSH)
 		ctx->state = MTK_STATE_HEADER;
 
+	/* Do the initialization when both start_streaming have been called */
+	if (V4L2_TYPE_IS_OUTPUT(q->type)) {
+		ctx->sequence_out = 0;
+		if (!vb2_start_streaming_called(&ctx->m2m_ctx->cap_q_ctx.q))
+			return 0;
+	} else {
+		ctx->sequence_cap = 0;
+		if (!vb2_start_streaming_called(&ctx->m2m_ctx->out_q_ctx.q))
+			return 0;
+	}
 
 	return 0;
 }
