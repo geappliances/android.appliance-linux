@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2020 Laurent Pinchart <laurent.pinchart@ideasonboard.com>
+ * Copyright (c) 2020 Baylibre, SAS
+ * Author: Phi-Bang Nguyen <pnguyen@baylibre.com>
  */
 
 #include "mt8183-pumpkin-ap1302-ar0330-dual-ar0144-dual.dtsi"
