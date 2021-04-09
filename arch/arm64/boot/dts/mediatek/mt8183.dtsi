@@ -1373,6 +1373,8 @@
 
 			opp-300000000 {
 				opp-hz = /bits/ 64 <300000000>;
+				opp-hz-real = /bits/ 64 <300000000>,
+							  /bits/ 64 <300000000>;
 				opp-microvolt = <625000>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1380,6 +1382,8 @@
 
 			opp-320000000 {
 				opp-hz = /bits/ 64 <320000000>;
+				opp-hz-real = /bits/ 64 <320000000>,
+							  /bits/ 64 <320000000>;
 				opp-microvolt = <631250>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1387,6 +1391,8 @@
 
 			opp-340000000 {
 				opp-hz = /bits/ 64 <340000000>;
+				opp-hz-real = /bits/ 64 <340000000>,
+							  /bits/ 64 <340000000>;
 				opp-microvolt = <637500>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1394,6 +1400,8 @@
 
 			opp-360000000 {
 				opp-hz = /bits/ 64 <360000000>;
+				opp-hz-real = /bits/ 64 <360000000>,
+							  /bits/ 64 <360000000>;
 				opp-microvolt = <643750>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1401,6 +1409,8 @@
 
 			opp-380000000 {
 				opp-hz = /bits/ 64 <380000000>;
+				opp-hz-real = /bits/ 64 <380000000>,
+							  /bits/ 64 <380000000>;
 				opp-microvolt = <650000>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1408,6 +1418,8 @@
 
 			opp-400000000 {
 				opp-hz = /bits/ 64 <400000000>;
+				opp-hz-real = /bits/ 64 <400000000>,
+							  /bits/ 64 <400000000>;
 				opp-microvolt = <656250>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1415,6 +1427,8 @@
 
 			opp-420000000 {
 				opp-hz = /bits/ 64 <420000000>;
+				opp-hz-real = /bits/ 64 <420000000>,
+							  /bits/ 64 <420000000>;
 				opp-microvolt = <662500>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1422,6 +1436,8 @@
 
 			opp-460000000 {
 				opp-hz = /bits/ 64 <460000000>;
+				opp-hz-real = /bits/ 64 <460000000>,
+							  /bits/ 64 <460000000>;
 				opp-microvolt = <675000>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1429,6 +1445,8 @@
 
 			opp-500000000 {
 				opp-hz = /bits/ 64 <500000000>;
+				opp-hz-real = /bits/ 64 <500000000>,
+							  /bits/ 64 <500000000>;
 				opp-microvolt = <687500>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1436,6 +1454,8 @@
 
 			opp-540000000 {
 				opp-hz = /bits/ 64 <540000000>;
+				opp-hz-real = /bits/ 64 <540000000>,
+							  /bits/ 64 <540000000>;
 				opp-microvolt = <700000>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1443,6 +1463,8 @@
 
 			opp-580000000 {
 				opp-hz = /bits/ 64 <580000000>;
+				opp-hz-real = /bits/ 64 <580000000>,
+							  /bits/ 64 <580000000>;
 				opp-microvolt = <712500>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1450,6 +1472,8 @@
 
 			opp-620000000 {
 				opp-hz = /bits/ 64 <620000000>;
+				opp-hz-real = /bits/ 64 <620000000>,
+							  /bits/ 64 <620000000>;
 				opp-microvolt = <725000>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1457,6 +1481,8 @@
 
 			opp-653000000 {
 				opp-hz = /bits/ 64 <653000000>;
+				opp-hz-real = /bits/ 64 <653000000>,
+							  /bits/ 64 <653000000>;
 				opp-microvolt = <743750>, /* Supply 0 */
 						<850000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1464,6 +1490,8 @@
 
 			opp-698000000 {
 				opp-hz = /bits/ 64 <698000000>;
+				opp-hz-real = /bits/ 64 <698000000>,
+							  /bits/ 64 <698000000>;
 				opp-microvolt = <768750>, /* Supply 0 */
 						<868750>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1471,6 +1499,8 @@
 
 			opp-743000000 {
 				opp-hz = /bits/ 64 <743000000>;
+				opp-hz-real = /bits/ 64 <743000000>,
+							  /bits/ 64 <743000000>;
 				opp-microvolt = <793750>, /* Supply 0 */
 						<893750>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1478,6 +1508,8 @@
 
 			opp-800000000 {
 				opp-hz = /bits/ 64 <800000000>;
+				opp-hz-real = /bits/ 64 <800000000>,
+							  /bits/ 64 <800000000>;
 				opp-microvolt = <825000>, /* Supply 0 */
 						<925000>; /* Supply 1 */
 				opp-core-mask = /bits/ 64 <0xf>;
@@ -1934,7 +1966,7 @@
 			#clock-cells = <1>;
 		};
 
-		camsv0: camsv0@1a050000 {
+		camsv0: camsv@1a050000 {
 			compatible = "mediatek,mt8183-camsv";
 			reg = <0 0x1a050000 0 0x1000>;
 			interrupts = <GIC_SPI 258 IRQ_TYPE_LEVEL_LOW>;
@@ -1942,16 +1974,102 @@
 				 <&camsys CLK_CAM_CAMTG>,
 				 <&camsys CLK_CAM_CAMSV0>;
 			clock-names = "camsys_cam_cgpdn", "camsys_camtg_cgpdn",
-						"camsys_camsv0";
+						"camsys_camsv";
 			iommus = <&iommu M4U_PORT_CAM_IMGO>;
 			mediatek,larb = <&larb3>, <&larb6>;
 			power-domains = <&scpsys MT8183_POWER_DOMAIN_CAM>;
 			status = "disabled";
 
-			port {
-				camsv_endpoint: endpoint {
-					remote-endpoint =
-						<&seninf_camsv_endpoint>;
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				port@0 {
+					reg = <0>;
+					camsv0_endpoint: endpoint {
+						remote-endpoint =
+							<&seninf_camsv0_endpoint>;
+					};
+				};
+			};
+		};
+
+		camsv1: camsv@1a051000 {
+			compatible = "mediatek,mt8183-camsv";
+			reg = <0 0x1a051000 0 0x1000>;
+			interrupts = <GIC_SPI 259 IRQ_TYPE_LEVEL_LOW>;
+			clocks = <&camsys CLK_CAM_CAM>,
+				 <&camsys CLK_CAM_CAMTG>,
+				 <&camsys CLK_CAM_CAMSV0>;
+			clock-names = "camsys_cam_cgpdn", "camsys_camtg_cgpdn",
+						"camsys_camsv";
+			iommus = <&iommu M4U_PORT_CAM_IMGO>;
+			mediatek,larb = <&larb3>, <&larb6>;
+			power-domains = <&scpsys MT8183_POWER_DOMAIN_CAM>;
+			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				port@0 {
+					reg = <0>;
+					camsv1_endpoint: endpoint {
+						remote-endpoint =
+							<&seninf_camsv1_endpoint>;
+					};
+				};
+			};
+		};
+
+		camsv2: camsv@1a052000 {
+			compatible = "mediatek,mt8183-camsv";
+			reg = <0 0x1a052000 0 0x1000>;
+			interrupts = <GIC_SPI 260 IRQ_TYPE_LEVEL_LOW>;
+			clocks = <&camsys CLK_CAM_CAM>,
+				 <&camsys CLK_CAM_CAMTG>,
+				 <&camsys CLK_CAM_CAMSV1>;
+			clock-names = "camsys_cam_cgpdn", "camsys_camtg_cgpdn",
+						"camsys_camsv";
+			iommus = <&iommu M4U_PORT_CAM_IMGO>;
+			mediatek,larb = <&larb3>, <&larb6>;
+			power-domains = <&scpsys MT8183_POWER_DOMAIN_CAM>;
+			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				port@0 {
+					reg = <0>;
+					camsv2_endpoint: endpoint {
+						remote-endpoint =
+							<&seninf_camsv2_endpoint>;
+					};
+				};
+			};
+		};
+
+		camsv3: camsv@1a053000 {
+			compatible = "mediatek,mt8183-camsv";
+			reg = <0 0x1a053000 0 0x1000>;
+			interrupts = <GIC_SPI 261 IRQ_TYPE_LEVEL_LOW>;
+			clocks = <&camsys CLK_CAM_CAM>,
+				 <&camsys CLK_CAM_CAMTG>,
+				 <&camsys CLK_CAM_CAMSV1>;
+			clock-names = "camsys_cam_cgpdn", "camsys_camtg_cgpdn",
+						"camsys_camsv";
+			iommus = <&iommu M4U_PORT_CAM_IMGO>;
+			mediatek,larb = <&larb3>, <&larb6>;
+			power-domains = <&scpsys MT8183_POWER_DOMAIN_CAM>;
+			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				port@0 {
+					reg = <0>;
+					camsv3_endpoint: endpoint {
+						remote-endpoint =
+							<&seninf_camsv3_endpoint>;
+					};
 				};
 			};
 		};
@@ -1993,9 +2111,33 @@
 
 				port@4 {
 					reg = <4>;
-					seninf_camsv_endpoint: endpoint {
+					seninf_camsv0_endpoint: endpoint {
 						remote-endpoint =
-							<&camsv_endpoint>;
+							<&camsv0_endpoint>;
+					};
+				};
+
+				port@5 {
+					reg = <5>;
+					seninf_camsv1_endpoint: endpoint {
+						remote-endpoint =
+							<&camsv1_endpoint>;
+					};
+				};
+
+				port@6 {
+					reg = <6>;
+					seninf_camsv2_endpoint: endpoint {
+						remote-endpoint =
+							<&camsv2_endpoint>;
+					};
+				};
+
+				port@7 {
+					reg = <7>;
+					seninf_camsv3_endpoint: endpoint {
+						remote-endpoint =
+							<&camsv3_endpoint>;
 					};
 				};
 			};

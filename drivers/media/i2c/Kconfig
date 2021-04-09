@@ -878,7 +878,8 @@ config VIDEO_MT9M111
 config VIDEO_AP1302
 	tristate "ON Semiconductor AP1302 support"
 	depends on I2C && VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
-	---help---
+	select V4L2_FWNODE
+	help
 	  This is a Video4Linux2 sensor-level driver for the ON Semiconductor
 	  AP1302 ISP.
 

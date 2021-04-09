@@ -26,19 +26,26 @@
 #include <media/v4l2-async.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
+#include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
 #include "smiapp-pll.h"
 
-#define AR0330_PIXEL_ARRAY_WIDTH		2304U
-#define AR0330_PIXEL_ARRAY_HEIGHT		1536U
+#define AR0330_PIXEL_ARRAY_WIDTH		2316U
+#define AR0330_PIXEL_ARRAY_HEIGHT		1544U
+
+#define AR0330_WINDOW_LEFT_BORDER		6U
+#define AR0330_WINDOW_TOP_BORDER		6U
 
 #define AR0330_WINDOW_WIDTH_MIN			32U
 #define AR0330_WINDOW_WIDTH_DEF			2304U
-#define AR0330_WINDOW_WIDTH_MAX			AR0330_PIXEL_ARRAY_WIDTH
+#define AR0330_WINDOW_WIDTH_MAX			2304U
 #define AR0330_WINDOW_HEIGHT_MIN		32U
 #define AR0330_WINDOW_HEIGHT_DEF		1296U
-#define AR0330_WINDOW_HEIGHT_MAX		AR0330_PIXEL_ARRAY_HEIGHT
+#define AR0330_WINDOW_HEIGHT_MAX		1544U
+
+#define AR0330_HBLANK_DEF			192
+#define AR0330_VBLANK_DEF			60
 
 #define AR0330_CHIP_VERSION				0x3000
 #define		AR0330_CHIP_VERSION_VALUE		0x2604
@@ -585,9 +592,11 @@ static int ar0330_set_params(struct ar0330 *ar0330)
 	ar0330_write16(ar0330, AR0330_Y_ODD_INC, yskip, &ret);
 
 	/* Blanking - use default values. */
-	ar0330_write16(ar0330, AR0330_LINE_LENGTH_PCK, (crop->width + 192) / 2,
+	ar0330_write16(ar0330, AR0330_LINE_LENGTH_PCK,
+		       (crop->width + AR0330_HBLANK_DEF) / 2,
 		       &ret);
-	ar0330_write16(ar0330, AR0330_FRAME_LENGTH_LINES, crop->height + 60,
+	ar0330_write16(ar0330, AR0330_FRAME_LENGTH_LINES,
+		       crop->height + AR0330_VBLANK_DEF,
 		       &ret);
 
 	return ret;
@@ -702,8 +711,10 @@ static int ar0330_init_cfg(struct v4l2_subdev *subdev,
 	struct v4l2_rect *crop;
 
 	crop = __ar0330_get_pad_crop(ar0330, cfg, 0, which);
-	crop->left = (AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_DEF) / 2;
-	crop->top = (AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_DEF) / 2;
+	crop->left = (AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_DEF) / 2
+		   + AR0330_WINDOW_LEFT_BORDER;
+	crop->top = (AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_DEF) / 2
+		  + AR0330_WINDOW_TOP_BORDER;
 	crop->width = AR0330_WINDOW_WIDTH_DEF;
 	crop->height = AR0330_WINDOW_HEIGHT_DEF;
 
@@ -800,10 +811,30 @@ static int ar0330_get_selection(struct v4l2_subdev *subdev,
 {
 	struct ar0330 *ar0330 = to_ar0330(subdev);
 
-	if (sel->target != V4L2_SEL_TGT_CROP)
-		return -EINVAL;
+	switch (sel->target) {
+	case V4L2_SEL_TGT_CROP:
+		sel->r = *__ar0330_get_pad_crop(ar0330, cfg, sel->pad,
+						sel->which);
+		break;
 
-	sel->r = *__ar0330_get_pad_crop(ar0330, cfg, sel->pad, sel->which);
+	case V4L2_SEL_TGT_CROP_DEFAULT:
+		sel->r.left = AR0330_WINDOW_LEFT_BORDER;
+		sel->r.top = AR0330_WINDOW_TOP_BORDER;
+		sel->r.width = AR0330_WINDOW_WIDTH_MAX;
+		sel->r.height = AR0330_WINDOW_HEIGHT_MAX;
+		break;
+
+	case V4L2_SEL_TGT_CROP_BOUNDS:
+		sel->r.left = 0;
+		sel->r.top = 0;
+		sel->r.width = AR0330_PIXEL_ARRAY_WIDTH;
+		sel->r.height = AR0330_PIXEL_ARRAY_HEIGHT;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
 	return 0;
 }
 
@@ -823,10 +854,14 @@ static int ar0330_set_selection(struct v4l2_subdev *subdev,
 	 * Clamp the crop rectangle boundaries and align them to a multiple of 2
 	 * pixels to ensure a GRBG Bayer pattern.
 	 */
-	rect.left = clamp_t(unsigned int, ALIGN(sel->r.left, 2), 0,
-			    AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_MIN);
-	rect.top = clamp_t(unsigned int, ALIGN(sel->r.top, 2), 0,
-			   AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_MIN);
+	rect.left = clamp_t(unsigned int, ALIGN(sel->r.left, 2),
+			    AR0330_WINDOW_LEFT_BORDER,
+			    AR0330_WINDOW_WIDTH_MAX - AR0330_WINDOW_WIDTH_MIN +
+			    AR0330_WINDOW_LEFT_BORDER);
+	rect.top = clamp_t(unsigned int, ALIGN(sel->r.top, 2),
+			   AR0330_WINDOW_TOP_BORDER,
+			   AR0330_WINDOW_HEIGHT_MAX - AR0330_WINDOW_HEIGHT_MIN +
+			   AR0330_WINDOW_TOP_BORDER);
 	rect.width = clamp(ALIGN(sel->r.width, 2),
 			   AR0330_WINDOW_WIDTH_MIN,
 			   AR0330_WINDOW_WIDTH_MAX);
@@ -834,8 +869,10 @@ static int ar0330_set_selection(struct v4l2_subdev *subdev,
 			    AR0330_WINDOW_HEIGHT_MIN,
 			    AR0330_WINDOW_HEIGHT_MAX);
 
-	rect.width = min(rect.width, AR0330_WINDOW_WIDTH_MAX - rect.left);
-	rect.height = min(rect.height, AR0330_WINDOW_HEIGHT_MAX - rect.top);
+	rect.width = min(rect.width, AR0330_WINDOW_WIDTH_MAX +
+			 AR0330_WINDOW_LEFT_BORDER - rect.left);
+	rect.height = min(rect.height, AR0330_WINDOW_HEIGHT_MAX +
+			  AR0330_WINDOW_TOP_BORDER - rect.top);
 
 	__crop = __ar0330_get_pad_crop(ar0330, cfg, sel->pad, sel->which);
 
@@ -960,6 +997,84 @@ static const struct v4l2_subdev_ops ar0330_subdev_ops = {
 	.video  = &ar0330_subdev_video_ops,
 	.pad    = &ar0330_subdev_pad_ops,
 };
+
+static int ar0330_v4l2_init(struct ar0330 *ar0330)
+{
+	struct v4l2_fwnode_device_properties props;
+	struct v4l2_ctrl *ctrl;
+	int ret;
+
+	/* Parse the firmware sensor properties. */
+	ret = v4l2_fwnode_device_parse(ar0330->dev, &props);
+	if (ret) {
+		dev_err(ar0330->dev, "Failed to parse fwnode properties: %d\n",
+			ret);
+		return ret;
+	}
+
+	/* Create V4L2 controls. */
+	v4l2_ctrl_handler_init(&ar0330->ctrls, 10);
+
+	v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+			  V4L2_CID_EXPOSURE, AR0330_COARSE_INTEGRATION_TIME_MIN,
+			  AR0330_COARSE_INTEGRATION_TIME_MAX, 1,
+			  AR0330_COARSE_INTEGRATION_TIME_DEF);
+	v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+			  V4L2_CID_GAIN, AR0330_GLOBAL_GAIN_MIN,
+			  AR0330_GLOBAL_GAIN_MAX, 1, AR0330_GLOBAL_GAIN_DEF);
+	ar0330->flip[0] = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+					    V4L2_CID_HFLIP, 0, 1, 1, 0);
+	ar0330->flip[1] = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+					    V4L2_CID_VFLIP, 0, 1, 1, 0);
+	ar0330->pixel_rate = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+					       V4L2_CID_PIXEL_RATE,
+					       0, 0, 1, 0);
+	v4l2_ctrl_new_std_menu_items(&ar0330->ctrls, &ar0330_ctrl_ops,
+				     V4L2_CID_TEST_PATTERN,
+				     ARRAY_SIZE(ar0330_test_pattern_menu) - 1,
+				     0, 0, ar0330_test_pattern_menu);
+
+	ctrl = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+				 V4L2_CID_HBLANK, AR0330_HBLANK_DEF,
+				 AR0330_HBLANK_DEF, 1, AR0330_HBLANK_DEF);
+	if (ctrl)
+		ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+
+	ctrl = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
+				 V4L2_CID_VBLANK, AR0330_VBLANK_DEF,
+				 AR0330_VBLANK_DEF, 1, AR0330_VBLANK_DEF);
+	if (ctrl)
+		ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+
+	v4l2_ctrl_cluster(ARRAY_SIZE(ar0330->flip), ar0330->flip);
+
+
+	v4l2_ctrl_new_fwnode_properties(&ar0330->ctrls, &ar0330_ctrl_ops,
+					&props);
+
+	if (ar0330->ctrls.error) {
+		dev_err(ar0330->dev, "%s: control initialization error %d\n",
+			__func__, ar0330->ctrls.error);
+		return ar0330->ctrls.error;
+	}
+
+	ar0330->subdev.ctrl_handler = &ar0330->ctrls;
+
+	/* Initialize the media entity and V4L2 subdev. */
+	ar0330->pad.flags = MEDIA_PAD_FL_SOURCE;
+	ret = media_entity_pads_init(&ar0330->subdev.entity, 1, &ar0330->pad);
+	if (ret < 0)
+		return ret;
+
+	v4l2_i2c_subdev_init(&ar0330->subdev, ar0330->client,
+			     &ar0330_subdev_ops);
+	ar0330->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+	ar0330->subdev.entity.function = MEDIA_ENT_F_CAM_SENSOR;
+
+	ar0330_init_cfg(&ar0330->subdev, NULL);
+
+	return 0;
+}
 
 /* -----------------------------------------------------------------------------
  * Power management
@@ -1161,48 +1276,12 @@ static int ar0330_probe(struct i2c_client *client,
 	if (ret < 0)
 		goto error_power;
 
-	/* Create V4L2 controls. */
-	v4l2_ctrl_handler_init(&ar0330->ctrls, 6);
-
-	v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
-			  V4L2_CID_EXPOSURE, AR0330_COARSE_INTEGRATION_TIME_MIN,
-			  AR0330_COARSE_INTEGRATION_TIME_MAX, 1,
-			  AR0330_COARSE_INTEGRATION_TIME_DEF);
-	v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
-			  V4L2_CID_GAIN, AR0330_GLOBAL_GAIN_MIN,
-			  AR0330_GLOBAL_GAIN_MAX, 1, AR0330_GLOBAL_GAIN_DEF);
-	ar0330->flip[0] = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
-					    V4L2_CID_HFLIP, 0, 1, 1, 0);
-	ar0330->flip[1] = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
-					    V4L2_CID_VFLIP, 0, 1, 1, 0);
-	ar0330->pixel_rate = v4l2_ctrl_new_std(&ar0330->ctrls, &ar0330_ctrl_ops,
-					       V4L2_CID_PIXEL_RATE,
-					       0, 0, 1, 0);
-	v4l2_ctrl_new_std_menu_items(&ar0330->ctrls, &ar0330_ctrl_ops,
-				     V4L2_CID_TEST_PATTERN,
-				     ARRAY_SIZE(ar0330_test_pattern_menu) - 1,
-				     0, 0, ar0330_test_pattern_menu);
-
-	v4l2_ctrl_cluster(ARRAY_SIZE(ar0330->flip), ar0330->flip);
-
-	if (ar0330->ctrls.error)
-		dev_err(ar0330->dev, "%s: control initialization error %d\n",
-			__func__, ar0330->ctrls.error);
-
-	ar0330->subdev.ctrl_handler = &ar0330->ctrls;
-
-	/* Initialize the media entity and V4L2 subdev. */
-	ar0330->pad.flags = MEDIA_PAD_FL_SOURCE;
-	ret = media_entity_pads_init(&ar0330->subdev.entity, 1, &ar0330->pad);
+	/* Init the V4L2 subdev and controls. */
+	ret = ar0330_v4l2_init(ar0330);
 	if (ret < 0)
-		goto error_ctrl;
+		goto error_media;
 
-	v4l2_i2c_subdev_init(&ar0330->subdev, client, &ar0330_subdev_ops);
-	ar0330->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
-	ar0330->subdev.entity.function = MEDIA_ENT_F_CAM_SENSOR;
-
-	ar0330_init_cfg(&ar0330->subdev, NULL);
-
+	/* Initialize the PLL. */
 	ret = ar0330_pll_init(ar0330, rate);
 	if (ret < 0) {
 		dev_err(ar0330->dev, "PLL initialization failed\n");
@@ -1239,7 +1318,6 @@ error_pm:
 	pm_runtime_put_noidle(ar0330->dev);
 error_media:
 	media_entity_cleanup(&ar0330->subdev.entity);
-error_ctrl:
 	v4l2_ctrl_handler_free(&ar0330->ctrls);
 error_power:
 	ar0330_power_off(ar0330);

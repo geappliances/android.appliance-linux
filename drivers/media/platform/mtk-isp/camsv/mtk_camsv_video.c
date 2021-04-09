@@ -5,34 +5,31 @@
  * Copyright (c) 2020 BayLibre
  */
 
-#include <linux/io.h>
-#include <linux/platform_device.h>
-#include <linux/pm_runtime.h>
 #include <linux/version.h>
-
-#include <media/media-entity.h>
 #include <media/v4l2-ctrls.h>
-#include <media/v4l2-dev.h>
 #include <media/v4l2-event.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-mediabus.h>
-#include <media/v4l2-subdev.h>
-#include <media/videobuf2-dma-contig.h>
-#include <media/videobuf2-v4l2.h>
 
 #include "mtk_camsv.h"
 
 static inline struct mtk_camsv_video_device *
-file_to_mtk_camsv_node(struct file *__file)
+file_to_mtk_camsv_video_device(struct file *__file)
 {
 	return container_of(video_devdata(__file),
 			    struct mtk_camsv_video_device, vdev);
 }
 
 static inline struct mtk_camsv_video_device *
-mtk_camsv_vbq_to_vdev(struct vb2_queue *__vq)
+vb2_queue_to_mtk_camsv_video_device(struct vb2_queue *vq)
 {
-	return container_of(__vq, struct mtk_camsv_video_device, vbq);
+	return container_of(vq, struct mtk_camsv_video_device, vbq);
+}
+
+static inline struct mtk_camsv_dev_buffer *
+to_mtk_camsv_dev_buffer(struct vb2_buffer *buf)
+{
+	return container_of(buf, struct mtk_camsv_dev_buffer, v4l2_buf.vb2_buf);
 }
 
 /* -----------------------------------------------------------------------------
@@ -155,7 +152,7 @@ mtk_camsv_format_info_by_code(u32 code)
 	return NULL;
 }
 
-static bool mtk_camsv_dev_find_fmt(const struct mtk_camsv_dev_node_desc *desc,
+static bool mtk_camsv_dev_find_fmt(const struct mtk_camsv_vdev_desc *desc,
 				   u32 format)
 {
 	unsigned int i;
@@ -182,17 +179,15 @@ static void calc_bpl_size_pix_mp(const struct mtk_camsv_format_info *fmtinfo,
 	}
 }
 
-static void
-mtk_camsv_dev_load_default_fmt(struct mtk_camsv_dev *cam,
-			       struct mtk_camsv_video_device *node)
+static void mtk_camsv_dev_load_default_fmt(struct mtk_camsv_dev *cam)
 {
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
-	struct v4l2_pix_format_mplane *fmt = &node->format;
+	struct mtk_camsv_video_device *vdev = &cam->vdev;
+	struct v4l2_pix_format_mplane *fmt = &vdev->format;
 
-	fmt->num_planes = p1_dev->conf->enableFH ? 2 : 1;
-	fmt->pixelformat = node->desc->fmts[0];
-	fmt->width = node->desc->def_width;
-	fmt->height = node->desc->def_height;
+	fmt->num_planes = cam->conf->enableFH ? 2 : 1;
+	fmt->pixelformat = vdev->desc->fmts[0];
+	fmt->width = vdev->desc->def_width;
+	fmt->height = vdev->desc->def_height;
 
 	fmt->colorspace = V4L2_COLORSPACE_SRGB;
 	fmt->field = V4L2_FIELD_NONE;
@@ -200,9 +195,9 @@ mtk_camsv_dev_load_default_fmt(struct mtk_camsv_dev *cam,
 	fmt->quantization = V4L2_QUANTIZATION_DEFAULT;
 	fmt->xfer_func = V4L2_XFER_FUNC_DEFAULT;
 
-	node->fmtinfo = mtk_camsv_format_info_by_fourcc(fmt->pixelformat);
+	vdev->fmtinfo = mtk_camsv_format_info_by_fourcc(fmt->pixelformat);
 
-	calc_bpl_size_pix_mp(node->fmtinfo, fmt);
+	calc_bpl_size_pix_mp(vdev->fmtinfo, fmt);
 }
 
 /* -----------------------------------------------------------------------------
@@ -215,11 +210,11 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 				     unsigned int sizes[],
 				     struct device *alloc_devs[])
 {
-	struct mtk_camsv_video_device *node = mtk_camsv_vbq_to_vdev(vq);
-	unsigned int max_buffer_count = node->desc->max_buf_count;
-	const struct v4l2_pix_format_mplane *fmt = &node->format;
+	struct mtk_camsv_video_device *vdev =
+		vb2_queue_to_mtk_camsv_video_device(vq);
+	unsigned int max_buffer_count = vdev->desc->max_buf_count;
+	const struct v4l2_pix_format_mplane *fmt = &vdev->format;
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vq);
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 	unsigned int size;
 	unsigned int np_conf;
 	unsigned int i;
@@ -231,7 +226,7 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 	size = fmt->plane_fmt[0].sizeimage;
 	/* Add for q.create_bufs with fmt.g_sizeimage(p) / 2 test */
 
-	np_conf = p1_dev->conf->enableFH ? 2 : 1;
+	np_conf = cam->conf->enableFH ? 2 : 1;
 
 	if (*num_planes == 0) {
 		*num_planes = np_conf;
@@ -241,8 +236,8 @@ static int mtk_camsv_vb2_queue_setup(struct vb2_queue *vq,
 		return -EINVAL;
 	}
 
-	mtk_camsv_setup(p1_dev, fmt->width, fmt->height,
-			fmt->plane_fmt[0].bytesperline, node->fmtinfo->code);
+	mtk_camsv_setup(cam, fmt->width, fmt->height,
+			fmt->plane_fmt[0].bytesperline, vdev->fmtinfo->code);
 
 	return 0;
 }
@@ -258,12 +253,11 @@ static int mtk_camsv_vb2_buf_init(struct vb2_buffer *vb)
 
 static int mtk_camsv_vb2_buf_prepare(struct vb2_buffer *vb)
 {
-	struct mtk_camsv_video_device *node =
-		mtk_camsv_vbq_to_vdev(vb->vb2_queue);
+	struct mtk_camsv_video_device *vdev =
+		vb2_queue_to_mtk_camsv_video_device(vb->vb2_queue);
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vb->vb2_queue);
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
 	struct mtk_camsv_dev_buffer *buf = to_mtk_camsv_dev_buffer(vb);
-	const struct v4l2_pix_format_mplane *fmt = &node->format;
+	const struct v4l2_pix_format_mplane *fmt = &vdev->format;
 	u32 size;
 	int i;
 
@@ -285,7 +279,7 @@ static int mtk_camsv_vb2_buf_prepare(struct vb2_buffer *vb)
 
 	if (buf->daddr == 0ULL) {
 		buf->daddr = vb2_dma_contig_plane_dma_addr(vb, 0);
-		if (p1_dev->conf->enableFH)
+		if (cam->conf->enableFH)
 			buf->fhaddr = vb2_dma_contig_plane_dma_addr(vb, 1);
 	}
 
@@ -296,10 +290,9 @@ static void mtk_camsv_vb2_buf_queue(struct vb2_buffer *vb)
 {
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vb->vb2_queue);
 	struct device *dev = cam->dev;
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
 	struct mtk_camsv_dev_buffer *buf = to_mtk_camsv_dev_buffer(vb);
 
-	mutex_lock(&p1_dev->protect_mutex);
+	mutex_lock(&cam->protect_mutex);
 
 	if (pm_runtime_get_sync(dev) < 0) {
 		dev_err(dev, "failed to get pm_runtime\n");
@@ -310,41 +303,39 @@ static void mtk_camsv_vb2_buf_queue(struct vb2_buffer *vb)
 	list_add_tail(&buf->list, &cam->buf_list);
 
 	/* update buffer internal address */
-	writel(buf->daddr, p1_dev->regs + CAMSV_FBC_IMGO_ENQ_ADDR);
-	if (p1_dev->conf->enableFH)
-		writel(buf->fhaddr, p1_dev->regs + CAMSV_IMGO_FH_BASE_ADDR);
+	writel(buf->daddr, cam->regs + CAMSV_FBC_IMGO_ENQ_ADDR);
+	if (cam->conf->enableFH)
+		writel(buf->fhaddr, cam->regs + CAMSV_IMGO_FH_BASE_ADDR);
 
-	writel(0x1U, p1_dev->regs + CAMSV_IMGO_FBC);
+	writel(0x1U, cam->regs + CAMSV_IMGO_FBC);
 
 out:
 	pm_runtime_put_autosuspend(dev);
-	mutex_unlock(&p1_dev->protect_mutex);
+	mutex_unlock(&cam->protect_mutex);
 }
 
 static void mtk_camsv_vb2_return_all_buffers(struct mtk_camsv_dev *cam,
 					     enum vb2_buffer_state state)
 {
-	struct device *dev = cam->dev;
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
 	struct mtk_camsv_dev_buffer *buf, *buf_prev;
 
-	mutex_lock(&p1_dev->protect_mutex);
+	mutex_lock(&cam->protect_mutex);
 	list_for_each_entry_safe(buf, buf_prev, &cam->buf_list, list) {
 		buf->daddr = 0ULL;
 		list_del(&buf->list);
 		vb2_buffer_done(&buf->v4l2_buf.vb2_buf, state);
 	}
-	mutex_unlock(&p1_dev->protect_mutex);
+	mutex_unlock(&cam->protect_mutex);
 }
 
-static void mtk_camsv_cmos_vf_enable(struct mtk_camsv_p1_device *p1_dev,
+static void mtk_camsv_cmos_vf_enable(struct mtk_camsv_dev *camsv_dev,
 				     bool enable, bool pak_en)
 {
-	struct device *dev = p1_dev->dev;
+	struct device *dev = camsv_dev->dev;
 	u32 mask = enable ? (u32)1 : ~(u32)1;
 	u32 clk_en;
 
-	mutex_lock(&p1_dev->protect_mutex);
+	mutex_lock(&camsv_dev->protect_mutex);
 	if (pm_runtime_get_sync(dev) < 0) {
 		dev_err(dev, "failed to get pm_runtime\n");
 		goto out;
@@ -355,27 +346,27 @@ static void mtk_camsv_cmos_vf_enable(struct mtk_camsv_p1_device *p1_dev,
 		if (pak_en)
 			clk_en |= CAMSV_PAK_DP_CLK_EN;
 
-		writel(clk_en, p1_dev->regs + CAMSV_CLK_EN);
-		writel(readl(p1_dev->regs + CAMSV_TG_VF_CON) | mask,
-		       p1_dev->regs + CAMSV_TG_VF_CON);
+		writel(clk_en, camsv_dev->regs + CAMSV_CLK_EN);
+		writel(readl(camsv_dev->regs + CAMSV_TG_VF_CON) | mask,
+		       camsv_dev->regs + CAMSV_TG_VF_CON);
 	} else {
-		writel(readl(p1_dev->regs + CAMSV_TG_SEN_MODE) & mask,
-		       p1_dev->regs + CAMSV_TG_SEN_MODE);
-		writel(readl(p1_dev->regs + CAMSV_TG_VF_CON) & mask,
-		       p1_dev->regs + CAMSV_TG_VF_CON);
+		writel(readl(camsv_dev->regs + CAMSV_TG_SEN_MODE) & mask,
+		       camsv_dev->regs + CAMSV_TG_SEN_MODE);
+		writel(readl(camsv_dev->regs + CAMSV_TG_VF_CON) & mask,
+		       camsv_dev->regs + CAMSV_TG_VF_CON);
 	}
 
 out:
 	pm_runtime_put_autosuspend(dev);
-	mutex_unlock(&p1_dev->protect_mutex);
+	mutex_unlock(&camsv_dev->protect_mutex);
 }
 
-static int mtk_camsv_verify_format(struct mtk_camsv_dev *cam,
-				   struct mtk_camsv_video_device *node)
+static int mtk_camsv_verify_format(struct mtk_camsv_dev *cam)
 {
+	struct mtk_camsv_video_device *vdev = &cam->vdev;
 	struct v4l2_subdev_format fmt = {
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
-		.pad = node->id,
+		.pad = MTK_CAMSV_CIO_PAD_VIDEO,
 	};
 	int ret;
 
@@ -383,9 +374,9 @@ static int mtk_camsv_verify_format(struct mtk_camsv_dev *cam,
 	if (ret < 0)
 		return ret == -ENOIOCTLCMD ? -EINVAL : ret;
 
-	if (node->fmtinfo->code != fmt.format.code ||
-	    node->format.height != fmt.format.height ||
-	    node->format.width != fmt.format.width)
+	if (vdev->fmtinfo->code != fmt.format.code ||
+	    vdev->format.height != fmt.format.height ||
+	    vdev->format.width != fmt.format.width)
 		return -EINVAL;
 
 	return 0;
@@ -395,29 +386,24 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 					 unsigned int count)
 {
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vq);
-	struct mtk_camsv_video_device *node = mtk_camsv_vbq_to_vdev(vq);
+	struct mtk_camsv_video_device *vdev =
+		vb2_queue_to_mtk_camsv_video_device(vq);
 	struct device *dev = cam->dev;
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
 	int ret;
 
-	if (!node->enabled) {
-		dev_err(dev, "Node:%d is not enabled\n", node->id);
-		ret = -ENOLINK;
-		goto fail_ret_buf;
-	}
-
 	/* Enable CMOS and VF */
-	mtk_camsv_cmos_vf_enable(p1_dev, true, node->fmtinfo->packed);
+	mtk_camsv_cmos_vf_enable(cam, true, vdev->fmtinfo->packed);
 
 	mutex_lock(&cam->op_lock);
 
-	ret = mtk_camsv_verify_format(cam, node);
+	ret = mtk_camsv_verify_format(cam);
 	if (ret < 0)
 		goto fail_unlock;
 
 	/* Start streaming of the whole pipeline now*/
 	if (!cam->pipeline.streaming_count) {
-		ret = media_pipeline_start(&node->vdev.entity, &cam->pipeline);
+		ret = media_pipeline_start(vdev->vdev.entity.pads,
+					   &cam->pipeline);
 		if (ret) {
 			dev_err(dev, "failed to start pipeline:%d\n", ret);
 			goto fail_unlock;
@@ -429,7 +415,7 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 
 	cam->sequence = (unsigned int)-1;
 
-	/* Stream on sub-devices node */
+	/* Stream on the sub-device */
 	ret = v4l2_subdev_call(&cam->subdev, video, s_stream, 1);
 	if (ret)
 		goto fail_no_stream;
@@ -440,10 +426,9 @@ static int mtk_camsv_vb2_start_streaming(struct vb2_queue *vq,
 fail_no_stream:
 	cam->stream_count--;
 	if (cam->stream_count == 0)
-		media_pipeline_stop(&node->vdev.entity);
+		media_pipeline_stop(vdev->vdev.entity.pads);
 fail_unlock:
 	mutex_unlock(&cam->op_lock);
-fail_ret_buf:
 	mtk_camsv_vb2_return_all_buffers(cam, VB2_BUF_STATE_QUEUED);
 
 	return ret;
@@ -452,12 +437,11 @@ fail_ret_buf:
 static void mtk_camsv_vb2_stop_streaming(struct vb2_queue *vq)
 {
 	struct mtk_camsv_dev *cam = vb2_get_drv_priv(vq);
-	struct mtk_camsv_video_device *node = mtk_camsv_vbq_to_vdev(vq);
-	struct device *dev = cam->dev;
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(dev);
+	struct mtk_camsv_video_device *vdev =
+		vb2_queue_to_mtk_camsv_video_device(vq);
 
 	/* Disable CMOS and VF */
-	mtk_camsv_cmos_vf_enable(p1_dev, false, false);
+	mtk_camsv_cmos_vf_enable(cam, false, false);
 
 	mutex_lock(&cam->op_lock);
 
@@ -472,7 +456,7 @@ static void mtk_camsv_vb2_stop_streaming(struct vb2_queue *vq)
 
 	mutex_unlock(&cam->op_lock);
 
-	media_pipeline_stop(&node->vdev.entity);
+	media_pipeline_stop(vdev->vdev.entity.pads);
 }
 
 static const struct vb2_ops mtk_camsv_vb2_ops = {
@@ -510,17 +494,17 @@ static int mtk_camsv_vidioc_querycap(struct file *file, void *fh,
 static int mtk_camsv_vidioc_enum_fmt(struct file *file, void *fh,
 				     struct v4l2_fmtdesc *f)
 {
-	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(file);
+	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_video_device(file);
 	const struct mtk_camsv_format_info *fmtinfo;
 	unsigned int i;
 
 	/* If mbus_code is not set enumerate all supported formats. */
 	if (!f->mbus_code) {
-		if (f->index >= node->desc->num_fmts)
+		if (f->index >= vdev->desc->num_fmts)
 			return -EINVAL;
 
 		/* f->description is filled in v4l_fill_fmtdesc function */
-		f->pixelformat = node->desc->fmts[f->index];
+		f->pixelformat = vdev->desc->fmts[f->index];
 		f->flags = 0;
 
 		return 0;
@@ -537,8 +521,8 @@ static int mtk_camsv_vidioc_enum_fmt(struct file *file, void *fh,
 	if (!fmtinfo)
 		return -EINVAL;
 
-	for (i = 0; i < node->desc->num_fmts; ++i) {
-		if (node->desc->fmts[i] == fmtinfo->fourcc) {
+	for (i = 0; i < vdev->desc->num_fmts; ++i) {
+		if (vdev->desc->fmts[i] == fmtinfo->fourcc) {
 			f->pixelformat = fmtinfo->fourcc;
 			f->flags = 0;
 			return 0;
@@ -551,9 +535,9 @@ static int mtk_camsv_vidioc_enum_fmt(struct file *file, void *fh,
 static int mtk_camsv_vidioc_g_fmt(struct file *file, void *fh,
 				  struct v4l2_format *f)
 {
-	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(file);
+	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_video_device(file);
 
-	f->fmt.pix_mp = node->format;
+	f->fmt.pix_mp = vdev->format;
 
 	return 0;
 }
@@ -562,20 +546,19 @@ static int mtk_camsv_vidioc_try_fmt(struct file *file, void *fh,
 				    struct v4l2_format *f)
 {
 	struct mtk_camsv_dev *cam = video_drvdata(file);
-	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(file);
-	struct mtk_camsv_p1_device *p1_dev = dev_get_drvdata(cam->dev);
+	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_video_device(file);
 	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
 	const struct mtk_camsv_format_info *fmtinfo;
 
 	/* Validate pixelformat */
-	if (!mtk_camsv_dev_find_fmt(node->desc, pix_mp->pixelformat))
-		pix_mp->pixelformat = node->desc->fmts[0];
+	if (!mtk_camsv_dev_find_fmt(vdev->desc, pix_mp->pixelformat))
+		pix_mp->pixelformat = vdev->desc->fmts[0];
 
 	pix_mp->width = clamp_val(pix_mp->width, IMG_MIN_WIDTH, IMG_MAX_WIDTH);
 	pix_mp->height = clamp_val(pix_mp->height, IMG_MIN_HEIGHT,
 				   IMG_MAX_HEIGHT);
 
-	pix_mp->num_planes = p1_dev->conf->enableFH ? 2 : 1;
+	pix_mp->num_planes = cam->conf->enableFH ? 2 : 1;
 
 	fmtinfo = mtk_camsv_format_info_by_fourcc(pix_mp->pixelformat);
 	calc_bpl_size_pix_mp(fmtinfo, pix_mp);
@@ -594,10 +577,10 @@ static int mtk_camsv_vidioc_s_fmt(struct file *file, void *fh,
 				  struct v4l2_format *f)
 {
 	struct mtk_camsv_dev *cam = video_drvdata(file);
-	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(file);
+	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_video_device(file);
 	int ret;
 
-	if (vb2_is_busy(node->vdev.queue)) {
+	if (vb2_is_busy(vdev->vdev.queue)) {
 		dev_dbg(cam->dev, "%s: queue is busy\n", __func__);
 		return -EBUSY;
 	}
@@ -607,26 +590,26 @@ static int mtk_camsv_vidioc_s_fmt(struct file *file, void *fh,
 		return ret;
 
 	/* Configure to video device */
-	node->format = f->fmt.pix_mp;
-	node->fmtinfo =
+	vdev->format = f->fmt.pix_mp;
+	vdev->fmtinfo =
 		mtk_camsv_format_info_by_fourcc(f->fmt.pix_mp.pixelformat);
 
 	return 0;
 }
 
-static int mtk_camsv_vidioc_enum_framesizes(struct file *filp, void *priv,
+static int mtk_camsv_vidioc_enum_framesizes(struct file *file, void *priv,
 					    struct v4l2_frmsizeenum *sizes)
 {
-	struct mtk_camsv_video_device *node = file_to_mtk_camsv_node(filp);
+	struct mtk_camsv_video_device *vdev = file_to_mtk_camsv_video_device(file);
 
 	if (sizes->index)
 		return -EINVAL;
 
-	if (!mtk_camsv_dev_find_fmt(node->desc, sizes->pixel_format))
+	if (!mtk_camsv_dev_find_fmt(vdev->desc, sizes->pixel_format))
 		return -EINVAL;
 
-	sizes->type = node->desc->frmsizes->type;
-	memcpy(&sizes->stepwise, &node->desc->frmsizes->stepwise,
+	sizes->type = vdev->desc->frmsizes->type;
+	memcpy(&sizes->stepwise, &vdev->desc->frmsizes->stepwise,
 	       sizeof(sizes->stepwise));
 
 	return 0;
@@ -667,121 +650,6 @@ static const struct v4l2_file_operations mtk_camsv_v4l2_fops = {
  * Init & Cleanup
  */
 
-int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
-			     struct mtk_camsv_video_device *node)
-{
-	struct device *dev = cam->dev;
-	struct video_device *vdev = &node->vdev;
-	struct vb2_queue *vbq = &node->vbq;
-	unsigned int output = V4L2_TYPE_IS_OUTPUT(node->desc->buf_type);
-	unsigned int link_flags = node->desc->link_flags;
-	int ret;
-
-	/* Initialize mtk_camsv_video_device */
-	if (link_flags & MEDIA_LNK_FL_IMMUTABLE)
-		node->enabled = true;
-	else
-		node->enabled = false;
-	mtk_camsv_dev_load_default_fmt(cam, node);
-
-	cam->subdev_pads[MTK_CAMSV_CIO_PAD_NODE(node->id)].flags =
-		output ? MEDIA_PAD_FL_SINK : MEDIA_PAD_FL_SOURCE;
-
-	/* Initialize media entities */
-	ret = media_entity_pads_init(&vdev->entity, 1, &node->vdev_pad);
-	if (ret) {
-		dev_err(dev, "failed to initialize media pad:%d\n", ret);
-		return ret;
-	}
-	node->vdev_pad.flags = output ? MEDIA_PAD_FL_SOURCE : MEDIA_PAD_FL_SINK;
-
-	vbq->type = node->desc->buf_type;
-	vbq->io_modes = VB2_MMAP | VB2_DMABUF;
-	vbq->dev = dev;
-	vbq->ops = &mtk_camsv_vb2_ops;
-	vbq->mem_ops = &vb2_dma_contig_memops;
-	vbq->buf_struct_size = sizeof(struct mtk_camsv_dev_buffer);
-	/*
-	 * TODO: The hardware supports SOF interrupts, switch to a SOF
-	 * timestamp source would give better accuracy, but first requires
-	 * extending the V4L2 API to support it.
-	 */
-	vbq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC
-			     | V4L2_BUF_FLAG_TSTAMP_SRC_EOF;
-
-	/* No minimum buffers limitation */
-	vbq->min_buffers_needed = 0;
-	vbq->drv_priv = cam;
-
-	vbq->lock = &node->vdev_lock;
-	ret = vb2_queue_init(vbq);
-	if (ret) {
-		dev_err(dev, "failed to init. vb2 queue:%d\n", ret);
-		goto fail_media_clean;
-	}
-
-	/* Initialize vdev */
-	snprintf(vdev->name, sizeof(vdev->name), "%s %s",
-		 dev_driver_string(dev), node->desc->name);
-	/* set cap/type/ioctl_ops of the video device */
-	vdev->device_caps = node->desc->cap | V4L2_CAP_STREAMING
-			  | V4L2_CAP_IO_MC;
-	vdev->ioctl_ops = node->desc->ioctl_ops;
-	vdev->fops = &mtk_camsv_v4l2_fops;
-	vdev->release = video_device_release_empty;
-	vdev->lock = &node->vdev_lock;
-	vdev->v4l2_dev = &cam->v4l2_dev;
-	vdev->queue = &node->vbq;
-	vdev->vfl_dir = output ? VFL_DIR_TX : VFL_DIR_RX;
-	vdev->entity.function = MEDIA_ENT_F_IO_V4L;
-	vdev->entity.ops = NULL;
-	video_set_drvdata(vdev, cam);
-
-	/* Initialize miscellaneous variables */
-	mutex_init(&node->vdev_lock);
-	INIT_LIST_HEAD(&cam->buf_list);
-
-	ret = video_register_device(vdev, VFL_TYPE_GRABBER, -1);
-	if (ret) {
-		dev_err(dev, "failed to register vde:%d\n", ret);
-		goto fail_vb2_rel;
-	}
-
-	/* Create link between video node and the subdev pad */
-	if (output)
-		ret = media_create_pad_link(&vdev->entity, 0,
-					    &cam->subdev.entity,
-					    MTK_CAMSV_CIO_PAD_NODE(node->id),
-					    link_flags);
-	else
-		ret = media_create_pad_link(&cam->subdev.entity,
-					    MTK_CAMSV_CIO_PAD_NODE(node->id),
-					    &vdev->entity, 0, link_flags);
-
-	if (ret)
-		goto fail_vdev_ureg;
-
-	return 0;
-
-fail_vdev_ureg:
-	video_unregister_device(vdev);
-fail_vb2_rel:
-	mutex_destroy(&node->vdev_lock);
-	vb2_queue_release(vbq);
-fail_media_clean:
-	media_entity_cleanup(&vdev->entity);
-
-	return ret;
-}
-
-void mtk_camsv_video_unregister(struct mtk_camsv_video_device *node)
-{
-	video_unregister_device(&node->vdev);
-	vb2_queue_release(&node->vbq);
-	media_entity_cleanup(&node->vdev.entity);
-	mutex_destroy(&node->vdev_lock);
-}
-
 static const u32 stream_out_fmts[] = {
 	/* The 1st entry is the default image format */
 	V4L2_PIX_FMT_MTISP_SGRBG12,
@@ -802,47 +670,135 @@ static const u32 stream_out_fmts[] = {
 	V4L2_PIX_FMT_YVYU,
 };
 
-static const struct mtk_camsv_dev_node_desc capture_queues[] = {
-	{
-		.id = MTK_CAMSV_P1_MAIN_STREAM_OUT,
-		.name = "main stream",
-		.cap = V4L2_CAP_VIDEO_CAPTURE_MPLANE,
-		.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
-		.link_flags = MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED,
-		.fmts = stream_out_fmts,
-		.num_fmts = ARRAY_SIZE(stream_out_fmts),
-		.def_width = 1920,
-		.def_height = 1080,
-		.ioctl_ops = &mtk_camsv_v4l2_vcap_ioctl_ops,
-		.frmsizes =
-			&(struct v4l2_frmsizeenum){
-				.index = 0,
-				.type = V4L2_FRMSIZE_TYPE_CONTINUOUS,
-				.stepwise = {
-					.max_width = IMG_MAX_WIDTH,
-					.min_width = IMG_MIN_WIDTH,
-					.max_height = IMG_MAX_HEIGHT,
-					.min_height = IMG_MIN_HEIGHT,
-					.step_height = 1,
-					.step_width = 1,
-				},
+static const struct mtk_camsv_vdev_desc video_stream = {
+	.name = "video stream",
+	.cap = V4L2_CAP_VIDEO_CAPTURE_MPLANE,
+	.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+	.link_flags = MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED,
+	.fmts = stream_out_fmts,
+	.num_fmts = ARRAY_SIZE(stream_out_fmts),
+	.def_width = 1920,
+	.def_height = 1080,
+	.ioctl_ops = &mtk_camsv_v4l2_vcap_ioctl_ops,
+	.frmsizes =
+		&(struct v4l2_frmsizeenum){
+			.index = 0,
+			.type = V4L2_FRMSIZE_TYPE_CONTINUOUS,
+			.stepwise = {
+				.max_width = IMG_MAX_WIDTH,
+				.min_width = IMG_MIN_WIDTH,
+				.max_height = IMG_MAX_HEIGHT,
+				.min_height = IMG_MIN_HEIGHT,
+				.step_height = 1,
+				.step_width = 1,
 			},
-	},
+		},
 };
 
-void mtk_camsv_video_init_nodes(struct mtk_camsv_dev *cam)
+int mtk_camsv_video_register(struct mtk_camsv_dev *cam)
 {
-	unsigned int node_idx;
-	int i;
-
-	node_idx = 0;
-	for (i = 0; i < ARRAY_SIZE(capture_queues); i++)
-		cam->vdev_nodes[node_idx++].desc = &capture_queues[i];
+	struct device *dev = cam->dev;
+	struct mtk_camsv_video_device *cam_vdev = &cam->vdev;
+	struct video_device *vdev = &cam_vdev->vdev;
+	struct vb2_queue *vbq = &cam_vdev->vbq;
+	int ret;
 
 	vb2_dma_contig_set_max_seg_size(cam->dev, DMA_BIT_MASK(32));
+
+	cam_vdev->desc = &video_stream;
+
+	/* Initialize mtk_camsv_video_device */
+	mtk_camsv_dev_load_default_fmt(cam);
+
+	cam->subdev_pads[MTK_CAMSV_CIO_PAD_VIDEO].flags = MEDIA_PAD_FL_SOURCE;
+
+	/* Initialize media entities */
+	ret = media_entity_pads_init(&vdev->entity, 1, &cam_vdev->vdev_pad);
+	if (ret) {
+		dev_err(dev, "failed to initialize media pad:%d\n", ret);
+		return ret;
+	}
+	cam_vdev->vdev_pad.flags = MEDIA_PAD_FL_SINK;
+
+	vbq->type = cam_vdev->desc->buf_type;
+	vbq->io_modes = VB2_MMAP | VB2_DMABUF;
+	vbq->dev = dev;
+	vbq->ops = &mtk_camsv_vb2_ops;
+	vbq->mem_ops = &vb2_dma_contig_memops;
+	vbq->buf_struct_size = sizeof(struct mtk_camsv_dev_buffer);
+	/*
+	 * TODO: The hardware supports SOF interrupts, switch to a SOF
+	 * timestamp source would give better accuracy, but first requires
+	 * extending the V4L2 API to support it.
+	 */
+	vbq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC
+			     | V4L2_BUF_FLAG_TSTAMP_SRC_EOF;
+
+	/* No minimum buffers limitation */
+	vbq->min_buffers_needed = 0;
+	vbq->drv_priv = cam;
+
+	vbq->lock = &cam_vdev->vdev_lock;
+	ret = vb2_queue_init(vbq);
+	if (ret) {
+		dev_err(dev, "failed to init. vb2 queue:%d\n", ret);
+		goto fail_media_clean;
+	}
+
+	/* Initialize vdev */
+	snprintf(vdev->name, sizeof(vdev->name), "%s %s",
+		 dev_name(dev), cam_vdev->desc->name);
+
+	/* Set cap/type/ioctl_ops of the video device */
+	vdev->device_caps = cam_vdev->desc->cap | V4L2_CAP_STREAMING
+			  | V4L2_CAP_IO_MC;
+	vdev->ioctl_ops = cam_vdev->desc->ioctl_ops;
+	vdev->fops = &mtk_camsv_v4l2_fops;
+	vdev->release = video_device_release_empty;
+	vdev->lock = &cam_vdev->vdev_lock;
+	vdev->v4l2_dev = cam->subdev.v4l2_dev;
+	vdev->queue = &cam_vdev->vbq;
+	vdev->vfl_dir = VFL_DIR_RX;
+	vdev->entity.function = MEDIA_ENT_F_IO_V4L;
+	vdev->entity.ops = NULL;
+	video_set_drvdata(vdev, cam);
+
+	/* Initialize miscellaneous variables */
+	mutex_init(&cam_vdev->vdev_lock);
+	INIT_LIST_HEAD(&cam->buf_list);
+
+	ret = video_register_device(vdev, VFL_TYPE_GRABBER, -1);
+	if (ret) {
+		dev_err(dev, "failed to register vde:%d\n", ret);
+		goto fail_vb2_rel;
+	}
+
+	/* Create link between the video pad and the subdev pad. */
+	ret = media_create_pad_link(&cam->subdev.entity,
+				    MTK_CAMSV_CIO_PAD_VIDEO,
+				    &vdev->entity, 0, cam_vdev->desc->link_flags);
+
+	if (ret)
+		goto fail_vdev_ureg;
+
+	return 0;
+
+fail_vdev_ureg:
+	video_unregister_device(vdev);
+fail_vb2_rel:
+	mutex_destroy(&cam_vdev->vdev_lock);
+	vb2_queue_release(vbq);
+fail_media_clean:
+	media_entity_cleanup(&vdev->entity);
+
+	return ret;
 }
 
-void mtk_camsv_video_cleanup_nodes(struct mtk_camsv_dev *cam)
+void mtk_camsv_video_unregister(struct mtk_camsv_video_device *vdev)
 {
-	vb2_dma_contig_clear_max_seg_size(cam->dev);
+	video_unregister_device(&vdev->vdev);
+	vb2_queue_release(&vdev->vbq);
+	media_entity_cleanup(&vdev->vdev.entity);
+	mutex_destroy(&vdev->vdev_lock);
+	vb2_dma_contig_clear_max_seg_size(&vdev->vdev.dev);
 }

@@ -155,6 +155,44 @@ struct v4l2_subdev_selection {
 	__u32 reserved[8];
 };
 
+#define V4L2_SUBDEV_ROUTE_FL_ACTIVE	(1 << 0)
+#define V4L2_SUBDEV_ROUTE_FL_IMMUTABLE	(1 << 1)
+
+/**
+ * struct v4l2_subdev_route - A route inside a subdev
+ * @sink_pad: the sink pad index
+ * @sink_stream: the sink stream identifier
+ * @source_pad: the source pad index
+ * @source_stream: the source stream identifier
+ * @flags: route flags:
+ *
+ *	V4L2_SUBDEV_ROUTE_FL_ACTIVE: Is the route active? An active
+ *	route will start when streaming is enabled on a video node.
+ *	Set by the user.
+ *
+ *	V4L2_SUBDEV_ROUTE_FL_IMMUTABLE: Is the route immutable, i.e.
+ *	can it be activated and inactivated? Set by the driver.
+ */
+struct v4l2_subdev_route {
+	__u32 sink_pad;
+	__u32 sink_stream;
+	__u32 source_pad;
+	__u32 source_stream;
+	__u32 flags;
+	__u32 reserved[5];
+};
+
+/**
+ * struct v4l2_subdev_routing - Subdev routing information
+ * @routes: pointer to the routes array
+ * @num_routes: the total number of routes in the routes array
+ */
+struct v4l2_subdev_routing {
+	__u64 routes;
+	__u32 num_routes;
+	__u32 reserved[5];
+};
+
 /* Backwards compatibility define --- to be removed */
 #define v4l2_subdev_edid v4l2_edid
 
@@ -181,5 +219,7 @@ struct v4l2_subdev_selection {
 #define VIDIOC_SUBDEV_ENUM_DV_TIMINGS		_IOWR('V', 98, struct v4l2_enum_dv_timings)
 #define VIDIOC_SUBDEV_QUERY_DV_TIMINGS		_IOR('V', 99, struct v4l2_dv_timings)
 #define VIDIOC_SUBDEV_DV_TIMINGS_CAP		_IOWR('V', 100, struct v4l2_dv_timings_cap)
+#define VIDIOC_SUBDEV_G_ROUTING			_IOWR('V', 38, struct v4l2_subdev_routing)
+#define VIDIOC_SUBDEV_S_ROUTING			_IOWR('V', 39, struct v4l2_subdev_routing)
 
 #endif

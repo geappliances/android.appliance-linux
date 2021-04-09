@@ -7,40 +7,13 @@
 #define __MTK_CAMSV_H__
 
 #include <linux/clk.h>
-#include <linux/dma-mapping.h>
 #include <linux/err.h>
 #include <linux/errno.h>
-#include <linux/debugfs.h>
-#include <linux/delay.h>
-#include <linux/device.h>
-#include <linux/fs.h>
-#include <linux/init.h>
-#include <linux/interrupt.h>
-#include <linux/io.h>
-#include <linux/iommu.h>
 #include <linux/kernel.h>
-#include <linux/mfd/syscon.h>
-#include <linux/mm.h>
-#include <linux/module.h>
-#include <linux/moduleparam.h>
-#include <linux/of.h>
 #include <linux/of_graph.h>
-#include <linux/of_irq.h>
-#include <linux/of_platform.h>
-#include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
-#include <linux/regmap.h>
-#include <linux/sched.h>
-#include <linux/slab.h>
-#include <linux/time64.h>
-#include <linux/types.h>
 #include <linux/videodev2.h>
-#include <media/v4l2-common.h>
-#include <media/v4l2-dev.h>
-#include <media/v4l2-device.h>
-#include <media/v4l2-ioctl.h>
-#include <media/v4l2-event.h>
-#include <media/v4l2-fwnode.h>
+#include <media/media-entity.h>
 #include <media/v4l2-subdev.h>
 #include <media/videobuf2-core.h>
 #include <media/videobuf2-dma-contig.h>
@@ -58,18 +31,9 @@
 
 enum TEST_MODE { TEST_PATTERN_DISABLED = 0x0, TEST_PATTERN_SENINF };
 
-/*
- * ID enum value for struct mtk_camsv_dev_node_desc:id
- * or mtk_camsv_video_device:id
- */
-enum {
-	MTK_CAMSV_P1_MAIN_STREAM_OUT = 0,
-	MTK_CAMSV_P1_TOTAL_NODES
-};
-
 #define MTK_CAMSV_CIO_PAD_SENINF	0
-#define MTK_CAMSV_CIO_PAD_NODE(n)	((n) + 1)
-#define MTK_CAMSV_CIO_NUM_PADS		(MTK_CAMSV_P1_TOTAL_NODES + 1)
+#define MTK_CAMSV_CIO_PAD_VIDEO		1
+#define MTK_CAMSV_CIO_NUM_PADS		2
 
 struct mtk_camsv_format_info {
 	u32 code;
@@ -93,16 +57,9 @@ struct mtk_camsv_sparams {
 	unsigned int imgo_stride;
 };
 
-static inline struct mtk_camsv_dev_buffer *
-to_mtk_camsv_dev_buffer(struct vb2_buffer *buf)
-{
-	return container_of(buf, struct mtk_camsv_dev_buffer, v4l2_buf.vb2_buf);
-}
-
 /*
- * struct mtk_camsv_dev_node_desc - MTK camera device node descriptor
+ * struct mtk_camsv_vdev_desc - MTK camera device descriptor
  *
- * @id: id of the node
  * @name: name of the node
  * @cap: supported V4L2 capabilities
  * @buf_type: supported V4L2 buffer type
@@ -116,8 +73,7 @@ to_mtk_camsv_dev_buffer(struct vb2_buffer *buf)
  * @frmsizes: supported V4L2 frame size number
  *
  */
-struct mtk_camsv_dev_node_desc {
-	u8 id;
+struct mtk_camsv_vdev_desc {
 	const char *name;
 	u32 cap;
 	u32 buf_type;
@@ -134,19 +90,16 @@ struct mtk_camsv_dev_node_desc {
 /*
  * struct mtk_camsv_video_device - Mediatek video device structure
  *
- * @id: Id for index of mtk_camsv_dev:vdev_nodes array
  * @desc: The node description of video device
  * @vdev_pad: The media pad graph object of video device
  * @vdev: The video device instance
  * @vbq: A videobuf queue of video device
  * @vdev_lock: Serializes vb2 queue and video device operations
- * @enabled: Indicate the video device is enabled or not
  * @format: The V4L2 format of video device
  * @fmtinfo: Information about the current format
  */
 struct mtk_camsv_video_device {
-	unsigned int id;
-	const struct mtk_camsv_dev_node_desc *desc;
+	const struct mtk_camsv_vdev_desc *desc;
 
 	struct media_pad vdev_pad;
 	struct video_device vdev;
@@ -155,7 +108,6 @@ struct mtk_camsv_video_device {
 	/* Serializes vb2 queue and video device operations */
 	struct mutex vdev_lock;
 
-	unsigned int enabled;
 	struct v4l2_pix_format_mplane format;
 	const struct mtk_camsv_format_info *fmtinfo;
 };
@@ -165,13 +117,10 @@ struct mtk_camsv_video_device {
  *
  * @dev: Pointer to device.
  * @pipeline: Media pipeline information.
- * @media_dev: Media device instance.
  * @subdev: The V4L2 sub-device instance.
- * @v4l2_dev: The V4L2 device driver instance.
- * @notifier: The v4l2_device notifier data.
  * @subdev_pads: Media pads of this sub-device.
  * @formats: Media bus format for all pads.
- * @vdev_nodes: The array list of mtk_camsv_video_device nodes.
+ * @vdev: The video device node.
  * @seninf: Pointer to the seninf sub-device.
  * @streaming: Indicate the overall streaming status is on or off.
  * @stream_count: Number of streaming video nodes
@@ -181,28 +130,30 @@ struct mtk_camsv_video_device {
  */
 struct mtk_camsv_dev {
 	struct device *dev;
+	void __iomem *regs;
+	struct clk *camsys_cam_cgpdn;
+	struct clk *camsys_camtg_cgpdn;
+	struct clk *camsys_camsv;
+	struct device *larb_ipu;
+	struct device *larb_cam;
+	unsigned int irq;
+	const struct mtk_camsv_conf *conf;
+
 	struct media_pipeline pipeline;
-	struct media_device media_dev;
 	struct v4l2_subdev subdev;
-	struct v4l2_device v4l2_dev;
-	struct v4l2_async_notifier notifier;
 	struct media_pad subdev_pads[MTK_CAMSV_CIO_NUM_PADS];
 	struct v4l2_mbus_framefmt formats[MTK_CAMSV_CIO_NUM_PADS];
-	struct mtk_camsv_video_device vdev_nodes[MTK_CAMSV_P1_TOTAL_NODES];
+	struct mtk_camsv_video_device vdev;
 	struct v4l2_subdev *seninf;
 	unsigned int streaming;
 	unsigned int stream_count;
 	unsigned int sequence;
 
 	struct mutex op_lock;
+	struct mutex protect_mutex;
 
 	struct list_head buf_list;
 };
-
-static inline struct mtk_camsv_dev *to_mtk_camsv_dev(struct v4l2_subdev *sd)
-{
-	return container_of(sd, struct mtk_camsv_dev, subdev);
-}
 
 struct mtk_camsv_conf {
 	unsigned int tg_sen_mode;
@@ -215,33 +166,11 @@ struct mtk_camsv_conf {
 	bool enableFH;
 };
 
-struct mtk_camsv_p1_device {
-	struct device *dev;
-	struct mtk_camsv_dev camsv_dev;
-	void __iomem *regs;
-	struct clk *camsys_cam_cgpdn;
-	struct clk *camsys_camtg_cgpdn;
-	struct clk *camsys_camsv0;
-	struct device *larb_ipu;
-	struct device *larb_cam;
-	unsigned int irq;
-	const struct mtk_camsv_conf *conf;
-
-	struct mutex protect_mutex;
-};
-
-void mtk_camsv_setup(struct mtk_camsv_p1_device *p1_dev, u32 width, u32 height,
+void mtk_camsv_setup(struct mtk_camsv_dev *camsv_dev, u32 width, u32 height,
 		     u32 bpl, u32 mbus_fmt);
-
-int mtk_camsv_dev_init(struct platform_device *pdev,
-		       struct mtk_camsv_dev *camsv_dev);
-
+int mtk_camsv_dev_init(struct mtk_camsv_dev *camsv_dev);
 void mtk_camsv_dev_cleanup(struct mtk_camsv_dev *camsv_dev);
-
-int mtk_camsv_video_register(struct mtk_camsv_dev *cam,
-			     struct mtk_camsv_video_device *node);
-void mtk_camsv_video_unregister(struct mtk_camsv_video_device *node);
-void mtk_camsv_video_init_nodes(struct mtk_camsv_dev *cam);
-void mtk_camsv_video_cleanup_nodes(struct mtk_camsv_dev *cam);
+int mtk_camsv_video_register(struct mtk_camsv_dev *camsv_dev);
+void mtk_camsv_video_unregister(struct mtk_camsv_video_device *vdev);
 
 #endif /* __MTK_CAMSV_H__ */

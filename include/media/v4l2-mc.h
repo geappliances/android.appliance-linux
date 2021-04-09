@@ -18,6 +18,7 @@
 /* We don't need to include pci.h or usb.h here */
 struct pci_dev;
 struct usb_device;
+struct v4l2_subdev_route;
 
 #ifdef CONFIG_MEDIA_CONTROLLER
 /**
@@ -91,12 +92,18 @@ int v4l_vb2q_enable_media_source(struct vb2_queue *q);
  *
  * @src_sd - pointer to a source subdev
  * @sink - pointer to a subdev sink pad
+ * @flags: the link flags
  *
  * This function searches for fwnode endpoint connections from a source
  * subdevice to a single sink pad, and if suitable connections are found,
  * translates them into media links to that pad. The function can be
  * called by the sink subdevice, in its v4l2-async notifier subdev bound
  * callback, to create links from a bound source subdevice.
+ *
+ * The @flags argument specifies the link flags. The caller shall ensure that
+ * the flags are valid regardless of the number of links that may be created.
+ * For instance, setting the MEDIA_LNK_FL_ENABLED flag will cause all created
+ * links to be enabled, which isn't valid if more than one link is created.
  *
  * .. note::
  *
@@ -107,7 +114,7 @@ int v4l_vb2q_enable_media_source(struct vb2_queue *q);
  * Return 0 on success or a negative error code on failure.
  */
 int v4l2_create_fwnode_links_to_pad(struct v4l2_subdev *src_sd,
-				    struct media_pad *sink);
+				    struct media_pad *sink, u32 flags);
 
 /**
  * v4l2_create_fwnode_links - Create fwnode-based links from a source
@@ -171,6 +178,22 @@ int v4l2_pipeline_pm_use(struct media_entity *entity, int use);
 int v4l2_pipeline_link_notify(struct media_link *link, u32 flags,
 			      unsigned int notification);
 
+/**
+ * v4l2_subdev_routing_pm_use - Handle power state changes due to S_ROUTING
+ * @entity: The entity
+ * @route: The new state of the route
+ *
+ * Propagate the use count across a route in a pipeline whenever the
+ * route is enabled or disabled. The function is called before
+ * changing the route state when enabling a route, and after changing
+ * the route state when disabling a route.
+ *
+ * Return 0 on success or a negative error code on failure. Powering entities
+ * off is assumed to never fail. This function will not fail for disconnection
+ * events.
+ */
+int v4l2_subdev_routing_pm_use(struct media_entity *entity,
+			       struct v4l2_subdev_route *route);
 #else /* CONFIG_MEDIA_CONTROLLER */
 
 static inline int v4l2_mc_create_media_graph(struct media_device *mdev)
@@ -203,5 +226,10 @@ static inline int v4l2_pipeline_link_notify(struct media_link *link, u32 flags,
 	return 0;
 }
 
+static inline int v4l2_subdev_routing_pm_use(struct media_entity *entity,
+					     struct v4l2_subdev_route *route)
+{
+	return 0;
+}
 #endif /* CONFIG_MEDIA_CONTROLLER */
 #endif /* _V4L2_MC_H */

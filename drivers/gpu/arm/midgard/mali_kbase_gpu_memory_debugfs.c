@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2012-2017, 2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2012-2017, 2019-2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -21,6 +22,7 @@
  */
 
 #include <mali_kbase.h>
+#include <device/mali_kbase_device.h>
 
 #ifdef CONFIG_DEBUG_FS
 /** Show callback for the @c gpu_memory debugfs file.
@@ -40,7 +42,7 @@ static int kbasep_gpu_memory_seq_show(struct seq_file *sfile, void *data)
 	struct list_head *entry;
 	const struct list_head *kbdev_list;
 
-	kbdev_list = kbase_dev_list_get();
+	kbdev_list = kbase_device_get_list();
 	list_for_each(entry, kbdev_list) {
 		struct kbase_device *kbdev = NULL;
 		struct kbase_context *kctx;
@@ -53,7 +55,8 @@ static int kbasep_gpu_memory_seq_show(struct seq_file *sfile, void *data)
 		mutex_lock(&kbdev->kctx_list_lock);
 		list_for_each_entry(kctx, &kbdev->kctx_list, kctx_list_link) {
 			/* output the memory usage and cap for each kctx
-			* opened on this device */
+			* opened on this device
+			*/
 			seq_printf(sfile, "  %s-0x%p %10u\n",
 				"kctx",
 				kctx,
@@ -61,7 +64,7 @@ static int kbasep_gpu_memory_seq_show(struct seq_file *sfile, void *data)
 		}
 		mutex_unlock(&kbdev->kctx_list_lock);
 	}
-	kbase_dev_list_put(kbdev_list);
+	kbase_device_put_list(kbdev_list);
 	return 0;
 }
 

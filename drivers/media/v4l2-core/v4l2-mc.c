@@ -310,7 +310,7 @@ int v4l_vb2q_enable_media_source(struct vb2_queue *q)
 EXPORT_SYMBOL_GPL(v4l_vb2q_enable_media_source);
 
 int v4l2_create_fwnode_links_to_pad(struct v4l2_subdev *src_sd,
-				    struct media_pad *sink)
+				    struct media_pad *sink, u32 flags)
 {
 	struct fwnode_handle *endpoint;
 	struct v4l2_subdev *sink_sd;
@@ -367,7 +367,7 @@ int v4l2_create_fwnode_links_to_pad(struct v4l2_subdev *src_sd,
 			sink_sd->entity.name, sink_idx);
 
 		ret = media_create_pad_link(&src_sd->entity, src_idx,
-					    &sink_sd->entity, sink_idx, 0);
+					    &sink_sd->entity, sink_idx, flags);
 		if (ret) {
 			dev_err(sink_sd->dev,
 				"link %s:%d -> %s:%d failed with %d\n",
@@ -395,7 +395,7 @@ int v4l2_create_fwnode_links(struct v4l2_subdev *src_sd,
 		if (!(pad->flags & MEDIA_PAD_FL_SINK))
 			continue;
 
-		ret = v4l2_create_fwnode_links_to_pad(src_sd, pad);
+		ret = v4l2_create_fwnode_links_to_pad(src_sd, pad, 0);
 		if (ret)
 			return ret;
 	}
@@ -427,20 +427,20 @@ EXPORT_SYMBOL_GPL(v4l2_create_fwnode_links);
 
 /*
  * pipeline_pm_use_count - Count the number of users of a pipeline
- * @entity: The entity
+ * @pad: Any pad along the pipeline
  *
  * Return the total number of users of all video device nodes in the pipeline.
  */
-static int pipeline_pm_use_count(struct media_entity *entity,
-	struct media_graph *graph)
+static int pipeline_pm_use_count(struct media_pad *pad,
+				 struct media_graph *graph)
 {
 	int use = 0;
 
-	media_graph_walk_start(graph, entity);
+	media_graph_walk_start(graph, pad);
 
-	while ((entity = media_graph_walk_next(graph))) {
-		if (is_media_entity_v4l2_video_device(entity))
-			use += entity->use_count;
+	while ((pad = media_graph_walk_next(graph))) {
+		if (is_media_entity_v4l2_video_device(pad->entity))
+			use += pad->entity->use_count;
 	}
 
 	return use;
@@ -482,7 +482,7 @@ static int pipeline_pm_power_one(struct media_entity *entity, int change)
 
 /*
  * pipeline_pm_power - Apply power change to all entities in a pipeline
- * @entity: The entity
+ * @pad: Any pad along the pipeline
  * @change: Use count change
  *
  * Walk the pipeline to update the use count and the power state of all non-node
@@ -490,30 +490,29 @@ static int pipeline_pm_power_one(struct media_entity *entity, int change)
  *
  * Return 0 on success or a negative error code on failure.
  */
-static int pipeline_pm_power(struct media_entity *entity, int change,
-	struct media_graph *graph)
+static int pipeline_pm_power(struct media_pad *pad, int change,
+			     struct media_graph *graph)
 {
-	struct media_entity *first = entity;
+	struct media_pad *tmp_pad, *first = pad;
 	int ret = 0;
 
 	if (!change)
 		return 0;
 
-	media_graph_walk_start(graph, entity);
+	media_graph_walk_start(graph, pad);
 
-	while (!ret && (entity = media_graph_walk_next(graph)))
-		if (is_media_entity_v4l2_subdev(entity))
-			ret = pipeline_pm_power_one(entity, change);
+	while (!ret && (pad = media_graph_walk_next(graph)))
+		if (is_media_entity_v4l2_subdev(pad->entity))
+			ret = pipeline_pm_power_one(pad->entity, change);
 
 	if (!ret)
 		return ret;
 
 	media_graph_walk_start(graph, first);
 
-	while ((first = media_graph_walk_next(graph))
-	       && first != entity)
-		if (is_media_entity_v4l2_subdev(first))
-			pipeline_pm_power_one(first, -change);
+	while ((tmp_pad = media_graph_walk_next(graph)) && tmp_pad != pad)
+		if (is_media_entity_v4l2_subdev(tmp_pad->entity))
+			pipeline_pm_power_one(tmp_pad->entity, -change);
 
 	return ret;
 }
@@ -531,7 +530,7 @@ int v4l2_pipeline_pm_use(struct media_entity *entity, int use)
 	WARN_ON(entity->use_count < 0);
 
 	/* Apply power change to connected non-nodes. */
-	ret = pipeline_pm_power(entity, change, &mdev->pm_count_walk);
+	ret = pipeline_pm_power(entity->pads, change, &mdev->pm_count_walk);
 	if (ret < 0)
 		entity->use_count -= change;
 
@@ -545,8 +544,8 @@ int v4l2_pipeline_link_notify(struct media_link *link, u32 flags,
 			      unsigned int notification)
 {
 	struct media_graph *graph = &link->graph_obj.mdev->pm_count_walk;
-	struct media_entity *source = link->source->entity;
-	struct media_entity *sink = link->sink->entity;
+	struct media_pad *source = link->source;
+	struct media_pad *sink = link->sink;
 	int source_use;
 	int sink_use;
 	int ret = 0;
@@ -577,3 +576,37 @@ int v4l2_pipeline_link_notify(struct media_link *link, u32 flags,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(v4l2_pipeline_link_notify);
+
+int v4l2_subdev_routing_pm_use(struct media_entity *entity,
+			       struct v4l2_subdev_route *route)
+{
+	struct media_graph *graph =
+		&entity->graph_obj.mdev->pm_count_walk;
+	struct media_pad *source = &entity->pads[route->source_pad];
+	struct media_pad *sink = &entity->pads[route->sink_pad];
+	int source_use;
+	int sink_use;
+	int ret;
+
+	source_use = pipeline_pm_use_count(source, graph);
+	sink_use = pipeline_pm_use_count(sink, graph);
+
+	if (!(route->flags & V4L2_SUBDEV_ROUTE_FL_ACTIVE)) {
+		/* Route disabled. */
+		pipeline_pm_power(source, -sink_use, graph);
+		pipeline_pm_power(sink, -source_use, graph);
+		return 0;
+	}
+
+	/* Route enabled. */
+	ret = pipeline_pm_power(source, sink_use, graph);
+	if (ret < 0)
+		return ret;
+
+	ret = pipeline_pm_power(sink, source_use, graph);
+	if (ret < 0)
+		pipeline_pm_power(source, -sink_use, graph);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(v4l2_subdev_routing_pm_use);

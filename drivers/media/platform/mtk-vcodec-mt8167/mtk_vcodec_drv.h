@@ -114,6 +114,7 @@ struct mtk_video_fmt {
 	u32	fourcc;
 	enum mtk_fmt_type	type;
 	u32	num_planes;
+	u32	flags;
 };
 
 /**
@@ -312,7 +313,6 @@ struct mtk_color_desc {
  * @decode_work: worker for the decoding
  * @encode_work: worker for the encoding
  * @last_decoded_picinfo: pic information get from latest decode
- * @empty_flush_buf: a fake size-0 capture buffer that indicates flush
  * @oal_vcodec: 1: oal encoder, 0:non-oal encoder
  * @pend_src_buf: pending source buffer
  *
@@ -361,7 +361,6 @@ struct mtk_vcodec_ctx {
 	struct work_struct decode_work;
 	struct work_struct encode_work;
 	struct vdec_pic_info last_decoded_picinfo;
-	struct mtk_video_dec_buf *empty_flush_buf;
 	struct vb2_v4l2_buffer *last_src_buf;
 	bool is_stopped;
 	bool is_draining;

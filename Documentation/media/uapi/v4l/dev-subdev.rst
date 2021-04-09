@@ -36,6 +36,8 @@ will feature a character device node on which ioctls can be called to
 
 -  negotiate image formats on individual pads
 
+-  inspect and modify internal data routing between pads of the same entity
+
 Sub-device character device nodes, conventionally named
 ``/dev/v4l-subdev*``, use major number 81.
 
@@ -501,3 +503,93 @@ source pads.
     :maxdepth: 1
 
     subdev-formats
+
+
+Multiplexed media pads and internal routing
+-------------------------------------------
+
+Subdevice drivers may expose the internal connections between media pads of an
+entity by exposing a routing table that applications can inspect and manipulate
+to change the internal routing between sink and source pads' data connection
+endpoints. A routing table is described by a struct
+:c:type:`v4l2_subdev_routing`, which contains ``num_routes`` route entries, each
+one represented by a struct :c:type:`v4l2_subdev_route`.
+
+Data routes do not just connect one pad to another in an entity, but they refer
+instead to the ``streams`` a media pad provides. Streams are data connection
+endpoints in a media pad. Multiplexed media pads expose multiple ``streams``
+which represent, when the underlying hardware technology allows that, logical
+data flows transported over a single physical media bus.
+
+A noteworthy example of logical stream multiplexing techniques is represented
+by the data interleaving mechanism implemented by mean of Virtual Channels as
+defined by the MIPI CSI-2 media bus specifications. A subdevice that implements
+support for Virtual Channel data interleaving might expose up to 4 data
+``streams``, one for each available Virtual Channel, on the source media pad
+that represents a CSI-2 connection endpoint.
+
+Routes are defined as potential data connections between a ``(sink_pad,
+sink_stream)`` pair and a ``(source_pad, source_stream)`` one, where
+``sink_pad`` and ``source_pad`` are the indexes of two media pads part of the
+same media entity, and ``sink_stream`` and ``source_stream`` are the identifiers
+of the data streams to be connected in the media pads. Media pads that do not
+support data multiplexing expose a single stream, usually with identifier 0.
+
+Routes are reported to applications in a routing table which can be
+inspected and manipulated using the :ref:`routing <VIDIOC_SUBDEV_G_ROUTING>`
+ioctls.
+
+Routes can be activated and deactivated by setting or clearing the
+``V4L2_SUBDEV_ROUTE_FL_ACTIVE`` flag in the ``flags`` field of struct
+:c:type:`v4l2_subdev_route`.
+
+A subdev driver may create routes that cannot be modified by applications.
+Such routes are identified by the presence of the
+``V4L2_SUBDEV_ROUTE_FL_IMMUTABLE`` flag in the ``flags`` field of struct
+:c:type:`v4l2_subdev_route`.
+
+As an example, the routing table of a subdevice that has two sink pads and can
+combine their streams on a single source pad as two logical streams is here
+below described.
+
+.. flat-table::
+    :header-rows:  1
+
+    * - Pad Index
+      - Function
+      - Number of streams
+    * - 0
+      - SINK
+      - 1
+    * - 1
+      - SINK
+      - 1
+    * - 2
+      - SOURCE
+      - 2
+
+In such an example, the source media pad will report a routing table with 4
+entries, one entry for each possible ``(sink_pad, sink_stream) - (source_pad,
+source_stream)`` combination.
+
+.. flat-table:: routing table
+    :header-rows:  1
+
+    * - Sink Pad/Sink Stream
+      - ->
+      - Source Pad/Source Stream
+    * - 0/0
+      - ->
+      - 2/0
+    * - 0/0
+      - ->
+      - 2/1
+    * - 1/0
+      - ->
+      - 2/0
+    * - 1/0
+      - ->
+      - 2/1
+
+Subdev drivers are free to decide how many routes an application can enable on
+a media pad at the same time, and refuse to enable or disable specific routes.

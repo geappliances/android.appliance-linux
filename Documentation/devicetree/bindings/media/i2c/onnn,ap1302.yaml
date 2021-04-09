@@ -41,17 +41,16 @@ properties:
     maxItems: 1
 
   port:
-    type: object
+    $ref: /schemas/graph.yaml#/$defs/port-base
+    unevaluatedProperties: false
     description: MIPI CSI-2 output interface to the host.
 
     properties:
       endpoint:
-        type: object
+        $ref: /schemas/graph.yaml#/$defs/endpoint-base
+        unevaluatedProperties: false
 
         properties:
-          remote-endpoint:
-            description: phandle to the CSI-2 receiver input port.
-
           clock-noncontinuous:
             type: boolean
 
@@ -70,11 +69,6 @@ properties:
 
         required:
           - data-lanes
-          - remote-endpoint
-
-        additionalProperties: false
-
-    additionalProperties: false
 
   sensors:
     type: object
@@ -93,14 +87,15 @@ properties:
           Model of the connected sensors. Must be a valid compatible string.
 
           If no sensor is connected, this property must no be specified, and
-          the AP1302 can be used with it's internal test pattern generator.
+          the AP1302 can be used with its internal test pattern generator.
 
     patternProperties:
       "^sensor@[01]":
         type: object
         description: |
           Sensors connected to the first and second input, with one node per
-          sensor.
+          sensor. A sensor can be disabled through its status property, in
+          which case it will be ignored.
 
         properties:
           reg:
