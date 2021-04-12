@@ -64,7 +64,7 @@ enum PIXEL_MODE {
 	FOUR_PIXEL_MODE = 0x2,
 };
 
-enum SENINF_ID {
+enum mtk_seninf_id {
 	SENINF_1 = 0,
 	SENINF_2 = 1,
 	SENINF_3 = 2,
@@ -93,6 +93,7 @@ enum mtk_seninf_format_flag {
 };
 
 enum mtk_seninf_version {
+	SENINF_20,
 	SENINF_50,
 };
 
@@ -126,8 +127,9 @@ struct mtk_seninf_format_info {
 
 struct mtk_seninf_input {
 	enum mtk_seninf_port pad;
-	enum SENINF_ID seninf;
+	enum mtk_seninf_id seninf_id;
 	void __iomem *base;
+	struct mtk_seninf *seninf;
 
 	struct phy *phy;
 	enum mtk_seninf_phy_mode phy_mode;
@@ -281,13 +283,52 @@ static const struct mtk_seninf_format_info *mtk_seninf_format_info(u32 code)
  * Hardware Configuration
  */
 
+/*
+ * In order to minimize code difference between ISP2.0 and ISP5.0,
+ * we use an array to convert addresses coming from ISP5.0 to match
+ * ISP2.0 register topology.
+ */
+static const u16 mtk_seninf_20_translation_table[] = {
+	0x0000, /* 0x0: top_ctrl */
+	0xffff, /* 0x1: NA */
+	0x0100, /* 0x2: ctrl */
+	0x0300, /* 0x3: NCSI2 */
+	0xffff, /* 0x4: NA */
+	0xffff, /* 0x5: NA */
+	0x0020, /* 0x6: TG */
+	0xffff, /* 0x7: NA */
+	0xffff, /* 0x8: NA */
+	0xffff, /* 0x9: NA */
+	0xffff, /* 0xa: NA */
+	0xffff, /* 0xb: NA */
+	0xffff, /* 0xc: NA */
+	0x0120, /* 0xd: top_mux_ctrl */
+	0xffff, /* 0xe: NA */
+	0xffff, /* 0xf: NA */
+};
+
+/*
+ * To compute ISP2.0 address we keep the 16 lower bits of register
+ * and apply a translation thanks to the mtk_isp20_translation_table.
+ */
+static u32 mtk_seninf_20_address_translation(u32 reg)
+{
+	return mtk_seninf_20_translation_table[(reg >> 8) & 0xf] + (reg & 0xff);
+}
+
 static u32 mtk_seninf_read(struct mtk_seninf *priv, u32 reg)
 {
+	if (priv->conf->seninf_version == SENINF_20)
+		reg = mtk_seninf_20_address_translation(reg);
+
 	return readl(priv->base + reg);
 }
 
 static void mtk_seninf_write(struct mtk_seninf *priv, u32 reg, u32 value)
 {
+	if (priv->conf->seninf_version == SENINF_20)
+		reg = mtk_seninf_20_address_translation(reg);
+
 	writel(value, priv->base + reg);
 }
 
@@ -305,12 +346,18 @@ static void __mtk_seninf_update(struct mtk_seninf *priv, u32 reg,
 
 static u32 mtk_seninf_input_read(struct mtk_seninf_input *input, u32 reg)
 {
+	if (input->seninf->conf->seninf_version == SENINF_20)
+		reg = mtk_seninf_20_address_translation(reg);
+
 	return readl(input->base + reg);
 }
 
 static void mtk_seninf_input_write(struct mtk_seninf_input *input, u32 reg,
 				   u32 value)
 {
+	if (input->seninf->conf->seninf_version == SENINF_20)
+		reg = mtk_seninf_20_address_translation(reg);
+
 	writel(value, input->base + reg);
 }
 
@@ -399,7 +446,7 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 		pos = input->source_pad - conf->nb_inputs + 2;
 		val = (mtk_seninf_read(priv, SENINF_TOP_CAM_MUX_CTRL)
 		       & ~(0xF << (pos * 4))) |
-		       ((input->seninf & 0xF) << (pos * 4));
+		       ((input->seninf_id & 0xF) << (pos * 4));
 		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, val);
 	}
 }
@@ -1185,7 +1232,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 				   struct v4l2_fwnode_endpoint *vep,
 				   struct v4l2_async_subdev *asd)
 {
-	static const u32 port_to_seninf[] = {
+	static const u32 port_to_seninf_id[] = {
 		[CSI_PORT_0] = SENINF_1,
 		[CSI_PORT_1] = SENINF_3,
 		[CSI_PORT_2] = SENINF_5,
@@ -1222,9 +1269,10 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 
 	input = &priv->inputs[port];
 
+	input->seninf = priv;
 	input->pad = port;
-	input->seninf = port_to_seninf[port];
-	input->base = priv->base + 0x1000 * input->seninf;
+	input->seninf_id = port_to_seninf_id[port];
+	input->base = priv->base + 0x1000 * input->seninf_id;
 	input->bus = vep->bus.mipi_csi2;
 	input->source_pad = port + conf->nb_inputs;
 
@@ -1233,7 +1281,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	 * CSI0B, CSI1 and CSI2 PHYs respectively. SENINF1 uses CSI0 or CSI0A
 	 * depending on the clock and data lanes routing.
 	 */
-	switch (input->seninf) {
+	switch (input->seninf_id) {
 	case SENINF_1: {
 	default:
 		/*
@@ -1283,7 +1331,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	s_asd->input = input;
 
 	dev_dbg(dev, "%s: SENINF%u using %s (%uD1C mode, %u data lanes)\n",
-		__func__, input->seninf + 1, phy_name,
+		__func__, input->seninf_id + 1, phy_name,
 		input->phy_mode == SENINF_PHY_MODE_4D1C ? 4 : 2,
 		vep->bus.mipi_csi2.num_data_lanes);
 
