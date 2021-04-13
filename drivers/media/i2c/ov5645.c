@@ -71,6 +71,9 @@ static const char * const ov5645_supply_name[] = {
 
 #define OV5645_NUM_SUPPLIES ARRAY_SIZE(ov5645_supply_name)
 
+#define OV5645_HBLANK_DEF			252
+#define OV5645_VBLANK_DEF			24
+
 struct reg_value {
 	u16 reg;
 	u8 val;
@@ -1093,6 +1096,7 @@ static int ov5645_probe(struct i2c_client *client)
 	u8 chip_id_high, chip_id_low;
 	unsigned int i;
 	u32 xclk_freq;
+	struct v4l2_ctrl *ctrl;
 	int ret;
 
 	ov5645 = devm_kzalloc(dev, sizeof(struct ov5645), GFP_KERNEL);
@@ -1174,7 +1178,7 @@ static int ov5645_probe(struct i2c_client *client)
 
 	mutex_init(&ov5645->power_lock);
 
-	v4l2_ctrl_handler_init(&ov5645->ctrls, 9);
+	v4l2_ctrl_handler_init(&ov5645->ctrls, 11);
 	v4l2_ctrl_new_std(&ov5645->ctrls, &ov5645_ctrl_ops,
 			  V4L2_CID_SATURATION, -4, 4, 1, 0);
 	v4l2_ctrl_new_std(&ov5645->ctrls, &ov5645_ctrl_ops,
@@ -1185,6 +1189,19 @@ static int ov5645_probe(struct i2c_client *client)
 			  V4L2_CID_AUTOGAIN, 0, 1, 1, 1);
 	v4l2_ctrl_new_std(&ov5645->ctrls, &ov5645_ctrl_ops,
 			  V4L2_CID_AUTO_WHITE_BALANCE, 0, 1, 1, 1);
+
+	ctrl = v4l2_ctrl_new_std(&ov5645->ctrls, &ov5645_ctrl_ops,
+				 V4L2_CID_HBLANK, OV5645_HBLANK_DEF,
+				 OV5645_HBLANK_DEF, 1, OV5645_HBLANK_DEF);
+	if (ctrl)
+		ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+
+	ctrl = v4l2_ctrl_new_std(&ov5645->ctrls, &ov5645_ctrl_ops,
+				 V4L2_CID_VBLANK, OV5645_VBLANK_DEF,
+				 OV5645_VBLANK_DEF, 1, OV5645_VBLANK_DEF);
+	if (ctrl)
+		ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+
 	v4l2_ctrl_new_std_menu(&ov5645->ctrls, &ov5645_ctrl_ops,
 			       V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL,
 			       0, V4L2_EXPOSURE_AUTO);
