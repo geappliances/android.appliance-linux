@@ -225,6 +225,7 @@ static void mtk_rdma_layer_config(struct mtk_ddp_comp *comp, unsigned int idx,
 	mtk_ddp_write_mask(cmdq_pkt, RDMA_MODE_MEMORY, comp,
 			   DISP_REG_RDMA_GLOBAL_CON, RDMA_MODE_MEMORY);
 
+	mtk_drm_ddp_retain_old_gem(comp, idx, state);
 }
 
 static const struct mtk_ddp_comp_funcs mtk_disp_rdma_funcs = {
@@ -317,14 +318,24 @@ static int mtk_disp_rdma_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, priv);
 
 	ret = component_add(dev, &mtk_disp_rdma_component_ops);
-	if (ret)
+	if (ret) {
 		dev_err(dev, "Failed to add component: %d\n", ret);
+		return ret;
+	}
+
+	ret = mtk_ddp_comp_used_gems_init(dev, &priv->ddp_comp);
+	if (ret)
+		dev_err(dev, "Failed to initialize used_gems: %d\n", ret);
 
 	return ret;
 }
 
 static int mtk_disp_rdma_remove(struct platform_device *pdev)
 {
+	struct mtk_disp_rdma *priv = dev_get_drvdata(&pdev->dev);
+
+	mtk_ddp_comp_put_used_gems(&priv->ddp_comp);
+
 	component_del(&pdev->dev, &mtk_disp_rdma_component_ops);
 
 	return 0;
