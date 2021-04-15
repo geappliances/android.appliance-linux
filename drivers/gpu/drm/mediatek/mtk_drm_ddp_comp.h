@@ -7,6 +7,8 @@
 #define MTK_DRM_DDP_COMP_H
 
 #include <linux/io.h>
+#include <drm/drm_gem.h>
+#include "mtk_drm_plane.h"
 
 struct device;
 struct device_node;
@@ -88,6 +90,19 @@ struct mtk_ddp_comp_funcs {
 	void (*bgclr_in_off)(struct mtk_ddp_comp *comp);
 };
 
+struct old_gem {
+        struct drm_gem_object *gem;
+        struct list_head list;
+};
+
+struct mtk_used_gem_objects {
+	struct drm_gem_object **curr_gem;
+	struct drm_gem_object **old_gem;
+	struct work_struct put_old_gems_work;
+	struct list_head old_gems_list_head;
+	spinlock_t lock;
+};
+
 struct mtk_ddp_comp {
 	struct clk *clk;
 	void __iomem *regs;
@@ -95,7 +110,18 @@ struct mtk_ddp_comp {
 	struct device *larb_dev;
 	enum mtk_ddp_comp_id id;
 	const struct mtk_ddp_comp_funcs *funcs;
+
+	/* Only DMA capable components need to keep track of used gems */
+	struct mtk_used_gem_objects used_gems;
 };
+
+int mtk_ddp_comp_used_gems_init(struct device *dev,
+				struct mtk_ddp_comp *comp);
+void mtk_ddp_comp_put_used_gems(struct mtk_ddp_comp *comp);
+void mtk_drm_ddp_retain_old_gem(struct mtk_ddp_comp *comp,
+				unsigned int idx,
+				struct mtk_plane_state *state);
+void mtk_drm_ddp_queue_old_gems(struct mtk_ddp_comp *comp);
 
 static inline void mtk_ddp_comp_config(struct mtk_ddp_comp *comp,
 				       unsigned int w, unsigned int h,

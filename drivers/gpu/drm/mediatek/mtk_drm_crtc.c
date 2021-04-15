@@ -561,6 +561,9 @@ void mtk_crtc_ddp_irq(struct drm_crtc *crtc, struct mtk_ddp_comp *comp)
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 	struct mtk_drm_private *priv = crtc->dev->dev_private;
 
+	mtk_drm_ddp_queue_old_gems(comp);
+	schedule_work(&comp->used_gems.put_old_gems_work);
+
 	if (!priv->data->shadow_register)
 		mtk_crtc_ddp_config(crtc);
 
