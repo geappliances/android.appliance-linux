@@ -60,6 +60,13 @@ static struct mtk_mdp_pix_align mtk_mdp_size_align = {
 	.target_h		= 2,
 };
 
+static struct mtk_mdp_pix_align mtk_mdp_size_align_mt21 = {
+	.org_w			= 32,
+	.org_h			= 32,
+	.target_w		= 2,
+	.target_h		= 2,
+};
+
 static const struct mtk_mdp_fmt mtk_mdp_formats[] = {
 	{
 		.pixelformat	= V4L2_PIX_FMT_MT21C,
@@ -75,7 +82,7 @@ static const struct mtk_mdp_fmt mtk_mdp_formats[] = {
 		.row_depth	= { 8, 4 },
 		.num_planes	= 2,
 		.num_comp	= 2,
-		.align		= &mtk_mdp_size_align,
+		.align		= &mtk_mdp_size_align_mt21,
 		.flags		= MTK_MDP_FMT_FLAG_OUTPUT,
 	}, {
 		.pixelformat	= V4L2_PIX_FMT_NV12M,
@@ -412,6 +419,7 @@ static const struct mtk_mdp_fmt *mtk_mdp_try_fmt_mplane(struct mtk_mdp_ctx *ctx,
 	if (org_w != pix_mp->width || org_h != pix_mp->height)
 		mtk_mdp_dbg(1, "[%d] size change:%ux%u to %ux%u", ctx->id,
 			    org_w, org_h, pix_mp->width, pix_mp->height);
+
 	pix_mp->num_planes = fmt->num_planes;
 
 	for (i = 0; i < pix_mp->num_planes; ++i) {
