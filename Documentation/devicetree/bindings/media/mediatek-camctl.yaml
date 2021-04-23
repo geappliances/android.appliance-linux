@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: (GPL-2.0-Only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/media/mediatek-camctl.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Mediatek CAMCTL Device Tree Bindings
+
+maintainers:
+  - Florian Sylvestre <fsylvestre@baylibre.com>
+
+description: |
+  The CAMCTL is an ISP connected to the SENINF CSI-2 receivers.
+  The CAMCTL allows raw image direct transfert into memory with DMA support.
+
+properties:
+  compatible:
+    const: mediatek,mt8167-cam
+
+  reg:
+    minItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  power-domains:
+    maxItems: 1
+
+  clocks:
+    items:
+      - description: larb1_smi clock
+      - description: cam_smi clock
+      - description: cam_cam clock
+
+  clock-names:
+    items:
+      - const: img_larb1_smi
+      - const: img_cam_smi
+      - const: img_cam_cam
+
+  iommus:
+    items:
+      - const: M4U_PORT_CAM_IMGO
+
+  mediatek,larb:
+    items:
+      - const: larb1
+
+  ports:
+    $ref: /schemas/graph.yaml#/properties/ports
+
+    properties:
+      port@0:
+        $ref: /schemas/graph.yaml#/properties/port
+        unevaluatedProperties: false
+        description: connection point for camctl
+
+        patternProperties:
+          endpoint:
+            $ref: video-interfaces.yaml#
+            unevaluatedProperties: false
+
+    required:
+      - port@0
+
+required:
+  - compatible
+  - interrupts
+  - clocks
+  - clock-names
+  - power-domains
+  - iommus
+  - mediatek,larb
+  - ports
+
+additionalProperties: false
+
+examples:
+  - |
+    cam: cam@0x15004000 {
+        compatible = "mediatek,mt8167-cam";
+        reg = <0 0x15004000 0 0x1000>;
+        interrupts = <GIC_SPI 180 IRQ_TYPE_LEVEL_LOW>;
+        clocks = <&imgsys CLK_IMG_LARB1_SMI>,
+             <&imgsys CLK_IMG_CAM_SMI>,
+             <&imgsys CLK_IMG_CAM_CAM>;
+        clock-names =  "img_larb1_smi",
+                  "img_cam_smi",
+                  "img_cam_cam";
+        iommus = <&iommu M4U_PORT_CAM_IMGO>;
+        mediatek,larb = <&larb1>;
+        power-domains = <&scpsys MT8167_POWER_DOMAIN_ISP>;
+        status = "disabled";
+
+        ports {
+            #address-cells = <1>;
+            #size-cells = <0>;
+            port@0 {
+                reg = <0>;
+                cam_endpoint: endpoint {
+                    remote-endpoint =
+                          <&seninf_cam_endpoint>;
+                };
+            };
+        };
+    };
+...
