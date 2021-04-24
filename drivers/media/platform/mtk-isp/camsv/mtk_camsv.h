@@ -129,9 +129,17 @@ struct mtk_cam_video_device {
 struct mtk_cam_dev {
 	struct device *dev;
 	void __iomem *regs;
+	/*
+	 * FIXME: camsys_cam_cgpdn, camsys_camtg_cgpd,
+	 * camsys_camsv should be replaced by 'clk_bulk_data *clks'
+	 * in mtk_camsv_hw.c and then definitions removed from
+	 * mtk_cam_dev.
+	 */
 	struct clk *camsys_cam_cgpdn;
 	struct clk *camsys_camtg_cgpdn;
 	struct clk *camsys_camsv;
+	unsigned int num_clks;
+	struct clk_bulk_data *clks;
 	struct device *larb_ipu;
 	struct device *larb_cam;
 	unsigned int irq;
@@ -149,6 +157,7 @@ struct mtk_cam_dev {
 
 	struct mutex op_lock;
 	struct mutex protect_mutex;
+	spinlock_t irqlock;
 
 	struct list_head buf_list;
 };
