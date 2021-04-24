@@ -303,11 +303,7 @@ static void mtk_camsv_vb2_buf_queue(struct vb2_buffer *vb)
 	list_add_tail(&buf->list, &cam->buf_list);
 
 	/* update buffer internal address */
-	writel(buf->daddr, cam->regs + CAMSV_FBC_IMGO_ENQ_ADDR);
-	if (cam->conf->enableFH)
-		writel(buf->fhaddr, cam->regs + CAMSV_IMGO_FH_BASE_ADDR);
-
-	writel(0x1U, cam->regs + CAMSV_IMGO_FBC);
+	mtk_camsv_update_buffers_add(cam, buf);
 
 out:
 	pm_runtime_put_autosuspend(dev);
@@ -332,8 +328,6 @@ static void mtk_camsv_cmos_vf_enable(struct mtk_camsv_dev *camsv_dev,
 				     bool enable, bool pak_en)
 {
 	struct device *dev = camsv_dev->dev;
-	u32 mask = enable ? (u32)1 : ~(u32)1;
-	u32 clk_en;
 
 	mutex_lock(&camsv_dev->protect_mutex);
 	if (pm_runtime_get_sync(dev) < 0) {
@@ -341,20 +335,10 @@ static void mtk_camsv_cmos_vf_enable(struct mtk_camsv_dev *camsv_dev,
 		goto out;
 	}
 
-	if (enable) {
-		clk_en = CAMSV_TG_DP_CLK_EN | CAMSV_DMA_DP_CLK_EN;
-		if (pak_en)
-			clk_en |= CAMSV_PAK_DP_CLK_EN;
-
-		writel(clk_en, camsv_dev->regs + CAMSV_CLK_EN);
-		writel(readl(camsv_dev->regs + CAMSV_TG_VF_CON) | mask,
-		       camsv_dev->regs + CAMSV_TG_VF_CON);
-	} else {
-		writel(readl(camsv_dev->regs + CAMSV_TG_SEN_MODE) & mask,
-		       camsv_dev->regs + CAMSV_TG_SEN_MODE);
-		writel(readl(camsv_dev->regs + CAMSV_TG_VF_CON) & mask,
-		       camsv_dev->regs + CAMSV_TG_VF_CON);
-	}
+	if (enable)
+		mtk_camsv_cmos_vf_hw_enable(camsv_dev, pak_en);
+	else
+		mtk_camsv_cmos_vf_hw_disable(camsv_dev, pak_en);
 
 out:
 	pm_runtime_put_autosuspend(dev);

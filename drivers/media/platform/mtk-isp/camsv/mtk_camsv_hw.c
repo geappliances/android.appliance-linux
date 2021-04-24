@@ -13,6 +13,7 @@
 #include <linux/platform_device.h>
 
 #include "mtk_camsv.h"
+#include "mtk_camsv_regs.h"
 
 #define MTK_CAMSV_AUTOSUSPEND_DELAY_MS 100
 
@@ -72,6 +73,43 @@ static void fmt_to_sparams(u32 mbus_fmt, struct mtk_camsv_sparams *sparams)
 	default:
 		break;
 	}
+}
+
+void mtk_camsv_update_buffers_add(struct mtk_camsv_dev *camsv_dev,
+				  struct mtk_camsv_dev_buffer *buf)
+{
+	writel(buf->daddr, camsv_dev->regs + CAMSV_FBC_IMGO_ENQ_ADDR);
+	if (camsv_dev->conf->enableFH)
+		writel(buf->fhaddr, camsv_dev->regs + CAMSV_IMGO_FH_BASE_ADDR);
+
+	writel(0x1U, camsv_dev->regs + CAMSV_IMGO_FBC);
+}
+
+void mtk_camsv_cmos_vf_hw_enable(struct mtk_camsv_dev *camsv_dev, bool pak_en)
+{
+	unsigned int val;
+
+	val = CAMSV_TG_DP_CLK_EN | CAMSV_DMA_DP_CLK_EN;
+	if (pak_en)
+		val |= CAMSV_PAK_DP_CLK_EN;
+	writel(val, camsv_dev->regs + CAMSV_CLK_EN);
+
+	val = readl(camsv_dev->regs + CAMSV_TG_VF_CON)
+	      | CAMSV_TG_VF_CON_VFDATA_EN;
+	writel(val, camsv_dev->regs + CAMSV_TG_VF_CON);
+}
+
+void mtk_camsv_cmos_vf_hw_disable(struct mtk_camsv_dev *camsv_dev, bool pak_en)
+{
+	unsigned int val;
+
+	val = readl(camsv_dev->regs + CAMSV_TG_SEN_MODE)
+	      & ~CAMSV_TG_SEN_MODE_CMOS_EN;
+	writel(val, camsv_dev->regs + CAMSV_TG_SEN_MODE);
+
+	val = readl(camsv_dev->regs + CAMSV_TG_VF_CON)
+	      & ~CAMSV_TG_VF_CON_VFDATA_EN;
+	writel(val, camsv_dev->regs + CAMSV_TG_VF_CON);
 }
 
 void mtk_camsv_setup(struct mtk_camsv_dev *camsv_dev, u32 w, u32 h, u32 bpl,

@@ -20,8 +20,6 @@
 #include <media/videobuf2-v4l2.h>
 #include <soc/mediatek/smi.h>
 
-#include "mtk_camsv_regs.h"
-
 #define IMG_MAX_WIDTH			5376
 #define IMG_MAX_HEIGHT			4032
 #define IMG_DEF_WIDTH			1920
@@ -169,6 +167,11 @@ struct mtk_camsv_conf {
 void mtk_camsv_setup(struct mtk_camsv_dev *camsv_dev, u32 width, u32 height,
 		     u32 bpl, u32 mbus_fmt);
 int mtk_camsv_dev_init(struct mtk_camsv_dev *camsv_dev);
+void mtk_camsv_update_buffers_add(struct mtk_camsv_dev *camsv_dev,
+				  struct mtk_camsv_dev_buffer *buf);
+void mtk_camsv_cmos_vf_hw_enable(struct mtk_camsv_dev *camsv_dev, bool pak_en);
+void mtk_camsv_cmos_vf_hw_disable(struct mtk_camsv_dev *camsv_dev,
+				  bool pak_en);
 void mtk_camsv_dev_cleanup(struct mtk_camsv_dev *camsv_dev);
 int mtk_camsv_video_register(struct mtk_camsv_dev *camsv_dev);
 void mtk_camsv_video_unregister(struct mtk_camsv_video_device *vdev);
