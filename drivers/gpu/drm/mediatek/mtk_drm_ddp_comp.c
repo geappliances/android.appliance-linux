@@ -383,6 +383,123 @@ int mtk_ddp_comp_init(struct device *dev, struct device_node *node,
 	return 0;
 }
 
+void mtk_drm_ddp_retain_old_gem(struct mtk_ddp_comp *comp,
+				       unsigned int idx,
+				       struct mtk_plane_state *state)
+{
+	struct mtk_used_gem_objects *used_gems = &comp->used_gems;
+
+        if (used_gems && state && state->base.fb) {
+                struct drm_gem_object *gem = state->base.fb->obj[0];
+
+                if (gem != used_gems->curr_gem[idx]) {
+                        drm_gem_object_get(gem);
+                        used_gems->old_gem[idx] = used_gems->curr_gem[idx];
+                        used_gems->curr_gem[idx] = gem;
+                }
+        }
+}
+
+static void mtk_drm_ddp_queue_old_gem_layer(
+	struct mtk_used_gem_objects *used_gems, int idx)
+{
+	struct old_gem *old_gem;
+
+	if (used_gems->old_gem[idx]) {
+	      old_gem = kmalloc(sizeof(struct old_gem), GFP_ATOMIC);
+	      if (!old_gem) {
+		      printk(KERN_ERR "MTK_DEBUG, %s: kmalloc() failed!\n",
+				      __func__);
+		      return;
+	      }
+	      old_gem->gem = used_gems->old_gem[idx];
+	      used_gems->old_gem[idx] = NULL;
+	      list_add_tail(&old_gem->list, &used_gems->old_gems_list_head);
+	}
+}
+
+void mtk_drm_ddp_queue_old_gems(struct mtk_ddp_comp *comp)
+{
+	struct mtk_used_gem_objects *used_gems;
+	unsigned long flags;
+	int i;
+
+	used_gems = &comp->used_gems;
+
+	spin_lock_irqsave(&used_gems->lock, flags);
+	for(i = 0; i < comp->funcs->layer_nr(comp); i++) {
+		mtk_drm_ddp_queue_old_gem_layer(used_gems, i);
+	}
+	spin_unlock_irqrestore(&used_gems->lock, flags);
+}
+
+void put_old_gems(struct mtk_used_gem_objects *used_gems)
+{
+	struct old_gem *old_gem;
+	struct list_head *pos, *q;
+	unsigned long flags;
+
+	spin_lock_irqsave(&used_gems->lock, flags);
+	list_for_each_safe(pos, q, &used_gems->old_gems_list_head) {
+	      old_gem = list_entry(pos, struct old_gem, list);
+	      drm_gem_object_put_unlocked(old_gem->gem);
+	      list_del(pos);
+	      kfree(old_gem);
+	}
+	spin_unlock_irqrestore(&used_gems->lock, flags);
+}
+
+static void put_old_gems_work_callback(
+		struct work_struct *work)
+{
+	struct mtk_used_gem_objects *used_gems;
+
+	used_gems = container_of(work, struct mtk_used_gem_objects,
+			put_old_gems_work);
+
+	put_old_gems(used_gems);
+}
+
+int mtk_ddp_comp_used_gems_init(struct device *dev, struct mtk_ddp_comp *comp)
+{
+	struct mtk_used_gem_objects *used_gems = &comp->used_gems;
+
+	used_gems->curr_gem = devm_kmalloc_array(dev, comp->funcs->layer_nr(comp),
+                                        sizeof(*used_gems->curr_gem),
+					GFP_KERNEL | __GFP_ZERO);
+	if (!used_gems->curr_gem)
+		return -ENOMEM;
+
+	used_gems->old_gem = devm_kmalloc_array(dev, comp->funcs->layer_nr(comp),
+                                        sizeof(*used_gems->old_gem),
+					GFP_KERNEL | __GFP_ZERO);
+	if (!used_gems->old_gem) {
+		kfree(used_gems->curr_gem);
+		return -ENOMEM;
+	}
+
+	INIT_LIST_HEAD(&used_gems->old_gems_list_head);
+	spin_lock_init(&used_gems->lock);
+	INIT_WORK(&used_gems->put_old_gems_work, put_old_gems_work_callback);
+
+	return 0;
+}
+
+void mtk_ddp_comp_put_used_gems(struct mtk_ddp_comp *comp)
+{
+	struct mtk_used_gem_objects *used_gems = &comp->used_gems;
+	int i;
+
+	put_old_gems(used_gems);
+	
+	for(i = 0; i < comp->funcs->layer_nr(comp); i++) {
+		if (used_gems->old_gem[i])
+			drm_gem_object_put_unlocked(used_gems->old_gem[i]);
+		if (used_gems->curr_gem[i])
+			drm_gem_object_put_unlocked(used_gems->curr_gem[i]);
+	}
+}
+
 int mtk_ddp_comp_register(struct drm_device *drm, struct mtk_ddp_comp *comp)
 {
 	struct mtk_drm_private *private = drm->dev_private;

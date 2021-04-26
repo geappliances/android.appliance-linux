@@ -238,6 +238,8 @@ static void mtk_ovl_layer_config(struct mtk_ddp_comp *comp, unsigned int idx,
 
 	if (pending->enable)
 		mtk_ovl_layer_on(comp, idx);
+
+	mtk_drm_ddp_retain_old_gem(comp, idx, state);
 }
 
 static void mtk_ovl_bgclr_in_on(struct mtk_ddp_comp *comp)
@@ -347,14 +349,24 @@ static int mtk_disp_ovl_probe(struct platform_device *pdev)
 	}
 
 	ret = component_add(dev, &mtk_disp_ovl_component_ops);
-	if (ret)
+	if (ret) {
 		dev_err(dev, "Failed to add component: %d\n", ret);
+		return ret;
+	}
+
+	ret = mtk_ddp_comp_used_gems_init(dev, &priv->ddp_comp);
+	if (ret)
+		dev_err(dev, "Failed to initialize used_gems: %d\n", ret);
 
 	return ret;
 }
 
 static int mtk_disp_ovl_remove(struct platform_device *pdev)
 {
+	struct mtk_disp_ovl *priv = dev_get_drvdata(&pdev->dev);
+
+	mtk_ddp_comp_put_used_gems(&priv->ddp_comp);
+
 	component_del(&pdev->dev, &mtk_disp_ovl_component_ops);
 
 	return 0;
