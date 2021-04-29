@@ -88,13 +88,14 @@ static void mtk_camctl_write(struct mtk_cam_dev *priv, u32 reg, u32 value)
 	writel(value, priv->regs + reg);
 }
 
-void mtk_cam_update_buffers_add(struct mtk_cam_dev *cam_dev,
+static void mtk_camctl_update_buffers_add(struct mtk_cam_dev *cam_dev,
 				struct mtk_cam_dev_buffer *buf)
 {
 	mtk_camctl_write(cam_dev, CAMIMGO_BASE_ADDR, buf->daddr);
 }
 
-void mtk_cam_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev, bool pak_en)
+static void mtk_camctl_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev,
+					 bool pak_en)
 {
 	u32 clk_en;
 
@@ -105,7 +106,8 @@ void mtk_cam_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev, bool pak_en)
 			 mtk_camctl_read(cam_dev, CAMTG_VF_CON) | VFDATA_EN);
 }
 
-void mtk_cam_cmos_vf_hw_disable(struct mtk_cam_dev *cam_dev, bool pak_en)
+static void mtk_camctl_cmos_vf_hw_disable(struct mtk_cam_dev *cam_dev,
+				       bool pak_en)
 {
 	mtk_camctl_write(cam_dev, CAMTG_SEN_MODE,
 	       mtk_camctl_read(cam_dev, CAMTG_SEN_MODE) & ~VFDATA_EN);
@@ -113,8 +115,8 @@ void mtk_cam_cmos_vf_hw_disable(struct mtk_cam_dev *cam_dev, bool pak_en)
 	       mtk_camctl_read(cam_dev, CAMTG_VF_CON) & ~VFDATA_EN);
 }
 
-void mtk_cam_setup(struct mtk_cam_dev *cam_dev, u32 w, u32 h, u32 bpl,
-		   u32 mbus_fmt)
+static void mtk_camctl_setup(struct mtk_cam_dev *cam_dev, u32 w, u32 h,
+			     u32 bpl, u32 mbus_fmt)
 {
 	const struct mtk_cam_conf *conf = cam_dev->conf;
 	int poll_num = 1000;
@@ -260,6 +262,13 @@ static int mtk_camctl_runtime_resume(struct device *dev)
 	return 0;
 }
 
+static struct mtk_cam_hw_functions mtk_camctl_hw_functions = {
+	.mtk_cam_setup = mtk_camctl_setup,
+	.mtk_cam_update_buffers_add = mtk_camctl_update_buffers_add,
+	.mtk_cam_cmos_vf_hw_enable = mtk_camctl_cmos_vf_hw_enable,
+	.mtk_cam_cmos_vf_hw_disable = mtk_camctl_cmos_vf_hw_disable,
+};
+
 static int mtk_camctl_probe(struct platform_device *pdev)
 {
 	static const char * const clk_names[] = {
@@ -338,6 +347,8 @@ static int mtk_camctl_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to request irq=%d\n", cam_dev->irq);
 		return -ENODEV;
 	}
+
+	cam_dev->hw_functions = &mtk_camctl_hw_functions;
 
 	/* initialise protection mutex */
 	spin_lock_init(&cam_dev->irqlock);
