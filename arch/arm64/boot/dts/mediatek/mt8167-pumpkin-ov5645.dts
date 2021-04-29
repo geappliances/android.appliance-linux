@@ -72,6 +72,9 @@
 
 		mediatek,smilarb = <&larb1>;
 
+		orientation = <1>;
+		rotation = <0>;
+
 		port {
 			ov5645_endpoint: endpoint {
 				clock-lanes = <0>;
