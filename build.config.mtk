@@ -32,6 +32,7 @@ arch/arm64/boot/dts/mediatek/mt8167-pumpkin-i2s-header.dtb
 arch/arm64/boot/dts/mediatek/mt8167-pumpkin-android-dsi.dtb
 arch/arm64/boot/dts/mediatek/mt8167-sb30.dtb
 arch/arm64/boot/dts/mediatek/mt8167-sb30-android.dtb
+arch/arm64/boot/dts/mediatek/mt8167-pumpkin-ov5645.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin-android.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin-urt-umo-9465md-t.dtb

@@ -1,0 +1,114 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2021 BayLibre, SAS.
+ * Authors: Florian Sylvestre <fsylvestre@baylibre.com>
+ * 	    Phi-Bang Nguyen <pnguyen@baylibre.com>
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/power/mt8167-power.h>
+#include <dt-bindings/gpio/gpio.h>
+#include "mt8167-pinfunc.h"
+
+&{/} {
+	lcd_vdd_3v3: fixedregulator {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd_vdd_3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&pio 67 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
+	};
+};
+
+&reserved_memory {
+	#address-cells = <2>;
+	#size-cells = <2>;
+	ramoops@0x4FF00000 {
+		compatible = "ramoops";
+		reg = <0x0 0x4FF00000 0x0 0x00100000>;
+		record-size = <0x00008000>;
+		console-size = <0x00008000>;
+		ftrace-size = <0x00000000>;
+		pmsg-size = <0x00008000>;
+	};
+};
+
+&pio {
+	i2c1_pins_a: i2c1@0 {
+		pins1 {
+			pinmux = <MT8167_PIN_52_SDA1__FUNC_SDA1_0>,
+				 <MT8167_PIN_53_SCL1__FUNC_SCL1_0>;
+			bias-disable;
+		};
+	};
+};
+
+&mt6392_vgp2_reg {
+	regulator-always-on;
+};
+
+&i2c1 {
+	clock-div = <2>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c1_pins_a>;
+	status = "okay";
+
+	ov5645: ov5645@3c {
+		compatible = "ovti,ov5645";
+		reg = <0x3c>;
+		power-domains = <&scpsys MT8167_POWER_DOMAIN_ISP>;
+
+		enable-gpios = <&tca6416 15 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&tca6416 14 GPIO_ACTIVE_LOW>;
+
+		vdddo-supply = <&mt6392_vcamio_reg>;
+		vdda-supply = <&mt6392_vcama_reg>;
+		vddd-supply = <&mt6392_vcamd_reg>;
+		vddaf-supply = <&mt6392_vcamaf_reg>;
+
+		mediatek,smilarb = <&larb1>;
+
+		port {
+			ov5645_endpoint: endpoint {
+				clock-lanes = <0>;
+				data-lanes = <1 2 3 4>;
+				remote-endpoint = <&seninf0_endpoint>;
+			};
+		};
+	};
+};
+
+&seninf {
+	status = "okay";
+
+	ports {
+		port@0 {
+			seninf0_endpoint: endpoint {
+				/*
+				 * FIXME
+				 *
+				 * This is a big hack because of two reasons:
+				 * 1. The OV5645 is a 2-lanes sensor
+				 * 2. Clock lane and Data lane cannot be the same for D-Phy
+				 * 
+				 * The lanes index must be set based on the nature of the
+				 * connection between the camera and the MT8167 so that
+				 * the SENINF driver can do correct data lane muxing.
+				 * 
+				 * This hack is made just for the camera to work on MT8167
+				 */
+				clock-lanes = <1>;
+				data-lanes = <1 2 3 4>;
+				remote-endpoint = <&ov5645_endpoint>;
+			};
+		};
+	};
+};
+
+&cam {
+	status = "okay";
+};
