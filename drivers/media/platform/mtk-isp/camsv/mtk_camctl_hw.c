@@ -358,6 +358,7 @@ static int mtk_camctl_probe(struct platform_device *pdev)
 	pm_runtime_use_autosuspend(dev);
 	pm_runtime_set_suspended(dev);
 	pm_runtime_enable(dev);
+	pm_runtime_get_sync(dev);
 
 	/* Initialize the v4l2 common part */
 	return mtk_cam_dev_init(cam_dev);
