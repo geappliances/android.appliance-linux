@@ -160,6 +160,8 @@ struct mtk_cam_dev {
 	spinlock_t irqlock;
 
 	struct list_head buf_list;
+
+	struct mtk_cam_hw_functions *hw_functions;
 };
 
 struct mtk_cam_conf {
@@ -173,14 +175,18 @@ struct mtk_cam_conf {
 	bool enableFH;
 };
 
-void mtk_cam_setup(struct mtk_cam_dev *cam_dev, u32 width, u32 height,
-		     u32 bpl, u32 mbus_fmt);
+struct mtk_cam_hw_functions {
+	void (*mtk_cam_setup)(struct mtk_cam_dev *cam_dev, u32 width,
+			      u32 height, u32 bpl, u32 mbus_fmt);
+	void (*mtk_cam_update_buffers_add)(struct mtk_cam_dev *cam_dev,
+					   struct mtk_cam_dev_buffer *buf);
+	void (*mtk_cam_cmos_vf_hw_enable)(struct mtk_cam_dev *cam_dev,
+					  bool pak_en);
+	void (*mtk_cam_cmos_vf_hw_disable)(struct mtk_cam_dev *cam_dev,
+					   bool pak_en);
+};
+
 int mtk_cam_dev_init(struct mtk_cam_dev *cam_dev);
-void mtk_cam_update_buffers_add(struct mtk_cam_dev *cam_dev,
-				  struct mtk_cam_dev_buffer *buf);
-void mtk_cam_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev, bool pak_en);
-void mtk_cam_cmos_vf_hw_disable(struct mtk_cam_dev *cam_dev,
-				  bool pak_en);
 void mtk_cam_dev_cleanup(struct mtk_cam_dev *cam_dev);
 int mtk_cam_video_register(struct mtk_cam_dev *cam_dev);
 void mtk_cam_video_unregister(struct mtk_cam_video_device *vdev);

@@ -236,7 +236,7 @@ static int mtk_cam_vb2_queue_setup(struct vb2_queue *vq,
 		return -EINVAL;
 	}
 
-	mtk_cam_setup(cam, fmt->width, fmt->height,
+	(*cam->hw_functions->mtk_cam_setup)(cam, fmt->width, fmt->height,
 			fmt->plane_fmt[0].bytesperline, vdev->fmtinfo->code);
 
 	return 0;
@@ -303,7 +303,7 @@ static void mtk_cam_vb2_buf_queue(struct vb2_buffer *vb)
 	list_add_tail(&buf->list, &cam->buf_list);
 
 	/* update buffer internal address */
-	mtk_cam_update_buffers_add(cam, buf);
+	(*cam->hw_functions->mtk_cam_update_buffers_add)(cam, buf);
 
 out:
 	pm_runtime_put_autosuspend(dev);
@@ -336,9 +336,9 @@ static void mtk_cam_cmos_vf_enable(struct mtk_cam_dev *cam_dev,
 	}
 
 	if (enable)
-		mtk_cam_cmos_vf_hw_enable(cam_dev, pak_en);
+		(*cam_dev->hw_functions->mtk_cam_cmos_vf_hw_enable)(cam_dev, pak_en);
 	else
-		mtk_cam_cmos_vf_hw_disable(cam_dev, pak_en);
+		(*cam_dev->hw_functions->mtk_cam_cmos_vf_hw_disable)(cam_dev, pak_en);
 
 out:
 	pm_runtime_put_autosuspend(dev);

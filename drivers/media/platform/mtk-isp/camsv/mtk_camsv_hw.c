@@ -75,7 +75,7 @@ static void fmt_to_sparams(u32 mbus_fmt, struct mtk_cam_sparams *sparams)
 	}
 }
 
-void mtk_cam_update_buffers_add(struct mtk_cam_dev *cam_dev,
+static void mtk_camsv_update_buffers_add(struct mtk_cam_dev *cam_dev,
 				struct mtk_cam_dev_buffer *buf)
 {
 	writel(buf->daddr, cam_dev->regs + CAMSV_FBC_IMGO_ENQ_ADDR);
@@ -85,7 +85,7 @@ void mtk_cam_update_buffers_add(struct mtk_cam_dev *cam_dev,
 	writel(0x1U, cam_dev->regs + CAMSV_IMGO_FBC);
 }
 
-void mtk_cam_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev, bool pak_en)
+static void mtk_camsv_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev, bool pak_en)
 {
 	unsigned int val;
 
@@ -99,7 +99,7 @@ void mtk_cam_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev, bool pak_en)
 	writel(val, cam_dev->regs + CAMSV_TG_VF_CON);
 }
 
-void mtk_cam_cmos_vf_hw_disable(struct mtk_cam_dev *cam_dev, bool pak_en)
+static void mtk_camsv_cmos_vf_hw_disable(struct mtk_cam_dev *cam_dev, bool pak_en)
 {
 	unsigned int val;
 
@@ -112,7 +112,7 @@ void mtk_cam_cmos_vf_hw_disable(struct mtk_cam_dev *cam_dev, bool pak_en)
 	writel(val, cam_dev->regs + CAMSV_TG_VF_CON);
 }
 
-void mtk_cam_setup(struct mtk_cam_dev *cam_dev, u32 w, u32 h, u32 bpl,
+static void mtk_camsv_setup(struct mtk_cam_dev *cam_dev, u32 w, u32 h, u32 bpl,
 		     u32 mbus_fmt)
 {
 	const struct mtk_cam_conf *conf = cam_dev->conf;
@@ -284,6 +284,13 @@ static int mtk_camsv_runtime_resume(struct device *dev)
 	return 0;
 }
 
+static struct mtk_cam_hw_functions mtk_camsv_hw_functions = {
+	.mtk_cam_setup = mtk_camsv_setup,
+	.mtk_cam_update_buffers_add = mtk_camsv_update_buffers_add,
+	.mtk_cam_cmos_vf_hw_enable = mtk_camsv_cmos_vf_hw_enable,
+	.mtk_cam_cmos_vf_hw_disable = mtk_camsv_cmos_vf_hw_disable,
+};
+
 static int mtk_camsv_probe(struct platform_device *pdev)
 {
 	struct mtk_cam_dev *cam_dev;
@@ -385,6 +392,8 @@ static int mtk_camsv_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to request irq=%d\n", cam_dev->irq);
 		goto err_clk;
 	}
+
+	cam_dev->hw_functions = &mtk_camsv_hw_functions;
 
 	/* initialise protection mutex */
 	mutex_init(&cam_dev->protect_mutex);
