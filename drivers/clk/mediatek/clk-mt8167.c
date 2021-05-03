@@ -696,7 +696,7 @@ static const struct mtk_clk_divider top_adj_divs[] = {
 
 static const struct mtk_clk_divider apmixed_adj_divs[] = {
 	DIV_ADJ_FLAG(CLK_APMIXED_HDMI_REF, "hdmi_ref", "tvdpll",
-		0x1c4, 24, 3, CLK_DIVIDER_POWER_OF_TWO),
+		0x1c4, 24, 3, CLK_DIVIDER_POWER_OF_TWO | CLK_DIVIDER_READ_ONLY),
 };
 
 static const struct mtk_gate_regs top0_cg_regs = {
