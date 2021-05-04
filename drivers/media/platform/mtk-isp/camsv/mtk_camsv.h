@@ -20,8 +20,6 @@
 #include <media/videobuf2-v4l2.h>
 #include <soc/mediatek/smi.h>
 
-#include "mtk_camsv_regs.h"
-
 #define IMG_MAX_WIDTH			5376
 #define IMG_MAX_HEIGHT			4032
 #define IMG_DEF_WIDTH			1920
@@ -31,25 +29,25 @@
 
 enum TEST_MODE { TEST_PATTERN_DISABLED = 0x0, TEST_PATTERN_SENINF };
 
-#define MTK_CAMSV_CIO_PAD_SENINF	0
-#define MTK_CAMSV_CIO_PAD_VIDEO		1
-#define MTK_CAMSV_CIO_NUM_PADS		2
+#define MTK_CAM_CIO_PAD_SENINF		0
+#define MTK_CAM_CIO_PAD_VIDEO		1
+#define MTK_CAM_CIO_NUM_PADS		2
 
-struct mtk_camsv_format_info {
+struct mtk_cam_format_info {
 	u32 code;
 	u32 fourcc;
 	bool packed;
 	unsigned int bpp;
 };
 
-struct mtk_camsv_dev_buffer {
+struct mtk_cam_dev_buffer {
 	struct vb2_v4l2_buffer v4l2_buf;
 	struct list_head list;
 	dma_addr_t daddr;
 	dma_addr_t fhaddr;
 };
 
-struct mtk_camsv_sparams {
+struct mtk_cam_sparams {
 	unsigned int w_factor;
 	unsigned int module_en_pak;
 	unsigned int fmt_sel;
@@ -58,7 +56,7 @@ struct mtk_camsv_sparams {
 };
 
 /*
- * struct mtk_camsv_vdev_desc - MTK camera device descriptor
+ * struct mtk_cam_vdev_desc - MTK camera device descriptor
  *
  * @name: name of the node
  * @cap: supported V4L2 capabilities
@@ -73,7 +71,7 @@ struct mtk_camsv_sparams {
  * @frmsizes: supported V4L2 frame size number
  *
  */
-struct mtk_camsv_vdev_desc {
+struct mtk_cam_vdev_desc {
 	const char *name;
 	u32 cap;
 	u32 buf_type;
@@ -88,7 +86,7 @@ struct mtk_camsv_vdev_desc {
 };
 
 /*
- * struct mtk_camsv_video_device - Mediatek video device structure
+ * struct mtk_cam_video_device - Mediatek video device structure
  *
  * @desc: The node description of video device
  * @vdev_pad: The media pad graph object of video device
@@ -98,8 +96,8 @@ struct mtk_camsv_vdev_desc {
  * @format: The V4L2 format of video device
  * @fmtinfo: Information about the current format
  */
-struct mtk_camsv_video_device {
-	const struct mtk_camsv_vdev_desc *desc;
+struct mtk_cam_video_device {
+	const struct mtk_cam_vdev_desc *desc;
 
 	struct media_pad vdev_pad;
 	struct video_device vdev;
@@ -109,11 +107,11 @@ struct mtk_camsv_video_device {
 	struct mutex vdev_lock;
 
 	struct v4l2_pix_format_mplane format;
-	const struct mtk_camsv_format_info *fmtinfo;
+	const struct mtk_cam_format_info *fmtinfo;
 };
 
 /*
- * struct mtk_camsv_dev - Mediatek camera device structure.
+ * struct mtk_cam_dev - Mediatek camera device structure.
  *
  * @dev: Pointer to device.
  * @pipeline: Media pipeline information.
@@ -128,22 +126,30 @@ struct mtk_camsv_video_device {
  * @op_lock: Serializes driver's VB2 callback operations.
  *
  */
-struct mtk_camsv_dev {
+struct mtk_cam_dev {
 	struct device *dev;
 	void __iomem *regs;
+	/*
+	 * FIXME: camsys_cam_cgpdn, camsys_camtg_cgpd,
+	 * camsys_camsv should be replaced by 'clk_bulk_data *clks'
+	 * in mtk_camsv_hw.c and then definitions removed from
+	 * mtk_cam_dev.
+	 */
 	struct clk *camsys_cam_cgpdn;
 	struct clk *camsys_camtg_cgpdn;
 	struct clk *camsys_camsv;
+	unsigned int num_clks;
+	struct clk_bulk_data *clks;
 	struct device *larb_ipu;
 	struct device *larb_cam;
 	unsigned int irq;
-	const struct mtk_camsv_conf *conf;
+	const struct mtk_cam_conf *conf;
 
 	struct media_pipeline pipeline;
 	struct v4l2_subdev subdev;
-	struct media_pad subdev_pads[MTK_CAMSV_CIO_NUM_PADS];
-	struct v4l2_mbus_framefmt formats[MTK_CAMSV_CIO_NUM_PADS];
-	struct mtk_camsv_video_device vdev;
+	struct media_pad subdev_pads[MTK_CAM_CIO_NUM_PADS];
+	struct v4l2_mbus_framefmt formats[MTK_CAM_CIO_NUM_PADS];
+	struct mtk_cam_video_device vdev;
 	struct v4l2_subdev *seninf;
 	unsigned int streaming;
 	unsigned int stream_count;
@@ -151,11 +157,14 @@ struct mtk_camsv_dev {
 
 	struct mutex op_lock;
 	struct mutex protect_mutex;
+	spinlock_t irqlock;
 
 	struct list_head buf_list;
+
+	struct mtk_cam_hw_functions *hw_functions;
 };
 
-struct mtk_camsv_conf {
+struct mtk_cam_conf {
 	unsigned int tg_sen_mode;
 	unsigned int module_en;
 	unsigned int pak;
@@ -166,11 +175,20 @@ struct mtk_camsv_conf {
 	bool enableFH;
 };
 
-void mtk_camsv_setup(struct mtk_camsv_dev *camsv_dev, u32 width, u32 height,
-		     u32 bpl, u32 mbus_fmt);
-int mtk_camsv_dev_init(struct mtk_camsv_dev *camsv_dev);
-void mtk_camsv_dev_cleanup(struct mtk_camsv_dev *camsv_dev);
-int mtk_camsv_video_register(struct mtk_camsv_dev *camsv_dev);
-void mtk_camsv_video_unregister(struct mtk_camsv_video_device *vdev);
+struct mtk_cam_hw_functions {
+	void (*mtk_cam_setup)(struct mtk_cam_dev *cam_dev, u32 width,
+			      u32 height, u32 bpl, u32 mbus_fmt);
+	void (*mtk_cam_update_buffers_add)(struct mtk_cam_dev *cam_dev,
+					   struct mtk_cam_dev_buffer *buf);
+	void (*mtk_cam_cmos_vf_hw_enable)(struct mtk_cam_dev *cam_dev,
+					  bool pak_en);
+	void (*mtk_cam_cmos_vf_hw_disable)(struct mtk_cam_dev *cam_dev,
+					   bool pak_en);
+};
+
+int mtk_cam_dev_init(struct mtk_cam_dev *cam_dev);
+void mtk_cam_dev_cleanup(struct mtk_cam_dev *cam_dev);
+int mtk_cam_video_register(struct mtk_cam_dev *cam_dev);
+void mtk_cam_video_unregister(struct mtk_cam_video_device *vdev);
 
 #endif /* __MTK_CAMSV_H__ */

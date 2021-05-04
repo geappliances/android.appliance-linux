@@ -5,7 +5,6 @@ config MTK_SENINF
 	depends on ARCH_MEDIATEK || COMPILE_TEST
 	depends on OF
 	select V4L2_FWNODE
-	select PHY_MTK_CDPHY
 	default n
 	help
 	  This driver provides a MIPI CSI-2 receiver interface to connect
@@ -19,8 +18,24 @@ config MTK_CAMSV
 	select VIDEOBUF2_VMALLOC
 	select VIDEOBUF2_DMA_CONTIG
 	select MTK_SENINF
+	select PHY_MTK_CDPHY
 	default n
 	help
 	  This driver provides a path to bypass the SoC ISP so that
 	  image data come from the SENINF can go directly into memory
 	  without any image processing.
+
+config MTK_ISP_20
+	tristate "Mediatek ISP 2.0 Pass 1 driver (only pass-through mode)"
+	depends on VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
+	depends on ARCH_MEDIATEK
+	depends on PM
+	select VIDEOBUF2_VMALLOC
+	select VIDEOBUF2_DMA_CONTIG
+	select MTK_SENINF
+	select PHY_MTK_DPHY
+	default n
+	help
+	  This driver provides a path to bypass the SoC ISP so that
+	  image data come from the SENINF can go directly into memory
+	  with minimal image processing.

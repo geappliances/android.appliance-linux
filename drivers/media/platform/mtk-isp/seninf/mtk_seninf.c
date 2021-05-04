@@ -6,6 +6,7 @@
 #include <linux/module.h>
 #include <linux/of_graph.h>
 #include <linux/phy/phy.h>
+#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/videodev2.h>
@@ -23,15 +24,14 @@
 
 #include "mtk_seninf_reg.h"
 
-#define MTK_MEDIA_DEV_MODEL			"mtk-camsys-5.0"
-
 #define SENINF_TIMESTAMP_STEP		0x67
 #define SENINF_SETTLE_DELAY		0x15
 #define SENINF_HS_TRAIL_PARAMETER	0x8
 
-#define SENINF_NUM_INPUTS		4
-#define SENINF_NUM_OUTPUTS		4
-#define SENINF_NUM_PADS			(SENINF_NUM_INPUTS + SENINF_NUM_OUTPUTS)
+#define SENINF_MAX_NUM_INPUTS		4
+#define SENINF_MAX_NUM_OUTPUTS		4
+#define SENINF_MAX_NUM_PADS		(SENINF_MAX_NUM_INPUTS + \
+					 SENINF_MAX_NUM_OUTPUTS)
 
 #define SENINF_DEFAULT_WIDTH		1920
 #define SENINF_DEFAULT_HEIGHT		1080
@@ -64,7 +64,7 @@ enum PIXEL_MODE {
 	FOUR_PIXEL_MODE = 0x2,
 };
 
-enum SENINF_ID {
+enum mtk_seninf_id {
 	SENINF_1 = 0,
 	SENINF_2 = 1,
 	SENINF_3 = 2,
@@ -92,6 +92,43 @@ enum mtk_seninf_format_flag {
 	MTK_SENINF_FORMAT_INPUT_ONLY = BIT(3),
 };
 
+enum mtk_seninf_version {
+	SENINF_20,
+	SENINF_50,
+};
+
+enum mtk_seninf_csi2_rx_type {
+	MTK_SENINF_CSI2_RX_NCSI2,
+	MTK_SENINF_CSI2_RX_CSI2,
+};
+
+struct mtk_seninf_conf {
+	enum mtk_seninf_version seninf_version;
+	char *model;
+	enum mtk_seninf_csi2_rx_type csi2_rx_type;
+	u8 nb_inputs;
+	u8 nb_outputs;
+	u8 nb_phy;
+};
+
+static const struct mtk_seninf_conf seninf_8183_conf = {
+	.seninf_version = SENINF_50,
+	.model = "mtk-camsys-5.0",
+	.csi2_rx_type = MTK_SENINF_CSI2_RX_CSI2,
+	.nb_inputs = 4,
+	.nb_outputs = 4,
+	.nb_phy = 5,
+};
+
+static const struct mtk_seninf_conf seninf_8167_conf = {
+	.seninf_version = SENINF_20,
+	.model = "mtk-camsys-2.0",
+	.csi2_rx_type = MTK_SENINF_CSI2_RX_NCSI2,
+	.nb_inputs = 4,
+	.nb_outputs = 1,
+	.nb_phy = 1,
+};
+
 struct mtk_seninf_format_info {
 	u32 code;
 	u32 flags;
@@ -99,8 +136,9 @@ struct mtk_seninf_format_info {
 
 struct mtk_seninf_input {
 	enum mtk_seninf_port pad;
-	enum SENINF_ID seninf;
+	enum mtk_seninf_id seninf_id;
 	void __iomem *base;
+	struct mtk_seninf *seninf;
 
 	struct phy *phy;
 	enum mtk_seninf_phy_mode phy_mode;
@@ -123,14 +161,16 @@ struct mtk_seninf {
 	struct media_device media_dev;
 	struct v4l2_device v4l2_dev;
 	struct v4l2_subdev subdev;
-	struct media_pad pads[SENINF_NUM_PADS];
+	struct media_pad pads[SENINF_MAX_NUM_PADS];
 	struct v4l2_async_notifier notifier;
 	struct v4l2_ctrl_handler ctrl_handler;
 
 	struct v4l2_mbus_framefmt source_format;
 
-	struct mtk_seninf_input inputs[SENINF_NUM_INPUTS];
+	struct mtk_seninf_input inputs[SENINF_MAX_NUM_INPUTS];
 	struct mtk_seninf_input *active_input;
+
+	const struct mtk_seninf_conf *conf;
 
 	bool is_testmode;
 };
@@ -252,13 +292,52 @@ static const struct mtk_seninf_format_info *mtk_seninf_format_info(u32 code)
  * Hardware Configuration
  */
 
+/*
+ * In order to minimize code difference between ISP2.0 and ISP5.0,
+ * we use an array to convert addresses coming from ISP5.0 to match
+ * ISP2.0 register topology.
+ */
+static const u16 mtk_seninf_20_translation_table[] = {
+	0x0000, /* 0x0: top_ctrl */
+	0xffff, /* 0x1: NA */
+	0x0100, /* 0x2: ctrl */
+	0x0300, /* 0x3: NCSI2 */
+	0xffff, /* 0x4: NA */
+	0xffff, /* 0x5: NA */
+	0x0020, /* 0x6: TG */
+	0xffff, /* 0x7: NA */
+	0xffff, /* 0x8: NA */
+	0xffff, /* 0x9: NA */
+	0xffff, /* 0xa: NA */
+	0xffff, /* 0xb: NA */
+	0xffff, /* 0xc: NA */
+	0x0120, /* 0xd: top_mux_ctrl */
+	0xffff, /* 0xe: NA */
+	0xffff, /* 0xf: NA */
+};
+
+/*
+ * To compute ISP2.0 address we keep the 16 lower bits of register
+ * and apply a translation thanks to the mtk_isp20_translation_table.
+ */
+static u32 mtk_seninf_20_address_translation(u32 reg)
+{
+	return mtk_seninf_20_translation_table[(reg >> 8) & 0xf] + (reg & 0xff);
+}
+
 static u32 mtk_seninf_read(struct mtk_seninf *priv, u32 reg)
 {
+	if (priv->conf->seninf_version == SENINF_20)
+		reg = mtk_seninf_20_address_translation(reg);
+
 	return readl(priv->base + reg);
 }
 
 static void mtk_seninf_write(struct mtk_seninf *priv, u32 reg, u32 value)
 {
+	if (priv->conf->seninf_version == SENINF_20)
+		reg = mtk_seninf_20_address_translation(reg);
+
 	writel(value, priv->base + reg);
 }
 
@@ -276,12 +355,18 @@ static void __mtk_seninf_update(struct mtk_seninf *priv, u32 reg,
 
 static u32 mtk_seninf_input_read(struct mtk_seninf_input *input, u32 reg)
 {
+	if (input->seninf->conf->seninf_version == SENINF_20)
+		reg = mtk_seninf_20_address_translation(reg);
+
 	return readl(input->base + reg);
 }
 
 static void mtk_seninf_input_write(struct mtk_seninf_input *input, u32 reg,
 				   u32 value)
 {
+	if (input->seninf->conf->seninf_version == SENINF_20)
+		reg = mtk_seninf_20_address_translation(reg);
+
 	writel(value, input->base + reg);
 }
 
@@ -302,6 +387,7 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 {
 	const struct mtk_seninf_format_info *fmtinfo;
 	unsigned int val, pos;
+	const struct mtk_seninf_conf *conf = priv->conf;
 	unsigned int pix_sel_ext;
 	unsigned int pix_sel;
 	unsigned int hs_pol = 0;
@@ -314,8 +400,9 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
 	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_SRC_SEL,
 				SENINF_MIPI_SENSOR);
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
-				SENINF_NORMAL_MODEL);
+	if (conf->seninf_version == SENINF_50)
+		mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT,
+			    SENINF_SRC_SEL_EXT, SENINF_NORMAL_MODEL);
 
 	switch (pixel_mode) {
 	case 1: /* 2 Pixel */
@@ -332,8 +419,9 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 		break;
 	}
 
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT, SENINF_PIX_SEL_EXT,
-				pix_sel_ext);
+	if (conf->seninf_version == SENINF_50)
+		mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT,
+			    SENINF_PIX_SEL_EXT, pix_sel_ext);
 	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
 
 	if (!(fmtinfo->flags & MTK_SENINF_FORMAT_JPEG)) {
@@ -363,13 +451,16 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	 * mapping, and use the top cam mux to configure routing from the async
 	 * FIFOs to the outputs (CAM and CAMSV).
 	 */
-	pos = input->source_pad - SENINF_NUM_INPUTS + 2;
-	val = (mtk_seninf_read(priv, SENINF_TOP_CAM_MUX_CTRL) & ~(0xF << (pos * 4))) |
-		((input->seninf & 0xF) << (pos * 4));
-	mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, val);
+	if (conf->seninf_version == SENINF_50) {
+		pos = input->source_pad - conf->nb_inputs + 2;
+		val = (mtk_seninf_read(priv, SENINF_TOP_CAM_MUX_CTRL)
+		       & ~(0xF << (pos * 4))) |
+		       ((input->seninf_id & 0xF) << (pos * 4));
+		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, val);
+	}
 }
 
-static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
+static void mtk_seninf_csi2_setup_phy(struct mtk_seninf *priv)
 {
 	/* CSI0(A) and CSI0B */
 	if (priv->inputs[CSI_PORT_0].phy_mode ||
@@ -428,7 +519,7 @@ static void mtk_seninf_setup_phy(struct mtk_seninf *priv)
 	}
 }
 
-static void mtk_seninf_rx_config(struct mtk_seninf *priv,
+static void mtk_seninf_csi2_rx_config(struct mtk_seninf *priv,
 				 struct mtk_seninf_input *input)
 {
 	unsigned int lanes[4] = { };
@@ -462,8 +553,8 @@ static void mtk_seninf_rx_config(struct mtk_seninf *priv,
 				CSI0_BIST_LN3_MUX, lanes[3]);
 }
 
-static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
-				    struct mtk_seninf_input *input)
+static void mtk_seninf_csi2_set_mipi(struct mtk_seninf *priv,
+				     struct mtk_seninf_input *input)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
 	unsigned int dpcm;
@@ -539,9 +630,60 @@ static void mtk_seninf_set_csi_mipi(struct mtk_seninf *priv,
 	mtk_seninf_input_update(input, SENINF_CTRL, CSI2_SW_RST, 0);
 }
 
+static void mtk_seninf_ncsi2_set_mipi(struct mtk_seninf *priv,
+				      struct mtk_seninf_input *input)
+{
+	const struct mtk_seninf_format_info *fmtinfo;
+	unsigned int val;
+
+	fmtinfo = mtk_seninf_format_info(input->format.code);
+
+	/* HQ */
+	mtk_seninf_input_write(input, SENINF_TG1_PH_CNT, 0x0);
+	mtk_seninf_input_write(input, SENINF_TG1_SEN_CK, 0x10001);
+
+	/* First Enable Sensor interface and select pad (0x1a04_0200) */
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CTRL, PAD2CAM_DATA_SEL,
+		    SENINF_PAD_10BIT);
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_SRC_SEL, 8);
+
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 1U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_3C, 0x00051545U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 5U);
+	mdelay(1);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 4U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_3C, 0U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, 0x11U);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, ED_SEL, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_LANE, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE3, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE2, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE1, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE0, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_HS_OPTION, 0);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_HS_OPTION, 1);
+	mtk_seninf_input_write(input, SENINF_NCSI2_LNRD_TIMING, 0x2800U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_INT_STATUS,
+			       SENINF_NCSI2_INT_STATUS_ALL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_INT_EN,
+			       SENINF_NCSI2_INT_EN_ALL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_24, 0xE4000000U);
+	val = 0xFFFFFF00U & mtk_seninf_input_read(input, SENINF_NCSI2_DBG_SEL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, val);
+	val = 0xFFFFFF45U | mtk_seninf_input_read(input, SENINF_NCSI2_DBG_SEL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, val);
+	val = 0xFFFFFFEFU & mtk_seninf_input_read(input, SENINF_NCSI2_HSRX_DBG);
+	mtk_seninf_input_write(input, SENINF_NCSI2_HSRX_DBG, val);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DI_CTRL, 0x01010101U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DI, 0x03020100U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, 0x10);
+}
+
 static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
+	const struct mtk_seninf_conf *conf = priv->conf;
 	unsigned int val;
 	unsigned int pixel_mode = TWO_PIXEL_MODE;
 	unsigned int pix_sel_ext;
@@ -568,7 +710,9 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 
 	mtk_seninf_update(priv, SENINF_CTRL, SENINF_EN, 1);
 	mtk_seninf_update(priv, SENINF_CTRL, SENINF_SRC_SEL, 1);
-	mtk_seninf_update(priv, SENINF_CTRL_EXT, SENINF_TESTMDL_IP_EN, 1);
+	if (conf->seninf_version == SENINF_50)
+		mtk_seninf_update(priv, SENINF_CTRL_EXT,
+			    SENINF_TESTMDL_IP_EN, 1);
 
 	mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_EN, 1);
 	mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_PAT, 0xc);
@@ -597,7 +741,8 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	}
 
 	mtk_seninf_write(priv, SENINF_TG1_TM_CLK, 0x8);
-	mtk_seninf_write(priv, SENINF_TG1_TM_STP, 0x1);
+	if (conf->seninf_version == SENINF_50)
+		mtk_seninf_write(priv, SENINF_TG1_TM_STP, 0x1);
 
 	/* Set top mux */
 	val = (mtk_seninf_read(priv, SENINF_TOP_MUX_CTRL) & (~(0xf << (mux * 4)))) |
@@ -606,8 +751,9 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 
 	/* TODO : if mux != 0 => use pseninf + 0x1000 * mux */
 	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
-	mtk_seninf_update(priv, SENINF_MUX_CTRL_EXT, SENINF_SRC_SEL_EXT,
-			  SENINF_TEST_MODEL);
+	if (conf->seninf_version == SENINF_50)
+		mtk_seninf_update(priv, SENINF_MUX_CTRL_EXT,
+			    SENINF_SRC_SEL_EXT, SENINF_TEST_MODEL);
 	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_SRC_SEL, 1);
 
 	switch (pixel_mode) {
@@ -624,8 +770,11 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 		pix_sel = 0;
 		break;
 	}
-	mtk_seninf_update(priv, SENINF_MUX_CTRL_EXT, SENINF_PIX_SEL_EXT,
-		    pix_sel_ext);
+
+	if (conf->seninf_version == SENINF_50)
+		mtk_seninf_update(priv, SENINF_MUX_CTRL_EXT,
+			    SENINF_PIX_SEL_EXT, pix_sel_ext);
+
 	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
 
 	mtk_seninf_update(priv, SENINF_MUX_CTRL, FIFO_PUSH_EN,
@@ -648,7 +797,8 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	mtk_seninf_write(priv, SENINF_MUX_CTRL,
 			 mtk_seninf_read(priv, SENINF_MUX_CTRL) & ~0x3);
 
-	mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76543010);
+	if (conf->seninf_version == SENINF_50)
+		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76543010);
 
 	dev_dbg(priv->dev, "%s: OK\n", __func__);
 	return 0;
@@ -657,6 +807,7 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 static int mtk_seninf_power_on(struct mtk_seninf *priv)
 {
 	struct mtk_seninf_input *input = priv->active_input;
+	const struct mtk_seninf_conf *conf = priv->conf;
 	int ret;
 
 	ret = pm_runtime_get_sync(priv->dev);
@@ -666,12 +817,18 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 		return ret;
 	}
 
-	mtk_seninf_setup_phy(priv);
+	if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2)
+		mtk_seninf_csi2_setup_phy(priv);
 
 	phy_power_on(input->phy);
 
-	mtk_seninf_rx_config(priv, input);
-	mtk_seninf_set_csi_mipi(priv, input);
+	if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2) {
+		mtk_seninf_csi2_rx_config(priv, input);
+		mtk_seninf_csi2_set_mipi(priv, input);
+	} else if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_NCSI2) {
+		mtk_seninf_ncsi2_set_mipi(priv, input);
+	}
+
 	mtk_seninf_set_mux(priv, input);
 
 	return 0;
@@ -679,12 +836,22 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 
 static void mtk_seninf_power_off(struct mtk_seninf *priv)
 {
+	const struct mtk_seninf_conf *conf = priv->conf;
+	unsigned int val;
+
 	if (priv->active_input) {
 		struct mtk_seninf_input *input = priv->active_input;
 
-		/* Disable CSI2(2.5G) first */
-		mtk_seninf_input_write(input, SENINF_CSI2_CTL,
-				       mtk_seninf_input_read(input, SENINF_CSI2_CTL) & 0xffffffe0);
+		if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2) {
+			/* Disable CSI2(2.5G) first */
+			val = mtk_seninf_input_read(input, SENINF_CSI2_CTL);
+			mtk_seninf_input_write(
+				input, SENINF_CSI2_CTL, val & 0xffffffe0);
+		} else if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_NCSI2) {
+			val = mtk_seninf_input_read(input, SENINF_NCSI2_CTL);
+			mtk_seninf_input_write(
+				input, SENINF_NCSI2_CTL, val & 0xffffffe0);
+		}
 
 		if (!priv->is_testmode)
 			phy_power_off(input->phy);
@@ -773,11 +940,13 @@ static struct v4l2_mbus_framefmt *
 seninf_get_pad_format(struct mtk_seninf *priv, struct v4l2_subdev_pad_config *cfg,
 		      unsigned int pad, u32 which)
 {
+	const struct mtk_seninf_conf *conf = priv->conf;
+
 	switch (which) {
 	case V4L2_SUBDEV_FORMAT_TRY:
 		return v4l2_subdev_get_try_format(&priv->subdev, cfg, pad);
 	case V4L2_SUBDEV_FORMAT_ACTIVE:
-		if (pad < ARRAY_SIZE(priv->inputs))
+		if (pad < conf->nb_inputs)
 			return &priv->inputs[pad].format;
 		else
 			return &priv->source_format;
@@ -807,13 +976,15 @@ static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_mbus_code_enum *code)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
+	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
+	const struct mtk_seninf_conf *conf = priv->conf;
 
 	if (code->index >= ARRAY_SIZE(mtk_seninf_formats))
 		return -EINVAL;
 
 	fmtinfo = &mtk_seninf_formats[code->index];
 	if (fmtinfo->flags & MTK_SENINF_FORMAT_INPUT_ONLY &&
-	    code->pad >= SENINF_NUM_INPUTS)
+	    code->pad >= conf->nb_inputs)
 		return -EINVAL;
 
 	code->code = fmtinfo->code;
@@ -875,19 +1046,20 @@ static int seninf_get_routing(struct v4l2_subdev *sd,
 			     struct v4l2_subdev_krouting *routing)
 {
 	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
+	const struct mtk_seninf_conf *conf = priv->conf;
 	struct v4l2_subdev_route *route = routing->routes;
 	unsigned int sink, source;
 	unsigned int num_routes = routing->num_routes;
 
-	routing->num_routes = SENINF_NUM_INPUTS * SENINF_NUM_OUTPUTS;
+	routing->num_routes = conf->nb_inputs * conf->nb_outputs;
 	if (num_routes < routing->num_routes)
 		return -ENOSPC;
 
-	for (sink = 0; sink < SENINF_NUM_INPUTS; ++sink) {
-		for (source = 0; source < SENINF_NUM_OUTPUTS; ++source) {
+	for (sink = 0; sink < conf->nb_inputs; ++sink) {
+		for (source = 0; source < conf->nb_outputs; ++source) {
 			route->sink_pad = sink;
 			route->sink_stream = 0;
-			route->source_pad = source + SENINF_NUM_INPUTS;
+			route->source_pad = source + conf->nb_inputs;
 			route->source_stream = 0;
 
 			if (priv->inputs[sink].source_pad == route->source_pad)
@@ -904,6 +1076,7 @@ static int seninf_set_routing(struct v4l2_subdev *sd,
 			     struct v4l2_subdev_krouting *routing)
 {
 	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
+	const struct mtk_seninf_conf *conf = priv->conf;
 	struct v4l2_subdev_route *route = routing->routes;
 	unsigned int i, k;
 	int pad;
@@ -915,7 +1088,7 @@ static int seninf_set_routing(struct v4l2_subdev *sd,
 			return -EINVAL;
 
 		pad = -1;
-		for (i = 0; i < SENINF_NUM_INPUTS; ++i) {
+		for (i = 0; i < conf->nb_inputs; ++i) {
 			if (priv->inputs[i].subdev == NULL)
 				continue;
 			if (priv->inputs[i].source_pad == route->source_pad) {
@@ -1037,9 +1210,10 @@ static bool seninf_has_route(struct media_entity *entity,
 {
 	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(entity);
 	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
+	const struct mtk_seninf_conf *conf = priv->conf;
 	unsigned int i;
 
-	for (i = 0; i < ARRAY_SIZE(priv->inputs); ++i)
+	for (i = 0; i < conf->nb_inputs; ++i)
 		if (pad0 == i && pad1 == priv->inputs[i].source_pad)
 			return true;
 
@@ -1067,7 +1241,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 				   struct v4l2_fwnode_endpoint *vep,
 				   struct v4l2_async_subdev *asd)
 {
-	static const u32 port_to_seninf[] = {
+	static const u32 port_to_seninf_id[] = {
 		[CSI_PORT_0] = SENINF_1,
 		[CSI_PORT_1] = SENINF_3,
 		[CSI_PORT_2] = SENINF_5,
@@ -1075,6 +1249,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	};
 
 	struct mtk_seninf *priv = dev_get_drvdata(dev);
+	const struct mtk_seninf_conf *conf = priv->conf;
 	struct mtk_seninf_async_subdev *s_asd =
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
 	unsigned int port = vep->base.port;
@@ -1086,15 +1261,21 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	if (!fwnode_device_is_available(asd->match.fwnode))
 		return -ENOTCONN;
 
-	if (port >= SENINF_NUM_PADS) {
+	if (port >= (conf->nb_inputs + conf->nb_outputs)) {
 		dev_err(dev, "Invalid port %u\n", port);
 		return -EINVAL;
 	}
 
 	s_asd->port = port;
 
-	if (port >= ARRAY_SIZE(priv->inputs))
+	if (port >= conf->nb_inputs)
 		return 0;
+
+	if (conf->seninf_version == SENINF_20 && port >= 1) {
+		dev_err(dev, "Port %u is not currently supported on ISP2.0\n",
+			port);
+		return -ENOTCONN;
+	}
 
 	if (vep->bus_type != V4L2_MBUS_CSI2_DPHY) {
 		dev_err(dev, "Only CSI2 bus type is currently supported\n");
@@ -1103,18 +1284,19 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 
 	input = &priv->inputs[port];
 
+	input->seninf = priv;
 	input->pad = port;
-	input->seninf = port_to_seninf[port];
-	input->base = priv->base + 0x1000 * input->seninf;
+	input->seninf_id = port_to_seninf_id[port];
+	input->base = priv->base + 0x1000 * input->seninf_id;
 	input->bus = vep->bus.mipi_csi2;
-	input->source_pad = port + SENINF_NUM_INPUTS;
+	input->source_pad = port + conf->nb_inputs;
 
 	/*
 	 * Select the PHY. SENINF2, SENINF3 and SENINF5 are hardwired to the
 	 * CSI0B, CSI1 and CSI2 PHYs respectively. SENINF1 uses CSI0 or CSI0A
 	 * depending on the clock and data lanes routing.
 	 */
-	switch (input->seninf) {
+	switch (input->seninf_id) {
 	case SENINF_1: {
 	default:
 		/*
@@ -1164,7 +1346,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	s_asd->input = input;
 
 	dev_dbg(dev, "%s: SENINF%u using %s (%uD1C mode, %u data lanes)\n",
-		__func__, input->seninf + 1, phy_name,
+		__func__, input->seninf_id + 1, phy_name,
 		input->phy_mode == SENINF_PHY_MODE_4D1C ? 4 : 2,
 		vep->bus.mipi_csi2.num_data_lanes);
 
@@ -1176,6 +1358,7 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
                                     struct v4l2_async_subdev *asd)
 {
 	struct mtk_seninf *priv = container_of(notifier, struct mtk_seninf, notifier);
+	const struct mtk_seninf_conf *conf = priv->conf;
 	struct mtk_seninf_async_subdev *s_asd =
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
 	int ret;
@@ -1183,7 +1366,7 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
 	dev_dbg(priv->dev, "%s bound to SENINF port %u\n", sd->entity.name,
 		s_asd->port);
 
-	if (s_asd->port < ARRAY_SIZE(priv->inputs)) {
+	if (s_asd->port < conf->nb_inputs) {
 		struct mtk_seninf_input *input = s_asd->input;
 
 		input->subdev = sd;
@@ -1204,7 +1387,6 @@ static int mtk_seninf_notifier_complete(struct v4l2_async_notifier *notifier)
 {
 	struct mtk_seninf *priv = container_of(notifier, struct mtk_seninf, notifier);
 	int ret;
-
 	ret = v4l2_device_register_subdev_nodes(&priv->v4l2_dev);
 	if (ret)
 		dev_err(priv->dev, "Failed to register subdev nodes: %d\n", ret);
@@ -1224,29 +1406,30 @@ static const struct v4l2_async_notifier_operations mtk_seninf_async_ops = {
 static int mtk_seninf_media_init(struct mtk_seninf *priv)
 {
 	struct media_pad *pads = priv->pads;
+	const struct mtk_seninf_conf *conf = priv->conf;
 	struct device *dev = priv->dev;
 	struct media_device *media_dev = &priv->media_dev;
+	u8 num_pads = conf->nb_outputs + conf->nb_inputs;
 	unsigned int i;
 	int ret;
 
 	media_dev->dev = dev;
-	strscpy(media_dev->model, MTK_MEDIA_DEV_MODEL, sizeof(media_dev->model));
+	strscpy(media_dev->model, conf->model, sizeof(media_dev->model));
 	snprintf(media_dev->bus_info, sizeof(media_dev->bus_info),
 		 "platform:%s", dev_name(dev));
 	media_dev->hw_revision = 0;
 	media_device_init(media_dev);
 
-	ret = media_entity_pads_init(&priv->subdev.entity, SENINF_NUM_PADS, pads);
+	ret = media_entity_pads_init(&priv->subdev.entity, num_pads, pads);
 	if (ret)
 		goto err_clean_media;
 
-	for (i = 0; i < SENINF_NUM_INPUTS; i++)
+	for (i = 0; i < conf->nb_inputs; i++)
 		pads[i].flags = MEDIA_PAD_FL_SINK;
-	for (i = SENINF_NUM_INPUTS; i < SENINF_NUM_PADS; i++)
+	for (i = conf->nb_inputs; i < num_pads; i++)
 		pads[i].flags = MEDIA_PAD_FL_SOURCE;
 
 	return 0;
-
 err_clean_media:
 	media_device_cleanup(media_dev);
 
@@ -1256,12 +1439,13 @@ err_clean_media:
 static int mtk_seninf_v4l2_async_register(struct mtk_seninf *priv)
 {
 	struct device *dev = priv->dev;
+	const struct mtk_seninf_conf *conf = priv->conf;
 	int ret;
 	unsigned int i;
 
 	v4l2_async_notifier_init(&priv->notifier);
 
-	for (i = 0; i < SENINF_NUM_PADS; ++i) {
+	for (i = 0; i < (conf->nb_inputs + conf->nb_outputs); ++i) {
 		ret = v4l2_async_notifier_parse_fwnode_endpoints_by_port(
 			dev, &priv->notifier,
 			sizeof(struct mtk_seninf_async_subdev), i,
@@ -1382,6 +1566,8 @@ static int seninf_probe(struct platform_device *pdev)
 	if (!priv)
 		return -ENOMEM;
 
+	priv->conf = of_device_get_match_data(dev);
+
 	dev_set_drvdata(dev, priv);
 	priv->dev = dev;
 
@@ -1390,7 +1576,7 @@ static int seninf_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->base))
 		return PTR_ERR(priv->base);
 
-	for (i = 0; i < ARRAY_SIZE(priv->phy); ++i) {
+	for (i = 0; i < priv->conf->nb_phy; ++i) {
 		struct phy *phy;
 
 		phy = devm_phy_get(dev, phy_names[i]);
@@ -1472,8 +1658,13 @@ static int seninf_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id mtk_seninf_of_match[] = {
-	{.compatible = "mediatek,mt8183-seninf"},
-	{},
+	{
+		.compatible = "mediatek,mt8167-seninf",
+		.data = &seninf_8167_conf,
+	}, {
+		.compatible = "mediatek,mt8183-seninf",
+		.data = &seninf_8183_conf,
+	},
 };
 MODULE_DEVICE_TABLE(of, mtk_seninf_of_match);
 

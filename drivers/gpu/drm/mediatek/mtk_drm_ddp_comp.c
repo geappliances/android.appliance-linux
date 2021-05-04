@@ -433,20 +433,32 @@ void mtk_drm_ddp_queue_old_gems(struct mtk_ddp_comp *comp)
 	spin_unlock_irqrestore(&used_gems->lock, flags);
 }
 
-void put_old_gems(struct mtk_used_gem_objects *used_gems)
+inline struct drm_gem_object *mtk_drm_del_get_old_gem
+	(struct mtk_used_gem_objects *used_gems)
 {
 	struct old_gem *old_gem;
-	struct list_head *pos, *q;
+	struct drm_gem_object *old_drm_gem = NULL;
 	unsigned long flags;
 
 	spin_lock_irqsave(&used_gems->lock, flags);
-	list_for_each_safe(pos, q, &used_gems->old_gems_list_head) {
-	      old_gem = list_entry(pos, struct old_gem, list);
-	      drm_gem_object_put_unlocked(old_gem->gem);
-	      list_del(pos);
-	      kfree(old_gem);
+	old_gem = list_first_entry_or_null(&used_gems->old_gems_list_head,
+					   struct old_gem, list);
+	if (old_gem) {
+		old_drm_gem = old_gem->gem;
+		list_del(&old_gem->list);
+		kfree(old_gem);
 	}
 	spin_unlock_irqrestore(&used_gems->lock, flags);
+
+	return old_drm_gem;
+}
+
+void put_old_gems(struct mtk_used_gem_objects *used_gems)
+{
+	struct drm_gem_object *old_drm_gem;
+
+	while ((old_drm_gem = mtk_drm_del_get_old_gem(used_gems)))
+		drm_gem_object_put_unlocked(old_drm_gem);
 }
 
 static void put_old_gems_work_callback(
