@@ -534,14 +534,6 @@ static const struct ov5645_mode_info ov5645_mode_info_data[] = {
 		.pixel_clock = 168000000,
 		.link_freq = 1 /* an index in link_freq[] */
 	},
-	{
-		.width = 2592,
-		.height = 1944,
-		.data = ov5645_setting_full,
-		.data_size = ARRAY_SIZE(ov5645_setting_full),
-		.pixel_clock = 168000000,
-		.link_freq = 1 /* an index in link_freq[] */
-	},
 };
 
 static int ov5645_write_reg(struct ov5645 *ov5645, u16 reg, u8 val)
