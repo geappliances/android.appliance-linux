@@ -378,16 +378,10 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 	 * software.  The unused domains will be switched off during
 	 * late_init time.
 	 */
-	if (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF)) {
-		if (scpsys_domain_is_on(pd))
-			dev_warn(scpsys->dev,
-				 "%pOF: A default off power domain has been ON\n", node);
-	} else {
-		ret = scpsys_power_on(&pd->genpd);
-		if (ret < 0) {
-			dev_err(scpsys->dev, "%pOF: failed to power on domain: %d\n", node, ret);
-			goto err_unprepare_clocks;
-		}
+	ret = scpsys_power_on(&pd->genpd);
+	if (ret < 0) {
+		dev_err(scpsys->dev, "%pOF: failed to power on domain: %d\n", node, ret);
+		goto err_unprepare_clocks;
 	}
 
 	if (scpsys->domains[id]) {
@@ -401,11 +395,7 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 	pd->genpd.power_off = scpsys_power_off;
 	pd->genpd.power_on = scpsys_power_on;
 
-	if (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF))
-		pm_genpd_init(&pd->genpd, NULL, true);
-	else
-		pm_genpd_init(&pd->genpd, NULL, false);
-
+	pm_genpd_init(&pd->genpd, NULL, false);
 	scpsys->domains[id] = &pd->genpd;
 
 	return scpsys->pd_data.domains[id];
@@ -488,8 +478,7 @@ static void scpsys_remove_one_domain(struct scpsys_domain *pd)
 			"failed to remove domain '%s' : %d - state may be inconsistent\n",
 			pd->genpd.name, ret);
 
-	if (!MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF))
-		scpsys_power_off(&pd->genpd);
+	scpsys_power_off(&pd->genpd);
 
 	clk_bulk_unprepare(pd->num_clks, pd->clks);
 	clk_bulk_put(pd->num_clks, pd->clks);
