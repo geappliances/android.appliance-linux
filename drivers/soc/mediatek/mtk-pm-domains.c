@@ -89,40 +89,24 @@ static int scpsys_sram_disable(struct scpsys_domain *pd)
 
 static int scpsys_bus_protect_enable(struct scpsys_domain *pd)
 {
-	const struct scpsys_bus_prot_data *bpd = pd->data->bp_infracfg;
-	int i, ret;
+	const struct scpsys_bus_prot_data *bp_data = &pd->data->bp_infracfg;
 
-	for (i = 0; i < SPM_MAX_BUS_PROT_DATA; i++) {
-		if (!bpd[i].bus_prot_mask)
-			break;
+	if (!bp_data->bus_prot_mask)
+		return 0;
 
-		ret = mtk_infracfg_set_bus_protection(pd->infracfg,
-						      bpd[i].bus_prot_mask,
-						      bpd[i].bus_prot_reg_update);
-		if (ret)
-			return ret;
-	}
-
-	return 0;
+	return mtk_infracfg_set_bus_protection(pd->infracfg, bp_data->bus_prot_mask,
+					       bp_data->bus_prot_reg_update);
 }
 
 static int scpsys_bus_protect_disable(struct scpsys_domain *pd)
 {
-	const struct scpsys_bus_prot_data *bpd = pd->data->bp_infracfg;
-	int i, ret;
+	const struct scpsys_bus_prot_data *bp_data = &pd->data->bp_infracfg;
 
-	for (i = 0; i < SPM_MAX_BUS_PROT_DATA; i++) {
-		if (!bpd[i].bus_prot_mask)
-			return 0;
+	if (!bp_data->bus_prot_mask)
+		return 0;
 
-		ret = mtk_infracfg_clear_bus_protection(pd->infracfg,
-							bpd[i].bus_prot_mask,
-							bpd[i].bus_prot_reg_update);
-		if (ret)
-			return ret;
-	}
-
-	return 0;
+	return mtk_infracfg_clear_bus_protection(pd->infracfg, bp_data->bus_prot_mask,
+						 bp_data->bus_prot_reg_update);
 }
 
 static int scpsys_power_on(struct generic_pm_domain *genpd)
