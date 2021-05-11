@@ -5218,10 +5218,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	err = kbase_device_init(kbdev);
 
 	if (err) {
-		if (err == -EPROBE_DEFER)
-			dev_err(kbdev->dev, "Device initialization Deferred\n");
-		else
-			dev_err(kbdev->dev, "Device initialization failed\n");
+		dev_err_probe(kbdev->dev, err, "Device initialization failed\n");
 
 		dev_set_drvdata(kbdev->dev, NULL);
 		kbase_device_free(kbdev);
