@@ -107,22 +107,6 @@
 #define OVL0_2L_MOUT_EN_DISP_PATH0			BIT(0)
 #define MT8183_DISP_RDMA0_SOUT_SEL_IN		0xf50
 
-/* MT8167 */
-#define MT8167_DISP_REG_CONFIG_DISP_OVL0_MOUT_EN	0x030
-#define MT8167_DISP_REG_CONFIG_DISP_DITHER_MOUT_EN	0x038
-#define MT8167_DISP_REG_CONFIG_DISP_COLOR0_SEL_IN	0x058
-#define MT8167_DISP_REG_CONFIG_DISP_DSI0_SEL_IN		0x064
-#define MT8167_DISP_REG_CONFIG_DISP_RDMA0_SOUT_SEL_IN	0x06c
-
-#define MT8167_DITHER_MOUT_EN_RDMA0			BIT(0)
-#define MT8167_DITHER_MOUT_EN_MASK			0x7
-
-#define MT8167_RDMA0_SOUT_DSI0				0x2
-#define MT8167_RDMA0_SOUT_MASK				0x3
-
-#define MT8167_DSI0_SEL_IN_RDMA0			0x1
-#define MT8167_DSI0_SEL_IN_MASK				0x3
-
 struct mtk_mmsys_routes {
 	u32 from_comp;
 	u32 to_comp;
@@ -198,30 +182,6 @@ static const struct mtk_mmsys_driver_data mt8183_mmsys_driver_data = {
 struct mtk_mmsys {
 	void __iomem *regs;
 	const struct mtk_mmsys_driver_data *data;
-};
-
-static const struct mtk_mmsys_routes mt8167_mmsys_routing_table[] = {
-	{
-		DDP_COMPONENT_OVL0, DDP_COMPONENT_COLOR0,
-		MT8167_DISP_REG_CONFIG_DISP_OVL0_MOUT_EN,
-		OVL0_MOUT_EN_COLOR0, OVL0_MOUT_EN_COLOR0
-	}, {
-		DDP_COMPONENT_DITHER, DDP_COMPONENT_RDMA0,
-		MT8167_DISP_REG_CONFIG_DISP_DITHER_MOUT_EN,
-		MT8167_DITHER_MOUT_EN_MASK, MT8167_DITHER_MOUT_EN_RDMA0
-	}, {
-		DDP_COMPONENT_OVL0, DDP_COMPONENT_COLOR0,
-		MT8167_DISP_REG_CONFIG_DISP_COLOR0_SEL_IN,
-		COLOR0_SEL_IN_OVL0, COLOR0_SEL_IN_OVL0
-	}, {
-		DDP_COMPONENT_RDMA0, DDP_COMPONENT_DSI0,
-		MT8167_DISP_REG_CONFIG_DISP_DSI0_SEL_IN,
-		MT8167_DSI0_SEL_IN_MASK, MT8167_DSI0_SEL_IN_RDMA0
-	}, {
-		DDP_COMPONENT_RDMA0, DDP_COMPONENT_DSI0,
-		MT8167_DISP_REG_CONFIG_DISP_RDMA0_SOUT_SEL_IN,
-		MT8167_RDMA0_SOUT_MASK, MT8167_RDMA0_SOUT_DSI0
-	},
 };
 
 static const struct mtk_mmsys_routes mt8173_mmsys_routing_table[] = {
@@ -388,12 +348,6 @@ static const struct mtk_mmsys_routes mt8173_mmsys_routing_table[] = {
 	}
 };
 
-static const struct mtk_mmsys_driver_data mt8167_mmsys_driver_data = {
-	.clk_driver = "clk-mt8167-mm",
-	.routes = mt8167_mmsys_routing_table,
-	.num_routes = ARRAY_SIZE(mt8167_mmsys_routing_table),
-};
-
 static const struct mtk_mmsys_driver_data mt8173_mmsys_driver_data = {
 	.clk_driver = "clk-mt8173-mm",
 	.routes = mt8173_mmsys_routing_table,
@@ -490,10 +444,6 @@ static const struct of_device_id of_match_mtk_mmsys[] = {
 	{
 		.compatible = "mediatek,mt6797-mmsys",
 		.data = &mt6797_mmsys_driver_data,
-	},
-	{
-		.compatible = "mediatek,mt8167-mmsys",
-		.data = &mt8167_mmsys_driver_data,
 	},
 	{
 		.compatible = "mediatek,mt8173-mmsys",
