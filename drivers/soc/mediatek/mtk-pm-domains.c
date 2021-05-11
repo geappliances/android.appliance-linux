@@ -3,7 +3,6 @@
  * Copyright (c) 2020 Collabora Ltd.
  */
 #include <linux/clk.h>
-#include <linux/clk-provider.h>
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
@@ -34,8 +33,6 @@ struct scpsys_domain {
 	struct scpsys *scpsys;
 	int num_clks;
 	struct clk_bulk_data *clks;
-	int num_subsys_clks;
-	struct clk_bulk_data *subsys_clks;
 	struct regmap *infracfg;
 	struct regmap *smi;
 };
@@ -210,22 +207,16 @@ static int scpsys_power_on(struct generic_pm_domain *genpd)
 	regmap_update_bits(scpsys->base, pd->data->ctl_offs, PWR_ISO_BIT, 0);
 	regmap_update_bits(scpsys->base, pd->data->ctl_offs, PWR_RST_B_BIT, PWR_RST_B_BIT);
 
-	ret = clk_bulk_enable(pd->num_subsys_clks, pd->subsys_clks);
-	if (ret)
-		goto err_pwr_ack;
-
 	ret = scpsys_sram_enable(pd);
 	if (ret < 0)
-		goto err_sram;
+		goto err_pwr_ack;
 
 	ret = scpsys_bus_protect_disable(pd);
 	if (ret < 0)
-		goto err_sram;
+		goto err_pwr_ack;
 
 	return 0;
 
-err_sram:
-	clk_bulk_disable(pd->num_subsys_clks, pd->subsys_clks);
 err_pwr_ack:
 	clk_bulk_disable(pd->num_clks, pd->clks);
 	return ret;
@@ -245,8 +236,6 @@ static int scpsys_power_off(struct generic_pm_domain *genpd)
 	ret = scpsys_sram_disable(pd);
 	if (ret < 0)
 		return ret;
-
-	clk_bulk_disable(pd->num_subsys_clks, pd->subsys_clks);
 
 	/* subsys power off */
 	regmap_update_bits(scpsys->base, pd->data->ctl_offs, PWR_RST_B_BIT, 0);
@@ -271,11 +260,7 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 {
 	const struct scpsys_domain_data *domain_data;
 	struct scpsys_domain *pd;
-	struct property *prop;
-	const char *clk_name;
-	int i, ret, num_clks;
-	struct clk *clk;
-	int clk_ind = 0;
+	int i, ret;
 	u32 id;
 
 	ret = of_property_read_u32(node, "reg", &id);
@@ -311,62 +296,25 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 	if (IS_ERR(pd->smi))
 		pd->smi = NULL;
 
-	num_clks = of_clk_get_parent_count(node);
-	if (num_clks > 0) {
-		/* Calculate number of subsys_clks */
-		of_property_for_each_string(node, "clock-names", prop, clk_name) {
-			char *subsys;
-
-			subsys = strchr(clk_name, '-');
-			if (subsys)
-				pd->num_subsys_clks++;
-			else
-				pd->num_clks++;
-		}
-
+	pd->num_clks = of_clk_get_parent_count(node);
+	if (pd->num_clks > 0) {
 		pd->clks = devm_kcalloc(scpsys->dev, pd->num_clks, sizeof(*pd->clks), GFP_KERNEL);
 		if (!pd->clks)
 			return ERR_PTR(-ENOMEM);
-
-		pd->subsys_clks = devm_kcalloc(scpsys->dev, pd->num_subsys_clks,
-					       sizeof(*pd->subsys_clks), GFP_KERNEL);
-		if (!pd->subsys_clks)
-			return ERR_PTR(-ENOMEM);
-
 	}
 
 	for (i = 0; i < pd->num_clks; i++) {
-		clk = of_clk_get(node, i);
-		if (IS_ERR(clk)) {
-			ret = PTR_ERR(clk);
-			dev_err_probe(scpsys->dev, ret,
-				      "%pOF: failed to get clk at index %d: %d\n", node, i, ret);
-			goto err_put_clocks;
+		pd->clks[i].clk = of_clk_get(node, i);
+		if (IS_ERR(pd->clks[i].clk)) {
+			dev_err(scpsys->dev, "%pOF: failed to get clk at index %d\n",
+				node, i);
+			return ERR_PTR(-EINVAL);
 		}
-
-		pd->clks[clk_ind++].clk = clk;
-	}
-
-	for (i = 0; i < pd->num_subsys_clks; i++) {
-		clk = of_clk_get(node, i + clk_ind);
-		if (IS_ERR(clk)) {
-			ret = PTR_ERR(clk);
-			dev_err_probe(scpsys->dev, ret,
-				      "%pOF: failed to get clk at index %d: %d\n", node,
-				      i + clk_ind, ret);
-			goto err_put_subsys_clocks;
-		}
-
-		pd->subsys_clks[i].clk = clk;
 	}
 
 	ret = clk_bulk_prepare(pd->num_clks, pd->clks);
 	if (ret)
-		goto err_put_subsys_clocks;
-
-	ret = clk_bulk_prepare(pd->num_subsys_clks, pd->subsys_clks);
-	if (ret)
-		goto err_unprepare_clocks;
+		goto err_put_clocks;
 
 	/*
 	 * Initially turn on all domains to make the domains usable
@@ -384,7 +332,7 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 		ret = -EINVAL;
 		dev_err(scpsys->dev,
 			"power domain with id %d already exists, check your device-tree\n", id);
-		goto err_unprepare_subsys_clocks;
+		goto err_unprepare_clocks;
 	}
 
 	pd->genpd.name = node->name;
@@ -396,12 +344,8 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 
 	return scpsys->pd_data.domains[id];
 
-err_unprepare_subsys_clocks:
-	clk_bulk_unprepare(pd->num_subsys_clks, pd->subsys_clks);
 err_unprepare_clocks:
 	clk_bulk_unprepare(pd->num_clks, pd->clks);
-err_put_subsys_clocks:
-	clk_bulk_put(pd->num_subsys_clks, pd->subsys_clks);
 err_put_clocks:
 	clk_bulk_put(pd->num_clks, pd->clks);
 	return ERR_PTR(ret);
@@ -478,9 +422,6 @@ static void scpsys_remove_one_domain(struct scpsys_domain *pd)
 
 	clk_bulk_unprepare(pd->num_clks, pd->clks);
 	clk_bulk_put(pd->num_clks, pd->clks);
-
-	clk_bulk_unprepare(pd->num_subsys_clks, pd->subsys_clks);
-	clk_bulk_put(pd->num_subsys_clks, pd->subsys_clks);
 }
 
 static void scpsys_domain_cleanup(struct scpsys *scpsys)
