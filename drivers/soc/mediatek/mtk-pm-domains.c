@@ -32,7 +32,6 @@ struct scpsys_domain {
 	int num_clks;
 	struct clk_bulk_data *clks;
 	struct regmap *infracfg;
-	struct regmap *smi;
 };
 
 struct scpsys {
@@ -101,9 +100,9 @@ static int _scpsys_bus_protect_enable(const struct scpsys_bus_prot_data *bpd, st
 		if (bpd[i].bus_prot_reg_update)
 			regmap_update_bits(regmap, INFRA_TOPAXI_PROTECTEN, mask, mask);
 		else
-			regmap_write(regmap, bpd[i].bus_prot_set, mask);
+			regmap_write(regmap, INFRA_TOPAXI_PROTECTEN_SET, mask);
 
-		ret = regmap_read_poll_timeout(regmap, bpd[i].bus_prot_sta,
+		ret = regmap_read_poll_timeout(regmap, INFRA_TOPAXI_PROTECTSTA1,
 					       val, (val & mask) == mask,
 					       MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
 		if (ret)
@@ -115,13 +114,11 @@ static int _scpsys_bus_protect_enable(const struct scpsys_bus_prot_data *bpd, st
 
 static int scpsys_bus_protect_enable(struct scpsys_domain *pd)
 {
+	const struct scpsys_bus_prot_data *bpd = pd->data->bp_infracfg;
 	int ret;
 
-	ret = _scpsys_bus_protect_enable(pd->data->bp_infracfg, pd->infracfg);
-	if (ret)
-		return ret;
-
-	return _scpsys_bus_protect_enable(pd->data->bp_smi, pd->smi);
+	ret = _scpsys_bus_protect_enable(bpd, pd->infracfg);
+	return ret;
 }
 
 static int _scpsys_bus_protect_disable(const struct scpsys_bus_prot_data *bpd,
@@ -136,11 +133,11 @@ static int _scpsys_bus_protect_disable(const struct scpsys_bus_prot_data *bpd,
 			return 0;
 
 		if (bpd[i].bus_prot_reg_update)
-			regmap_update_bits(regmap, bpd[i].bus_prot_set, mask, 0);
+			regmap_update_bits(regmap, INFRA_TOPAXI_PROTECTEN, mask, 0);
 		else
-			regmap_write(regmap, bpd[i].bus_prot_clr, mask);
+			regmap_write(regmap, INFRA_TOPAXI_PROTECTEN_CLR, mask);
 
-		ret = regmap_read_poll_timeout(regmap, bpd[i].bus_prot_sta,
+		ret = regmap_read_poll_timeout(regmap, INFRA_TOPAXI_PROTECTSTA1,
 					       val, !(val & mask),
 					       MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
 		if (ret)
@@ -152,13 +149,11 @@ static int _scpsys_bus_protect_disable(const struct scpsys_bus_prot_data *bpd,
 
 static int scpsys_bus_protect_disable(struct scpsys_domain *pd)
 {
+	const struct scpsys_bus_prot_data *bpd = pd->data->bp_infracfg;
 	int ret;
 
-	ret = _scpsys_bus_protect_disable(pd->data->bp_smi, pd->smi);
-	if (ret)
-		return ret;
-
-	return _scpsys_bus_protect_disable(pd->data->bp_infracfg, pd->infracfg);
+	ret = _scpsys_bus_protect_disable(bpd, pd->infracfg);
+	return ret;
 }
 
 static int scpsys_power_on(struct generic_pm_domain *genpd)
@@ -270,10 +265,6 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 	pd->infracfg = syscon_regmap_lookup_by_phandle(node, "mediatek,infracfg");
 	if (IS_ERR(pd->infracfg))
 		pd->infracfg = NULL;
-
-	pd->smi = syscon_regmap_lookup_by_phandle(node, "mediatek,smi");
-	if (IS_ERR(pd->smi))
-		pd->smi = NULL;
 
 	pd->num_clks = of_clk_get_parent_count(node);
 	if (pd->num_clks > 0) {
