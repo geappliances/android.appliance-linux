@@ -254,7 +254,7 @@ int kbase_device_init(struct kbase_device *kbdev)
 	for (i = 0; i < ARRAY_SIZE(dev_init); i++) {
 		err = dev_init[i].init(kbdev);
 		if (err) {
-			dev_err(kbdev->dev, "%s error = %d\n",
+			dev_err_probe(kbdev->dev, err, "%s error = %d\n",
 						dev_init[i].err_mes, err);
 			kbase_device_term_partial(kbdev, i);
 			break;
