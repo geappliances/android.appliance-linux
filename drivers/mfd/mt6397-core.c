@@ -14,11 +14,13 @@
 #include <linux/mfd/mt6323/core.h>
 #include <linux/mfd/mt6357/core.h>
 #include <linux/mfd/mt6358/core.h>
+#include <linux/mfd/mt6359/core.h>
 #include <linux/mfd/mt6392/core.h>
 #include <linux/mfd/mt6397/core.h>
 #include <linux/mfd/mt6323/registers.h>
 #include <linux/mfd/mt6357/registers.h>
 #include <linux/mfd/mt6358/registers.h>
+#include <linux/mfd/mt6359/registers.h>
 #include <linux/mfd/mt6392/registers.h>
 #include <linux/mfd/mt6397/registers.h>
 
@@ -178,6 +180,17 @@ static const struct mfd_cell mt6392_devs[] = {
 	},
 };
 
+static const struct mfd_cell mt6359_devs[] = {
+	{ .name = "mt6359-regulator", },
+	{
+		.name = "mt6359-rtc",
+		.num_resources = ARRAY_SIZE(mt6358_rtc_resources),
+		.resources = mt6358_rtc_resources,
+		.of_compatible = "mediatek,mt6358-rtc",
+	},
+	{ .name = "mt6359-sound", },
+};
+
 static const struct mfd_cell mt6397_devs[] = {
 	{
 		.name = "mt6397-rtc",
@@ -233,6 +246,14 @@ static const struct chip_data mt6358_core = {
 	.cid_shift = 8,
 	.cells = mt6358_devs,
 	.cell_size = ARRAY_SIZE(mt6358_devs),
+	.irq_init = mt6358_irq_init,
+};
+
+static const struct chip_data mt6359_core = {
+	.cid_addr = MT6359_SWCID,
+	.cid_shift = 8,
+	.cells = mt6359_devs,
+	.cell_size = ARRAY_SIZE(mt6359_devs),
 	.irq_init = mt6358_irq_init,
 };
 
@@ -316,6 +337,9 @@ static const struct of_device_id mt6397_of_match[] = {
 	}, {
 		.compatible = "mediatek,mt6358",
 		.data = &mt6358_core,
+	}, {
+		.compatible = "mediatek,mt6359",
+		.data = &mt6359_core,
 	}, {
 		.compatible = "mediatek,mt6392",
 		.data = &mt6392_core,
