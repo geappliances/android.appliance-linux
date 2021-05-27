@@ -757,12 +757,10 @@
 	pinctrl-names = "default", "jtag";
 	pinctrl-0 = <&vpu_jtag_disabled>;
 	pinctrl-1 = <&vpu_jtag_enabled>;
-	// FIXME
-	status = "disabled";
+	status = "okay";
 };
 
 &vpu1 {
 	memory-region = <&vpu_ram>;
-	// FIXME
-	status = "disabled";
+	status = "okay";
 };
