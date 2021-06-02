@@ -1088,6 +1088,7 @@ static int ov5645_probe(struct i2c_client *client)
 	u8 chip_id_high, chip_id_low;
 	unsigned int i;
 	u32 xclk_freq;
+	struct v4l2_fwnode_device_properties props;
 	struct v4l2_ctrl *ctrl;
 	int ret;
 
@@ -1170,6 +1171,14 @@ static int ov5645_probe(struct i2c_client *client)
 
 	mutex_init(&ov5645->power_lock);
 
+	/* Parse the firmware sensor properties. */
+	ret = v4l2_fwnode_device_parse(ov5645->dev, &props);
+	if (ret) {
+		dev_err(ov5645->dev, "Failed to parse fwnode properties: %d\n",
+			ret);
+		return ret;
+	}
+
 	v4l2_ctrl_handler_init(&ov5645->ctrls, 11);
 	v4l2_ctrl_new_std(&ov5645->ctrls, &ov5645_ctrl_ops,
 			  V4L2_CID_SATURATION, -4, 4, 1, 0);
@@ -1213,7 +1222,8 @@ static int ov5645_probe(struct i2c_client *client)
 	if (ov5645->link_freq)
 		ov5645->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
-	ov5645->sd.ctrl_handler = &ov5645->ctrls;
+	v4l2_ctrl_new_fwnode_properties(&ov5645->ctrls, &ov5645_ctrl_ops,
+					&props);
 
 	if (ov5645->ctrls.error) {
 		dev_err(dev, "%s: control initialization error %d\n",
@@ -1221,6 +1231,8 @@ static int ov5645_probe(struct i2c_client *client)
 		ret = ov5645->ctrls.error;
 		goto free_ctrl;
 	}
+
+	ov5645->sd.ctrl_handler = &ov5645->ctrls;
 
 	v4l2_i2c_subdev_init(&ov5645->sd, client, &ov5645_subdev_ops);
 	ov5645->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
