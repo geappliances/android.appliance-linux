@@ -426,6 +426,7 @@ struct msdc_host {
 	struct clk *h_clk;      /* msdc h_clk */
 	struct clk *bus_clk;	/* bus clock which used to access register */
 	struct clk *src_clk_cg; /* msdc source clock control gate */
+	struct clk *sys_cg;     /* msdc subsys clock gate */
 	u32 mclk;		/* mmc subsystem clock frequency */
 	u32 src_clk_freq;	/* source clock frequency */
 	unsigned char timing;
@@ -777,10 +778,12 @@ static void msdc_gate_clock(struct msdc_host *host)
 	clk_disable_unprepare(host->src_clk);
 	clk_disable_unprepare(host->bus_clk);
 	clk_disable_unprepare(host->h_clk);
+	clk_disable_unprepare(host->sys_cg);
 }
 
 static void msdc_ungate_clock(struct msdc_host *host)
 {
+	clk_prepare_enable(host->sys_cg);
 	clk_prepare_enable(host->h_clk);
 	clk_prepare_enable(host->bus_clk);
 	clk_prepare_enable(host->src_clk);
@@ -2406,6 +2409,10 @@ static int msdc_drv_probe(struct platform_device *pdev)
 	host->src_clk_cg = devm_clk_get(&pdev->dev, "source_cg");
 	if (IS_ERR(host->src_clk_cg))
 		host->src_clk_cg = NULL;
+
+	host->sys_cg = devm_clk_get(&pdev->dev, "sys_cg");
+	if (IS_ERR(host->sys_cg))
+		host->sys_cg = NULL;
 
 	host->reset = devm_reset_control_get_optional_exclusive(&pdev->dev,
 								"hrst");
