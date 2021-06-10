@@ -1402,12 +1402,12 @@ static void ap1302_ctrls_cleanup(struct ap1302_device *ap1302)
 
 static struct v4l2_mbus_framefmt *
 ap1302_get_pad_format(struct ap1302_device *ap1302,
-		      struct v4l2_subdev_pad_config *cfg,
+		      struct v4l2_subdev_state *sd_state,
 		      unsigned int pad, u32 which)
 {
 	switch (which) {
 	case V4L2_SUBDEV_FORMAT_TRY:
-		return v4l2_subdev_get_try_format(&ap1302->sd, cfg, pad);
+		return v4l2_subdev_get_try_format(&ap1302->sd, sd_state, pad);
 	case V4L2_SUBDEV_FORMAT_ACTIVE:
 		return &ap1302->formats[pad].format;
 	default:
@@ -1416,16 +1416,16 @@ ap1302_get_pad_format(struct ap1302_device *ap1302,
 }
 
 static int ap1302_init_cfg(struct v4l2_subdev *sd,
-			   struct v4l2_subdev_pad_config *cfg)
+			   struct v4l2_subdev_state *sd_state)
 {
-	u32 which = cfg ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
+	u32 which = sd_state ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
 	struct ap1302_device *ap1302 = to_ap1302(sd);
 	const struct ap1302_sensor_info *info = ap1302->sensor_info;
 	unsigned int pad;
 
 	for (pad = 0; pad < ARRAY_SIZE(ap1302->formats); ++pad) {
 		struct v4l2_mbus_framefmt *format =
-			ap1302_get_pad_format(ap1302, cfg, pad, which);
+			ap1302_get_pad_format(ap1302, sd_state, pad, which);
 
 		format->width = info->resolution.width;
 		format->height = info->resolution.height;
@@ -1449,7 +1449,7 @@ static int ap1302_init_cfg(struct v4l2_subdev *sd,
 }
 
 static int ap1302_enum_mbus_code(struct v4l2_subdev *sd,
-				 struct v4l2_subdev_pad_config *cfg,
+				 struct v4l2_subdev_state *sd_state,
 				 struct v4l2_subdev_mbus_code_enum *code)
 {
 	struct ap1302_device *ap1302 = to_ap1302(sd);
@@ -1475,7 +1475,7 @@ static int ap1302_enum_mbus_code(struct v4l2_subdev *sd,
 }
 
 static int ap1302_enum_frame_size(struct v4l2_subdev *sd,
-				  struct v4l2_subdev_pad_config *cfg,
+				  struct v4l2_subdev_state *sd_state,
 				  struct v4l2_subdev_frame_size_enum *fse)
 {
 	struct ap1302_device *ap1302 = to_ap1302(sd);
@@ -1519,13 +1519,13 @@ static int ap1302_enum_frame_size(struct v4l2_subdev *sd,
 }
 
 static int ap1302_get_fmt(struct v4l2_subdev *sd,
-			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_state *sd_state,
 			  struct v4l2_subdev_format *fmt)
 {
 	struct ap1302_device *ap1302 = to_ap1302(sd);
 	const struct v4l2_mbus_framefmt *format;
 
-	format = ap1302_get_pad_format(ap1302, cfg, fmt->pad, fmt->which);
+	format = ap1302_get_pad_format(ap1302, sd_state, fmt->pad, fmt->which);
 
 	mutex_lock(&ap1302->lock);
 	fmt->format = *format;
@@ -1535,7 +1535,7 @@ static int ap1302_get_fmt(struct v4l2_subdev *sd,
 }
 
 static int ap1302_set_fmt(struct v4l2_subdev *sd,
-			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_state *sd_state,
 			  struct v4l2_subdev_format *fmt)
 {
 	struct ap1302_device *ap1302 = to_ap1302(sd);
@@ -1545,9 +1545,9 @@ static int ap1302_set_fmt(struct v4l2_subdev *sd,
 
 	/* Formats on the sink pads can't be changed. */
 	if (fmt->pad != AP1302_PAD_SOURCE)
-		return ap1302_get_fmt(sd, cfg, fmt);
+		return ap1302_get_fmt(sd, sd_state, fmt);
 
-	format = ap1302_get_pad_format(ap1302, cfg, fmt->pad, fmt->which);
+	format = ap1302_get_pad_format(ap1302, sd_state, fmt->pad, fmt->which);
 
 	/* Validate the media bus code, default to the first supported value. */
 	for (i = 0; i < ARRAY_SIZE(supported_video_formats); i++) {
@@ -1588,7 +1588,7 @@ static int ap1302_set_fmt(struct v4l2_subdev *sd,
 }
 
 static int ap1302_get_selection(struct v4l2_subdev *sd,
-				struct v4l2_subdev_pad_config *cfg,
+				struct v4l2_subdev_state *sd_state,
 				struct v4l2_subdev_selection *sel)
 {
 	struct ap1302_device *ap1302 = to_ap1302(sd);
@@ -1955,7 +1955,7 @@ static const struct v4l2_subdev_internal_ops ap1302_subdev_internal_ops = {
  */
 
 static int ap1302_sensor_enum_mbus_code(struct v4l2_subdev *sd,
-					struct v4l2_subdev_pad_config *cfg,
+					struct v4l2_subdev_state *sd_state,
 					struct v4l2_subdev_mbus_code_enum *code)
 {
 	struct ap1302_sensor *sensor = to_ap1302_sensor(sd);
@@ -1969,7 +1969,7 @@ static int ap1302_sensor_enum_mbus_code(struct v4l2_subdev *sd,
 }
 
 static int ap1302_sensor_enum_frame_size(struct v4l2_subdev *sd,
-					 struct v4l2_subdev_pad_config *cfg,
+					 struct v4l2_subdev_state *sd_state,
 					 struct v4l2_subdev_frame_size_enum *fse)
 {
 	struct ap1302_sensor *sensor = to_ap1302_sensor(sd);
@@ -1990,7 +1990,7 @@ static int ap1302_sensor_enum_frame_size(struct v4l2_subdev *sd,
 }
 
 static int ap1302_sensor_get_fmt(struct v4l2_subdev *sd,
-				 struct v4l2_subdev_pad_config *cfg,
+				 struct v4l2_subdev_state *sd_state,
 				 struct v4l2_subdev_format *fmt)
 {
 	struct ap1302_sensor *sensor = to_ap1302_sensor(sd);

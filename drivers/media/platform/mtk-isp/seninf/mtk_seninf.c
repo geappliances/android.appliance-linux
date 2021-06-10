@@ -1098,13 +1098,14 @@ static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
 };
 
 static struct v4l2_mbus_framefmt *
-seninf_get_pad_format(struct mtk_seninf *priv, struct v4l2_subdev_pad_config *cfg,
+seninf_get_pad_format(struct mtk_seninf *priv,
+		      struct v4l2_subdev_state *sd_state,
 		      unsigned int pad, u32 which)
 {
 
 	switch (which) {
 	case V4L2_SUBDEV_FORMAT_TRY:
-		return v4l2_subdev_get_try_format(&priv->subdev, cfg, pad);
+		return v4l2_subdev_get_try_format(&priv->subdev, sd_state, pad);
 	case V4L2_SUBDEV_FORMAT_ACTIVE:
 		if (mtk_seninf_pad_is_sink(priv, pad))
 			return &priv->inputs[pad].format;
@@ -1116,15 +1117,16 @@ seninf_get_pad_format(struct mtk_seninf *priv, struct v4l2_subdev_pad_config *cf
 }
 
 static int seninf_init_cfg(struct v4l2_subdev *sd,
-			   struct v4l2_subdev_pad_config *cfg)
+			   struct v4l2_subdev_state *sd_state)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
-	u32 which = cfg ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
+	u32 which = sd_state ? V4L2_SUBDEV_FORMAT_TRY
+		  : V4L2_SUBDEV_FORMAT_ACTIVE;
 	struct v4l2_mbus_framefmt *format;
 	unsigned int i;
 
 	for (i = 0; i < sd->entity.num_pads; i++) {
-		format = seninf_get_pad_format(priv, cfg, i, which);
+		format = seninf_get_pad_format(priv, sd_state, i, which);
 		*format = mtk_seninf_default_fmt;
 	}
 
@@ -1132,7 +1134,7 @@ static int seninf_init_cfg(struct v4l2_subdev *sd,
 }
 
 static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
-				 struct v4l2_subdev_pad_config *cfg,
+				 struct v4l2_subdev_state *sd_state,
 				 struct v4l2_subdev_mbus_code_enum *code)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
@@ -1152,18 +1154,19 @@ static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
 }
 
 static int seninf_get_fmt(struct v4l2_subdev *sd,
-			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_state *sd_state,
 			  struct v4l2_subdev_format *fmt)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
 
-	fmt->format = *seninf_get_pad_format(priv, cfg, fmt->pad, fmt->which);
+	fmt->format = *seninf_get_pad_format(priv, sd_state, fmt->pad,
+					     fmt->which);
 
 	return 0;
 }
 
 static int seninf_set_fmt(struct v4l2_subdev *sd,
-			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_state *sd_state,
 			  struct v4l2_subdev_format *fmt)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
@@ -1176,7 +1179,7 @@ static int seninf_set_fmt(struct v4l2_subdev *sd,
 		fmt->format.code = fmtinfo->code;
 	}
 
-	format = seninf_get_pad_format(priv, cfg, fmt->pad, fmt->which);
+	format = seninf_get_pad_format(priv, sd_state, fmt->pad, fmt->which);
 
 	format->width = fmt->format.width;
 	format->height = fmt->format.height;
@@ -1193,7 +1196,8 @@ static int seninf_set_fmt(struct v4l2_subdev *sd,
 	 * no way to configure formats at all when no active input is selected.
 	 */
 	if (priv->inputs[fmt->pad].source_pad) {
-		format = seninf_get_pad_format(priv, cfg, priv->inputs[fmt->pad].source_pad,
+		format = seninf_get_pad_format(priv, sd_state,
+					       priv->inputs[fmt->pad].source_pad,
 					       fmt->which);
 		*format = fmt->format;
 	}
@@ -1232,6 +1236,8 @@ static int seninf_get_routing(struct v4l2_subdev *sd,
 }
 
 static int seninf_set_routing(struct v4l2_subdev *sd,
+			     struct v4l2_subdev_state *sd_state,
+			     enum  v4l2_subdev_format_whence which,
 			     struct v4l2_subdev_krouting *routing)
 {
 	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
