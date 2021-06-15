@@ -141,8 +141,7 @@ static bool ili211x_touchdata_to_coords(const u8 *touchdata,
 {
 	u32 data;
 
-	data = get_unaligned_be32(touchdata + 1 + (finger * 4) + 0);
-	if (data == 0xffffffff)	/* Finger up */
+	if (!(touchdata[0] & BIT(finger)))
 		return false;
 
 	*x = ((touchdata[1 + (finger * 4) + 0] & 0xf0) << 4) |
