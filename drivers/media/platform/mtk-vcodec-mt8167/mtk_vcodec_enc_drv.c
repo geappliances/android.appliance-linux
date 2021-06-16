@@ -87,29 +87,6 @@ static irqreturn_t mtk_vcodec_enc_irq_handler(int irq, void *priv)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t mtk_vcodec_enc_lt_irq_handler(int irq, void *priv)
-{
-	struct mtk_vcodec_dev *dev = priv;
-	struct mtk_vcodec_ctx *ctx;
-	unsigned long flags;
-	void __iomem *addr;
-
-	spin_lock_irqsave(&dev->irqlock, flags);
-	ctx = dev->curr_ctx;
-	spin_unlock_irqrestore(&dev->irqlock, flags);
-
-	mtk_v4l2_debug(1, "id=%d", ctx->id);
-	ctx->irq_status = readl(dev->reg_base[VENC_LT_SYS] +
-				(MTK_VENC_IRQ_STATUS_OFFSET));
-
-	addr = dev->reg_base[VENC_LT_SYS] + MTK_VENC_IRQ_ACK_OFFSET;
-
-	clean_irq_status(ctx->irq_status, addr);
-
-	wake_up_ctx(ctx, MTK_INST_IRQ_RECEIVED);
-	return IRQ_HANDLED;
-}
-
 static int fops_vcodec_open(struct file *file)
 {
 	struct mtk_vcodec_dev *dev = video_drvdata(file);
