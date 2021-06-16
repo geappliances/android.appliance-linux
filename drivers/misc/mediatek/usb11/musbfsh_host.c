@@ -2421,6 +2421,7 @@ static int musbfsh_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,
 			interval = max_t(u8, epd->bInterval, 1);
 			break;
 		}
+		fallthrough;
 	case USB_ENDPOINT_XFER_ISOC:
 		/* ISO always uses logarithmic encoding */
 		interval = min_t(u8, epd->bInterval, 16);
