@@ -273,6 +273,7 @@ static irqreturn_t edt_rpi_ft5x06_ts_isr(int irq, void *dev_id)
 	int i, type, x, y, id;
 	int offset, tplen, datalen, crclen;
 	int error;
+	struct edt_ts_regs *ts_data = (struct edt_ts_regs* )&rdbuf[0];
 
 	switch (tsdata->version) {
 	case EDT_M06:
@@ -320,7 +321,6 @@ static irqreturn_t edt_rpi_ft5x06_ts_isr(int irq, void *dev_id)
 		if (!edt_rpi_ft5x06_ts_check_crc(tsdata, rdbuf, datalen))
 			goto out;
 	}
-	struct edt_ts_regs *ts_data = (struct edt_ts_regs* )&rdbuf[0];
 
 	if (ts_data->num_points == 0xff ||
 	    (ts_data->num_points == 0 && tsdata->known_ids == 0))
