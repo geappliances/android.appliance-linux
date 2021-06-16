@@ -64,7 +64,7 @@
 #define CHB_LVDS_TERM		0
 #define CHA_LVDS_TERM		1
 #define CHB_REVERSE_LVDS	4
-#define CHB_REVERSE_LVDS	5
+#define CHA_REVERSE_LVDS	5
 #define EVEN_ODD_SWAP		6
 
 #define SN65DSI83_LVDS_CM_ADJ         0x1B
