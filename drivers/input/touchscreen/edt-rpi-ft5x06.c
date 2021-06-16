@@ -740,7 +740,6 @@ static int edt_ft5x06_fwupg_reset_in_boot(struct edt_rpi_ft5x06_ts_data *tsdata)
 static bool edt_ft5x06_fwupg_check_state(struct edt_rpi_ft5x06_ts_data *tsdata,
 					enum edt_fw_status rstate)
 {
-	struct i2c_client *client = tsdata->client;
 	int ret;
 	int i;
 	enum edt_fw_status cstate;
