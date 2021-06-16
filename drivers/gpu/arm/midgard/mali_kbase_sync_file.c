@@ -318,7 +318,7 @@ void kbase_sync_fence_info_get(struct dma_fence *fence,
 	scnprintf(info->name, sizeof(info->name), "%llu#%u",
 		  fence->context, fence->seqno);
 #else
-	scnprintf(info->name, sizeof(info->name), "%llu#%u",
+	scnprintf(info->name, sizeof(info->name), "%llu#%llu",
 		  fence->context, fence->seqno);
 #endif
 }
