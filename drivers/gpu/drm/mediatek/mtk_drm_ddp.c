@@ -268,6 +268,7 @@ struct mtk_mmsys_reg_data {
 	u32 dsi0_sel_in;
 	u32 dsi0_sel_in_rdma1;
 	u32 color0_sel_in;
+	u32 dither0_mout_en;
 };
 
 static const unsigned int mt2701_mutex_mod[DDP_COMPONENT_ID_MAX] = {
@@ -482,6 +483,14 @@ const struct mtk_mmsys_reg_data mt8183_mmsys_reg_data = {
 	.rdma1_sout_dpi1 = RDMA1_SOUT_DPI1,
 	.dpi1_sel_in = DISP_REG_CONFIG_DPI_SEL_IN,
 	.color0_sel_in = DISP_REG_CONFIG_DISP_COLOR0_SEL_IN,
+	.dither0_mout_en = MT8183_DISP_DITHER0_MOUT_EN,
+};
+
+const struct mtk_mmsys_reg_data mt8365_mmsys_reg_data = {
+	.ovl0_mout_en = 0xf3c,
+	.dither0_mout_en = 0xf50,
+	.rdma0_sout_sel_in = 0xf4c,
+	.rdma0_sout_color0 = 0x1,
 };
 
 static unsigned int mtk_ddp_mout_en(const struct mtk_mmsys_reg_data *data,
@@ -527,7 +536,7 @@ static unsigned int mtk_ddp_mout_en(const struct mtk_mmsys_reg_data *data,
 		*addr = MT8183_DISP_OVL1_2L_MOUT_EN;
 		value = OVL1_2L_MOUT_EN_RDMA1;
 	} else if (cur == DDP_COMPONENT_DITHER && next == DDP_COMPONENT_DSI0) {
-		*addr = MT8183_DISP_DITHER0_MOUT_EN;
+		*addr = data->dither0_mout_en;
 		value = DITHER0_MOUT_IN_DSI0;
 	} else {
 		value = 0;
@@ -595,6 +604,18 @@ static unsigned int mtk_ddp_sel_in(const struct mtk_mmsys_reg_data *data,
 	} else if (cur == DDP_COMPONENT_RDMA0 && next == DDP_COMPONENT_DSI0) {
 		*addr = data->dsi0_sel_in;
 		value = DSI0_SEL_IN_RDMA0;
+	} else if (cur == DDP_COMPONENT_OVL0 && next == DDP_COMPONENT_RDMA0) {
+		*addr = 0xf54;
+		value = 0;
+	} else if (cur == DDP_COMPONENT_COLOR0 && next == DDP_COMPONENT_CCORR) {
+		*addr = 0xf64;
+		value = 0;
+	} else if (cur == DDP_COMPONENT_DITHER && next == DDP_COMPONENT_DSI0) {
+		*addr = 0xf68;
+		value = 0x1;
+	} else if (cur == DDP_COMPONENT_RDMA0 && next == DDP_COMPONENT_COLOR0) {
+		*addr = 0xf60;
+		value = 0;
 	} else {
 		value = 0;
 	}

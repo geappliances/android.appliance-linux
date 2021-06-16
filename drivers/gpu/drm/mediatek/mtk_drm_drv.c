@@ -278,6 +278,7 @@ static const struct mtk_mmsys_driver_data mt8365_mmsys_driver_data = {
 	.main_len = ARRAY_SIZE(mt8365_mtk_ddp_main),
 	.ext_path = mt8365_mtk_ddp_ext,
 	.ext_len = ARRAY_SIZE(mt8365_mtk_ddp_ext),
+	.reg_data = &mt8365_mmsys_reg_data,
 };
 
 static int mtk_drm_kms_init(struct drm_device *drm)
