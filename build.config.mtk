@@ -49,6 +49,8 @@ SKIP_CP_KERNEL_HDR=1
 # This is needed to generate __symbols__ to apply overlays in bootloader
 DTC_FLAGS="-@"
 
+KCFLAGS="-Werror"
+
 EXTRA_CMDS="update_prebuilt"
 
 # Configure and enable build MT8183 EVB Connectivity modules
