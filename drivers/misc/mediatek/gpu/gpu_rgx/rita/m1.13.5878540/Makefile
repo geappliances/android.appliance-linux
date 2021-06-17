@@ -59,7 +59,8 @@ ccflags-y += \
 	-Wno-unused-parameter \
 	-Wno-sign-compare \
 	-Wno-type-limits \
-	-Wno-error
+	-Wno-error \
+	-Wno-typedef-redefinition
 
 pvrsrvkm-y += \
 	kernel/drivers/staging/imgtec/pvr_drm.o \
