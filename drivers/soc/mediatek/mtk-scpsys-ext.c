@@ -48,7 +48,7 @@ int mtk_scpsys_ext_set_bus_protection(const struct bus_prot *bp_table,
 	int i;
 
 	for (i = 0; i < MAX_STEPS; i++) {
-		struct regmap *map;
+		struct regmap *map = NULL;
 		int ret;
 
 		if (bp_table[i].type == INVALID_TYPE)
@@ -76,7 +76,7 @@ int mtk_scpsys_ext_clear_bus_protection(const struct bus_prot *bp_table,
 	int i;
 
 	for (i = MAX_STEPS - 1; i >= 0; i--) {
-		struct regmap *map;
+		struct regmap *map = NULL;
 		int ret;
 
 		if (bp_table[i].type == INVALID_TYPE)
