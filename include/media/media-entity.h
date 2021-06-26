@@ -921,11 +921,10 @@ void media_graph_walk_start(struct media_graph *graph, struct media_pad *pad);
  * The graph structure must have been previously initialized with a call to
  * media_graph_walk_start().
  *
- * Return: returns the next pad in the graph or %NULL if the whole
- * graph have been traversed. The pad which is returned is the pad
- * through which a new entity is reached when parsing the graph.
+ * Return: returns the next entity in the graph or %NULL if the whole graph
+ * have been traversed.
  */
-struct media_pad *media_graph_walk_next(struct media_graph *graph);
+struct media_entity *media_graph_walk_next(struct media_graph *graph);
 
 /**
  * media_pipeline_start - Mark a pipeline as streaming

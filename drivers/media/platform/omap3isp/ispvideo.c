@@ -223,8 +223,8 @@ static int isp_video_get_graph_data(struct isp_video *video,
 				    struct isp_pipeline *pipe)
 {
 	struct media_graph graph;
-	struct media_pad *pad = video->video.entity.pads;
-	struct media_device *mdev = pad->entity->graph_obj.mdev;
+	struct media_entity *entity = &video->video.entity;
+	struct media_device *mdev = entity->graph_obj.mdev;
 	struct isp_video *far_end = NULL;
 	int ret;
 
@@ -235,24 +235,23 @@ static int isp_video_get_graph_data(struct isp_video *video,
 		return ret;
 	}
 
-	media_graph_walk_start(&graph, pad);
+	media_graph_walk_start(&graph, entity->pads);
 
-	while ((pad = media_graph_walk_next(&graph))) {
+	while ((entity = media_graph_walk_next(&graph))) {
 		struct isp_video *__video;
 
-		media_entity_enum_set(&pipe->ent_enum, pad->entity);
+		media_entity_enum_set(&pipe->ent_enum, entity);
 
 		if (far_end != NULL)
 			continue;
 
-		if (pad == video->video.entity.pads)
+		if (entity == &video->video.entity)
 			continue;
 
-		if (!is_media_entity_v4l2_video_device(pad->entity))
+		if (!is_media_entity_v4l2_video_device(entity))
 			continue;
 
-		__video = to_isp_video(media_entity_to_video_device(
-					       pad->entity));
+		__video = to_isp_video(media_entity_to_video_device(entity));
 		if (__video->type != video->type)
 			far_end = __video;
 	}

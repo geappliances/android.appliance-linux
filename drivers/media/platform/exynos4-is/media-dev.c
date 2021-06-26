@@ -1139,7 +1139,7 @@ static int __fimc_md_modify_pipeline(struct media_entity *entity, bool enable)
 static int __fimc_md_modify_pipelines(struct media_entity *entity, bool enable,
 				      struct media_graph *graph)
 {
-	struct media_pad *pad, *pad_err = entity->pads;
+	struct media_entity *entity_err = entity;
 	int ret;
 
 	/*
@@ -1148,13 +1148,13 @@ static int __fimc_md_modify_pipelines(struct media_entity *entity, bool enable,
 	 * through active links. This is needed as we cannot power on/off the
 	 * subdevs in random order.
 	 */
-	media_graph_walk_start(graph, pad_err);
+	media_graph_walk_start(graph, entity->pads);
 
-	while ((pad = media_graph_walk_next(graph))) {
-		if (!is_media_entity_v4l2_video_device(pad->entity))
+	while ((entity = media_graph_walk_next(graph))) {
+		if (!is_media_entity_v4l2_video_device(entity))
 			continue;
 
-		ret  = __fimc_md_modify_pipeline(pad->entity, enable);
+		ret  = __fimc_md_modify_pipeline(entity, enable);
 
 		if (ret < 0)
 			goto err;
@@ -1163,15 +1163,15 @@ static int __fimc_md_modify_pipelines(struct media_entity *entity, bool enable,
 	return 0;
 
 err:
-	media_graph_walk_start(graph, pad_err);
+	media_graph_walk_start(graph, entity_err->pads);
 
-	while ((pad_err = media_graph_walk_next(graph))) {
-		if (!is_media_entity_v4l2_video_device(pad_err->entity))
+	while ((entity_err = media_graph_walk_next(graph))) {
+		if (!is_media_entity_v4l2_video_device(entity_err))
 			continue;
 
-		__fimc_md_modify_pipeline(pad_err->entity, !enable);
+		__fimc_md_modify_pipeline(entity_err, !enable);
 
-		if (pad_err == pad)
+		if (entity_err == entity)
 			break;
 	}
 

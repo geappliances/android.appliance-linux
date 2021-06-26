@@ -340,9 +340,9 @@ static void media_graph_walk_iter(struct media_graph *graph)
 		next->entity->name, next->index);
 }
 
-struct media_pad *media_graph_walk_next(struct media_graph *graph)
+struct media_entity *media_graph_walk_next(struct media_graph *graph)
 {
-	struct media_pad *pad;
+	struct media_entity *entity;
 
 	if (stack_top(graph) == NULL)
 		return NULL;
@@ -355,11 +355,11 @@ struct media_pad *media_graph_walk_next(struct media_graph *graph)
 	while (link_top(graph) != &stack_top(graph)->entity->links)
 		media_graph_walk_iter(graph);
 
-	pad = stack_pop(graph);
-	dev_dbg(pad->graph_obj.mdev->dev,
-		"walk: returning pad '%s':%u\n", pad->entity->name, pad->index);
+	entity = stack_pop(graph)->entity;
+	dev_dbg(entity->graph_obj.mdev->dev,
+		"walk: returning entity '%s'\n", entity->name);
 
-	return pad;
+	return entity;
 }
 EXPORT_SYMBOL_GPL(media_graph_walk_next);
 
@@ -407,8 +407,7 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 {
 	struct media_device *mdev = entity->graph_obj.mdev;
 	struct media_graph *graph = &pipe->graph;
-	struct media_pad *pad = entity->pads;
-	struct media_pad *pad_err = pad;
+	struct media_entity *entity_err = entity;
 	struct media_link *link;
 	int ret;
 
@@ -418,11 +417,9 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 			goto error_graph_walk_start;
 	}
 
-	media_graph_walk_start(&pipe->graph, pad);
+	media_graph_walk_start(&pipe->graph, entity->pads);
 
-	while ((pad = media_graph_walk_next(graph))) {
-		struct media_entity *entity = pad->entity;
-
+	while ((entity = media_graph_walk_next(graph))) {
 		DECLARE_BITMAP(active, MEDIA_ENTITY_MAX_PADS);
 		DECLARE_BITMAP(has_no_links, MEDIA_ENTITY_MAX_PADS);
 
@@ -449,12 +446,11 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 		bitmap_fill(has_no_links, entity->num_pads);
 
 		list_for_each_entry(link, &entity->links, list) {
-			struct media_pad *other_pad =
-				link->sink->entity == entity ?
-				link->sink : link->source;
+			struct media_pad *pad = link->sink->entity == entity
+						? link->sink : link->source;
 
 			/* Mark that a pad is connected by a link. */
-			bitmap_clear(has_no_links, other_pad->index, 1);
+			bitmap_clear(has_no_links, pad->index, 1);
 
 			/*
 			 * Pads that either do not need to connect or
@@ -463,13 +459,13 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 			 */
 			if (!(pad->flags & MEDIA_PAD_FL_MUST_CONNECT) ||
 			    link->flags & MEDIA_LNK_FL_ENABLED)
-				bitmap_set(active, other_pad->index, 1);
+				bitmap_set(active, pad->index, 1);
 
 			/*
 			 * Link validation will only take place for
 			 * sink ends of the link that are enabled.
 			 */
-			if (link->sink != other_pad ||
+			if (link->sink != pad ||
 			    !(link->flags & MEDIA_LNK_FL_ENABLED))
 				continue;
 
@@ -505,11 +501,9 @@ error:
 	 * Link validation on graph failed. We revert what we did and
 	 * return the error.
 	 */
-	media_graph_walk_start(graph, pad_err);
+	media_graph_walk_start(graph, entity_err->pads);
 
-	while ((pad_err = media_graph_walk_next(graph))) {
-		struct media_entity *entity_err = pad_err->entity;
-
+	while ((entity_err = media_graph_walk_next(graph))) {
 		/* Sanity check for negative stream_count */
 		if (!WARN_ON_ONCE(entity_err->stream_count <= 0)) {
 			entity_err->stream_count--;
@@ -521,7 +515,7 @@ error:
 		 * We haven't increased stream_count further than this
 		 * so we quit here.
 		 */
-		if (pad_err == pad)
+		if (entity_err == entity)
 			break;
 	}
 
@@ -548,9 +542,8 @@ EXPORT_SYMBOL_GPL(media_pipeline_start);
 
 void __media_pipeline_stop(struct media_entity *entity)
 {
+	struct media_graph *graph = &entity->pipe->graph;
 	struct media_pipeline *pipe = entity->pipe;
-	struct media_graph *graph = &pipe->graph;
-	struct media_pad *pad;
 
 	/*
 	 * If the following check fails, the driver has performed an
@@ -561,9 +554,7 @@ void __media_pipeline_stop(struct media_entity *entity)
 
 	media_graph_walk_start(graph, entity->pads);
 
-	while ((pad = media_graph_walk_next(graph))) {
-		struct media_entity *entity = pad->entity;
-
+	while ((entity = media_graph_walk_next(graph))) {
 		/* Sanity check for negative stream_count */
 		if (!WARN_ON_ONCE(entity->stream_count <= 0)) {
 			entity->stream_count--;
