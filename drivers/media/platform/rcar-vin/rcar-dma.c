@@ -1123,7 +1123,7 @@ static int rvin_set_stream(struct rvin_dev *vin, int on)
 	sd = media_entity_to_v4l2_subdev(pad->entity);
 
 	if (!on) {
-		media_pipeline_stop(vin->vdev.entity.pads);
+		media_pipeline_stop(&vin->vdev.entity);
 		return v4l2_subdev_call(sd, video, s_stream, 0);
 	}
 
@@ -1140,7 +1140,7 @@ static int rvin_set_stream(struct rvin_dev *vin, int on)
 	mdev = vin->vdev.entity.graph_obj.mdev;
 	mutex_lock(&mdev->graph_mutex);
 	pipe = sd->entity.pads->pipe ? sd->entity.pads->pipe : &vin->vdev.pipe;
-	ret = __media_pipeline_start(vin->vdev.entity.pads, pipe);
+	ret = __media_pipeline_start(&vin->vdev.entity, pipe);
 	mutex_unlock(&mdev->graph_mutex);
 	if (ret)
 		return ret;
@@ -1149,7 +1149,7 @@ static int rvin_set_stream(struct rvin_dev *vin, int on)
 	if (ret == -ENOIOCTLCMD)
 		ret = 0;
 	if (ret)
-		media_pipeline_stop(vin->vdev.entity.pads);
+		media_pipeline_stop(&vin->vdev.entity);
 
 	return ret;
 }
