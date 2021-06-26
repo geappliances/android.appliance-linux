@@ -626,15 +626,11 @@ static long subdev_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 		struct v4l2_subdev_route *route = (struct v4l2_subdev_route *)
 						  routing->routes;
 		struct v4l2_subdev_krouting krouting = {};
-		unsigned int i, sink, source;
+		unsigned int i;
 
 		for (i = 0; i < routing->num_routes; ++i) {
-			sink = route[i].sink_pad;
-			source = route[i].source_pad;
-			if (sink >= sd->entity.num_pads ||
-			    source >= sd->entity.num_pads ||
-			    !(sd->entity.pads[sink].flags & MEDIA_PAD_FL_SINK) ||
-			    !(sd->entity.pads[source].flags & MEDIA_PAD_FL_SOURCE))
+			if (route[i].sink_pad >= sd->entity.num_pads ||
+			    route[i].source_pad >= sd->entity.num_pads)
 				return -EINVAL;
 		}
 
