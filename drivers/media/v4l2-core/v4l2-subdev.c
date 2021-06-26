@@ -603,44 +603,7 @@ static long subdev_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 
 	case VIDIOC_SUBDEV_QUERYSTD:
 		return v4l2_subdev_call(sd, video, querystd, arg);
-
-	case VIDIOC_SUBDEV_G_ROUTING: {
-		struct v4l2_subdev_routing *routing = arg;
-		struct v4l2_subdev_krouting krouting = {
-			.num_routes = routing->num_routes,
-			.routes = (struct v4l2_subdev_route *)routing->routes,
-		};
-		int ret;
-
-		ret = v4l2_subdev_call(sd, pad, get_routing, &krouting);
-		if (ret)
-			return ret;
-
-		routing->num_routes = krouting.num_routes;
-
-		return 0;
-	}
-
-	case VIDIOC_SUBDEV_S_ROUTING: {
-		struct v4l2_subdev_routing *routing = arg;
-		struct v4l2_subdev_route *route = (struct v4l2_subdev_route *)
-						  routing->routes;
-		struct v4l2_subdev_krouting krouting = {};
-		unsigned int i;
-
-		for (i = 0; i < routing->num_routes; ++i) {
-			if (route[i].sink_pad >= sd->entity.num_pads ||
-			    route[i].source_pad >= sd->entity.num_pads)
-				return -EINVAL;
-		}
-
-		krouting.num_routes = routing->num_routes;
-		krouting.routes = route;
-
-		return v4l2_subdev_call(sd, pad, set_routing, &krouting);
-	}
 #endif
-
 	default:
 		return v4l2_subdev_call(sd, core, ioctl, cmd, arg);
 	}

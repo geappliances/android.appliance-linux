@@ -661,20 +661,6 @@ struct v4l2_subdev_pad_config {
 };
 
 /**
- * struct v4l2_subdev_krouting - subdev routing table
- *
- * @routes: &struct v4l2_subdev_route
- * @num_routes: number of routes
- *
- * This structure is used to translate argument received from
- * VIDIOC_SUBDEV_G/S_ROUTING() ioctl to sudev device drivers operations.
- */
-struct v4l2_subdev_krouting {
-	struct v4l2_subdev_route *routes;
-	unsigned int num_routes;
-};
-
-/**
  * struct v4l2_subdev_pad_ops - v4l2-subdev pad level operations
  *
  * @init_cfg: initialize the pad config to default values
@@ -711,11 +697,6 @@ struct v4l2_subdev_krouting {
  *
  * @set_frame_desc: set the low level media bus frame parameters, @fd array
  *                  may be adjusted by the subdev driver to device capabilities.
- *
- * @get_routing: get the subdevice routing table.
- *
- * @set_routing: enable or disable data connection routes described in the
- *		 subdevice routing table.
  */
 struct v4l2_subdev_pad_ops {
 	int (*init_cfg)(struct v4l2_subdev *sd,
@@ -756,10 +737,6 @@ struct v4l2_subdev_pad_ops {
 			      struct v4l2_mbus_frame_desc *fd);
 	int (*set_frame_desc)(struct v4l2_subdev *sd, unsigned int pad,
 			      struct v4l2_mbus_frame_desc *fd);
-	int (*get_routing)(struct v4l2_subdev *sd,
-			   struct v4l2_subdev_krouting *route);
-	int (*set_routing)(struct v4l2_subdev *sd,
-			   struct v4l2_subdev_krouting *route);
 };
 
 /**
