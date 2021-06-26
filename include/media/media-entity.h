@@ -897,20 +897,22 @@ __must_check int media_graph_walk_init(
 void media_graph_walk_cleanup(struct media_graph *graph);
 
 /**
- * media_graph_walk_start - Start walking the media graph at a given pad
+ * media_graph_walk_start - Start walking the media graph at a
+ *	given entity
  *
  * @graph: Media graph structure that will be used to walk the graph
- * @pad: Starting pad
+ * @entity: Starting entity
  *
  * Before using this function, media_graph_walk_init() must be
  * used to allocate resources used for walking the graph. This
  * function initializes the graph traversal structure to walk the
- * entities graph starting at the given pad. The traversal
+ * entities graph starting at the given entity. The traversal
  * structure must not be modified by the caller during graph
  * traversal. After the graph walk, the resources must be released
  * using media_graph_walk_cleanup().
  */
-void media_graph_walk_start(struct media_graph *graph, struct media_pad *pad);
+void media_graph_walk_start(struct media_graph *graph,
+			    struct media_entity *entity);
 
 /**
  * media_graph_walk_next - Get the next entity in the graph
