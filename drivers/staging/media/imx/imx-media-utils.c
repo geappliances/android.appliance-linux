@@ -933,7 +933,7 @@ int imx_media_pipeline_set_stream(struct imx_media_dev *imxmd,
 			__media_pipeline_stop(entity);
 	} else {
 		v4l2_subdev_call(sd, video, s_stream, 0);
-		if (entity->pads->pipe)
+		if (entity->pipe)
 			__media_pipeline_stop(entity);
 	}
 
