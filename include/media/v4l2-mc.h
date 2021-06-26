@@ -18,7 +18,6 @@
 /* We don't need to include pci.h or usb.h here */
 struct pci_dev;
 struct usb_device;
-struct v4l2_subdev_route;
 
 #ifdef CONFIG_MEDIA_CONTROLLER
 /**
@@ -178,22 +177,6 @@ int v4l2_pipeline_pm_use(struct media_entity *entity, int use);
 int v4l2_pipeline_link_notify(struct media_link *link, u32 flags,
 			      unsigned int notification);
 
-/**
- * v4l2_subdev_routing_pm_use - Handle power state changes due to S_ROUTING
- * @entity: The entity
- * @route: The new state of the route
- *
- * Propagate the use count across a route in a pipeline whenever the
- * route is enabled or disabled. The function is called before
- * changing the route state when enabling a route, and after changing
- * the route state when disabling a route.
- *
- * Return 0 on success or a negative error code on failure. Powering entities
- * off is assumed to never fail. This function will not fail for disconnection
- * events.
- */
-int v4l2_subdev_routing_pm_use(struct media_entity *entity,
-			       struct v4l2_subdev_route *route);
 #else /* CONFIG_MEDIA_CONTROLLER */
 
 static inline int v4l2_mc_create_media_graph(struct media_device *mdev)
@@ -226,10 +209,5 @@ static inline int v4l2_pipeline_link_notify(struct media_link *link, u32 flags,
 	return 0;
 }
 
-static inline int v4l2_subdev_routing_pm_use(struct media_entity *entity,
-					     struct v4l2_subdev_route *route)
-{
-	return 0;
-}
 #endif /* CONFIG_MEDIA_CONTROLLER */
 #endif /* _V4L2_MC_H */
