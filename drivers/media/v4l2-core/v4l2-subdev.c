@@ -828,7 +828,7 @@ static int v4l2_subdev_link_validate_one(struct media_link *link,
 }
 
 /* How many routes to assume there can be per a sub-device? */
-#define LINK_VALIDATE_ROUTES	16
+#define LINK_VALIDATE_ROUTES	8
 
 #define R_SRC	0
 #define R_SINK	1
