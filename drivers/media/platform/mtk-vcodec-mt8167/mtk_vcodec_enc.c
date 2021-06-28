@@ -834,7 +834,6 @@ static int vidioc_encoder_cmd(struct file *file, void *priv,
 			      struct v4l2_encoder_cmd *cmd)
 {
 	struct mtk_vcodec_ctx *ctx = fh_to_ctx(priv);
-	struct vb2_queue *dst_vq;
 	int ret;
 
 	ret = v4l2_m2m_ioctl_try_encoder_cmd(file, priv, cmd);
@@ -859,8 +858,6 @@ static int vidioc_encoder_cmd(struct file *file, void *priv,
 	case V4L2_ENC_CMD_START:
 		if (ctx->is_draining)
 			return -EBUSY;
-		if (ctx->is_stopped)
-			vb2_clear_last_buffer_dequeued(dst_vq);
 		ctx->is_stopped = false;
 		break;
 

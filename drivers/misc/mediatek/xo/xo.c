@@ -549,7 +549,7 @@ static ssize_t show_xo_nvram_board_offset(struct device *dev, struct device_attr
 static ssize_t store_xo_nvram_board_offset(struct device *dev, struct device_attribute *attr,
 				  const char *buf, size_t size)
 {
-	uint32_t capid_in;
+	uint32_t capid_in = 0;
 	char capid;
 	int ret;
 
