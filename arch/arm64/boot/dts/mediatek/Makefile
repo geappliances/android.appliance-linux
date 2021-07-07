@@ -28,4 +28,5 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt8183-pumpkin-ap1302-ar0330-single-ar0144-single
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8183-pumpkin-ap1302-ar0330-single-ar0144-dual.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8365-sb35.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8365-sb35-android.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt8365-sb35-android-dsi.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8516-pumpkin.dtb
