@@ -1,0 +1,100 @@
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "dt-bindings/interrupt-controller/irq.h"
+#include <dt-bindings/pinctrl/mt8365-pinfunc.h>
+
+&{/} {
+	vdddsi_ex_3v3: vdddsi-ex-3v3-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vdddsi-ex-3v3";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		gpio = <&pio 3 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
+	};
+};
+
+
+&reserved_memory {
+	#address-cells = <2>;
+	#size-cells = <2>;
+	ramoops@0x4FF00000 {
+		compatible = "ramoops";
+		reg = <0x0 0x4FF00000 0x0 0x00100000>;
+		record-size = <0x00008000>;
+		console-size = <0x00008000>;
+		ftrace-size = <0x00000000>;
+		pmsg-size = <0x00008000>;
+	};
+};
+
+&pio {
+	panel_pins: lcd-pins {
+		pin_p3v3_dsi_en {
+			pinmux = <MT8365_PIN_3_GPIO3__FUNC_GPIO3>;
+		};
+
+		pin_dsi_sel {
+			pinmux = <MT8365_PIN_2_GPIO2__FUNC_GPIO2>;
+			output-high;
+		};
+	};
+};
+
+&i2c1 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	hdmi-bridge@3b {
+		status = "disabled";
+	};
+
+	touchscreen: touchscreen@0 {
+		compatible = "pumpkin,7inch-touchscreen-panel";
+		reg = <0x45>;
+		status = "okay";
+		pinctrl-0 = <&panel_pins>;
+		pinctrl-names = "default";
+		power-supply = <&vdddsi_ex_3v3>;
+	};
+};
+
+&mipi_tx0 {
+	status = "okay";
+};
+
+&dsi0 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@0 {
+			reg = <0>;
+
+			dsi_out: endpoint {
+				remote-endpoint = <&panel_in>;
+			};
+		};
+	};
+
+	panel@0 {
+		compatible = "pumpkin,7inch-touchscreen-panel-dsi";
+		reg = <0>;
+		pumpkin,touchscreen = <&touchscreen>;
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+	};
+};
+
+
+
