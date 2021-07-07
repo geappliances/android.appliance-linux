@@ -43,6 +43,9 @@ arch/arm64/boot/dts/mediatek/mt8183-pumpkin-ap1302-ar0144-single.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin-ap1302-ar0144-dual.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin-ap1302-ar0330-single-ar0144-single.dtb
 arch/arm64/boot/dts/mediatek/mt8183-pumpkin-ap1302-ar0330-single-ar0144-dual.dtb
+arch/arm64/boot/dts/mediatek/mt8365-sb35.dtb
+arch/arm64/boot/dts/mediatek/mt8365-sb35-android.dtb
+arch/arm64/boot/dts/mediatek/mt8365-sb35-android-dsi.dtb
 "
 
 SKIP_CP_KERNEL_HDR=1
