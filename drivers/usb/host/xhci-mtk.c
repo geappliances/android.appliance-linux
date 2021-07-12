@@ -303,6 +303,7 @@ static void xhci_mtk_clks_disable(struct xhci_hcd_mtk *mtk, bool pm)
 /* only clocks can be turn off for ip-sleep wakeup mode */
 static void usb_wakeup_ip_sleep_set(struct xhci_hcd_mtk *mtk, bool enable)
 {
+	int ret;
 	u32 reg, msk, val;
 
 	switch (mtk->uwk_vers) {
@@ -325,6 +326,15 @@ static void usb_wakeup_ip_sleep_set(struct xhci_hcd_mtk *mtk, bool enable)
 		return;
 	}
 	regmap_update_bits(mtk->uwk, reg, msk, val);
+
+	if (enable)
+		ret = enable_irq_wake(mtk->irq);
+	else
+		ret = disable_irq_wake(mtk->irq);
+
+	if (ret)
+		dev_warn(mtk->dev, "Failed to %s wakeup on IRQ %u: %d\n",
+			 enable ? "enable" : "disable", mtk->irq, ret);
 }
 
 static int usb_wakeup_of_property_parse(struct xhci_hcd_mtk *mtk,
@@ -340,8 +350,10 @@ static int usb_wakeup_of_property_parse(struct xhci_hcd_mtk *mtk,
 
 	ret = of_parse_phandle_with_fixed_args(dn,
 				"mediatek,syscon-wakeup", 2, 0, &args);
-	if (ret)
+	if (ret) {
+		dev_err(mtk->dev, "Failed to get syscon\n");
 		return ret;
+	}
 
 	mtk->uwk_reg_base = args.args[0];
 	mtk->uwk_vers = args.args[1];
@@ -460,7 +472,6 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct usb_hcd *hcd;
 	int ret = -ENODEV;
-	int irq;
 
 	if (usb_disabled())
 		return -ENODEV;
@@ -511,11 +522,10 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 	if (ret)
 		goto disable_ldos;
 
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
-		ret = irq;
+	ret = platform_get_irq(pdev, 0);
+	if (ret < 0)
 		goto disable_clk;
-	}
+	mtk->irq = ret;
 
 	hcd = usb_create_hcd(driver, dev, dev_name(dev));
 	if (!hcd) {
@@ -571,7 +581,7 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 		goto disable_device_wakeup;
 	}
 
-	ret = usb_add_hcd(hcd, irq, IRQF_SHARED);
+	ret = usb_add_hcd(hcd, mtk->irq, IRQF_SHARED);
 	if (ret)
 		goto put_usb3_hcd;
 
@@ -579,7 +589,7 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 	    !(xhci->quirks & XHCI_BROKEN_STREAMS))
 		xhci->shared_hcd->can_do_streams = 1;
 
-	ret = usb_add_hcd(xhci->shared_hcd, irq, IRQF_SHARED);
+	ret = usb_add_hcd(xhci->shared_hcd, mtk->irq, IRQF_SHARED);
 	if (ret)
 		goto dealloc_usb2_hcd;
 
