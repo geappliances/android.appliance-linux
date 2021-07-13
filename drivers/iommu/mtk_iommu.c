@@ -860,7 +860,7 @@ static const struct mtk_iommu_plat_data mt8183_data = {
 static const struct mtk_iommu_plat_data mt8365_data = {
 	.m4u_plat     = M4U_MT8365,
 	.reset_axi = true,
-	.larbid_remap = {{0}, {1}, {2}, {3}, {4}, {5}}, /* Linear mapping. */
+	.larbid_remap = {0, 1, 2, 3, 4, 5}, /* Linear mapping. */
 };
 
 static const struct of_device_id mtk_iommu_of_ids[] = {
