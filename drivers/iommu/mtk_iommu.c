@@ -857,11 +857,18 @@ static const struct mtk_iommu_plat_data mt8183_data = {
 	.larbid_remap = {0, 4, 5, 6, 7, 2, 3, 1},
 };
 
+static const struct mtk_iommu_plat_data mt8365_data = {
+	.m4u_plat     = M4U_MT8365,
+	.reset_axi = true,
+	.larbid_remap = {{0}, {1}, {2}, {3}, {4}, {5}}, /* Linear mapping. */
+};
+
 static const struct of_device_id mtk_iommu_of_ids[] = {
 	{ .compatible = "mediatek,mt2712-m4u", .data = &mt2712_data},
 	{ .compatible = "mediatek,mt8167-m4u", .data = &mt8167_data},
 	{ .compatible = "mediatek,mt8173-m4u", .data = &mt8173_data},
 	{ .compatible = "mediatek,mt8183-m4u", .data = &mt8183_data},
+	{ .compatible = "mediatek,mt8365-m4u", .data = &mt8365_data},
 	{}
 };
 
