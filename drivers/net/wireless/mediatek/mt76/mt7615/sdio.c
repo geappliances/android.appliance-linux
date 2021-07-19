@@ -14,6 +14,8 @@
 #include <linux/mmc/sdio_ids.h>
 #include <linux/mmc/sdio_func.h>
 
+#include <linux/delay.h>
+
 #include "mt7615.h"
 #include "sdio.h"
 #include "mac.h"
@@ -221,11 +223,21 @@ static int mt7663s_rd_rp(struct mt76_dev *dev, u32 base,
 
 static void mt7663s_init_work(struct work_struct *work)
 {
+	int ret;
 	struct mt7615_dev *dev;
 
 	dev = container_of(work, struct mt7615_dev, mcu_work);
-	if (mt7663s_mcu_init(dev))
+retry:
+	ret = mt7663s_mcu_init(dev);
+	if (ret == -EAGAIN) {
+		dev_err(dev->mt76.dev, "Firmware init failed, retrying\n");
+		msleep(250);
+		goto retry;
+	}
+	else if(ret) {
+		dev_err(dev->mt76.dev, "Firmware init failed, NOT RETRYING, interface will not be usable : %d\n", ret);
 		return;
+	}
 
 	mt7615_mcu_set_eeprom(dev);
 	mt7615_mac_init(dev);
