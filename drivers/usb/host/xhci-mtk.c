@@ -239,20 +239,22 @@ static int xhci_mtk_clks_get(struct xhci_hcd_mtk *mtk)
 	return PTR_ERR_OR_ZERO(mtk->dma_clk);
 }
 
-static int xhci_mtk_clks_enable(struct xhci_hcd_mtk *mtk)
+static int xhci_mtk_clks_enable(struct xhci_hcd_mtk *mtk, bool pm)
 {
 	int ret;
 
-	ret = clk_prepare_enable(mtk->ref_clk);
-	if (ret) {
-		dev_err(mtk->dev, "failed to enable ref_clk\n");
-		goto ref_clk_err;
-	}
+	if (!pm || (pm && !mtk->uwk_en)) {
+		ret = clk_prepare_enable(mtk->ref_clk);
+		if (ret) {
+			dev_err(mtk->dev, "failed to enable ref_clk\n");
+			goto ref_clk_err;
+		}
 
-	ret = clk_prepare_enable(mtk->sys_clk);
-	if (ret) {
-		dev_err(mtk->dev, "failed to enable sys_clk\n");
-		goto sys_clk_err;
+		ret = clk_prepare_enable(mtk->sys_clk);
+		if (ret) {
+			dev_err(mtk->dev, "failed to enable sys_clk\n");
+			goto sys_clk_err;
+		}
 	}
 
 	ret = clk_prepare_enable(mtk->xhci_clk);
@@ -287,18 +289,21 @@ ref_clk_err:
 	return ret;
 }
 
-static void xhci_mtk_clks_disable(struct xhci_hcd_mtk *mtk)
+static void xhci_mtk_clks_disable(struct xhci_hcd_mtk *mtk, bool pm)
 {
 	clk_disable_unprepare(mtk->dma_clk);
 	clk_disable_unprepare(mtk->mcu_clk);
 	clk_disable_unprepare(mtk->xhci_clk);
-	clk_disable_unprepare(mtk->sys_clk);
-	clk_disable_unprepare(mtk->ref_clk);
+	if (!pm || (pm && !mtk->uwk_en)) {
+		clk_disable_unprepare(mtk->sys_clk);
+		clk_disable_unprepare(mtk->ref_clk);
+	}
 }
 
 /* only clocks can be turn off for ip-sleep wakeup mode */
 static void usb_wakeup_ip_sleep_set(struct xhci_hcd_mtk *mtk, bool enable)
 {
+	int ret;
 	u32 reg, msk, val;
 
 	switch (mtk->uwk_vers) {
@@ -321,6 +326,15 @@ static void usb_wakeup_ip_sleep_set(struct xhci_hcd_mtk *mtk, bool enable)
 		return;
 	}
 	regmap_update_bits(mtk->uwk, reg, msk, val);
+
+	if (enable)
+		ret = enable_irq_wake(mtk->irq);
+	else
+		ret = disable_irq_wake(mtk->irq);
+
+	if (ret)
+		dev_warn(mtk->dev, "Failed to %s wakeup on IRQ %u: %d\n",
+			 enable ? "enable" : "disable", mtk->irq, ret);
 }
 
 static int usb_wakeup_of_property_parse(struct xhci_hcd_mtk *mtk,
@@ -336,8 +350,10 @@ static int usb_wakeup_of_property_parse(struct xhci_hcd_mtk *mtk,
 
 	ret = of_parse_phandle_with_fixed_args(dn,
 				"mediatek,syscon-wakeup", 2, 0, &args);
-	if (ret)
+	if (ret) {
+		dev_err(mtk->dev, "Failed to get syscon\n");
 		return ret;
+	}
 
 	mtk->uwk_reg_base = args.args[0];
 	mtk->uwk_vers = args.args[1];
@@ -455,7 +471,6 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct usb_hcd *hcd;
 	int ret = -ENODEV;
-	int irq;
 
 	if (usb_disabled())
 		return -ENODEV;
@@ -502,15 +517,14 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 	if (ret)
 		goto disable_pm;
 
-	ret = xhci_mtk_clks_enable(mtk);
+	ret = xhci_mtk_clks_enable(mtk, false);
 	if (ret)
 		goto disable_ldos;
 
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
-		ret = irq;
+	ret = platform_get_irq(pdev, 0);
+	if (ret < 0)
 		goto disable_clk;
-	}
+	mtk->irq = ret;
 
 	/* Initialize dma_mask and coherent_dma_mask to 32-bits */
 	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
@@ -571,7 +585,7 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 		goto disable_device_wakeup;
 	}
 
-	ret = usb_add_hcd(hcd, irq, IRQF_SHARED);
+	ret = usb_add_hcd(hcd, mtk->irq, IRQF_SHARED);
 	if (ret)
 		goto put_usb3_hcd;
 
@@ -579,7 +593,7 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 	    !(xhci->quirks & XHCI_BROKEN_STREAMS))
 		xhci->shared_hcd->can_do_streams = 1;
 
-	ret = usb_add_hcd(xhci->shared_hcd, irq, IRQF_SHARED);
+	ret = usb_add_hcd(xhci->shared_hcd, mtk->irq, IRQF_SHARED);
 	if (ret)
 		goto dealloc_usb2_hcd;
 
@@ -599,7 +613,7 @@ put_usb2_hcd:
 	usb_put_hcd(hcd);
 
 disable_clk:
-	xhci_mtk_clks_disable(mtk);
+	xhci_mtk_clks_disable(mtk, false);
 
 disable_ldos:
 	xhci_mtk_ldos_disable(mtk);
@@ -628,7 +642,7 @@ static int xhci_mtk_remove(struct platform_device *dev)
 	usb_put_hcd(shared_hcd);
 	usb_put_hcd(hcd);
 	xhci_mtk_sch_exit(mtk);
-	xhci_mtk_clks_disable(mtk);
+	xhci_mtk_clks_disable(mtk, false);
 	xhci_mtk_ldos_disable(mtk);
 
 	return 0;
@@ -654,7 +668,7 @@ static int __maybe_unused xhci_mtk_suspend(struct device *dev)
 	del_timer_sync(&xhci->shared_hcd->rh_timer);
 
 	xhci_mtk_host_disable(mtk);
-	xhci_mtk_clks_disable(mtk);
+	xhci_mtk_clks_disable(mtk, true);
 	usb_wakeup_set(mtk, true);
 	return 0;
 }
@@ -666,7 +680,7 @@ static int __maybe_unused xhci_mtk_resume(struct device *dev)
 	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
 
 	usb_wakeup_set(mtk, false);
-	xhci_mtk_clks_enable(mtk);
+	xhci_mtk_clks_enable(mtk, true);
 	xhci_mtk_host_enable(mtk);
 
 	xhci_dbg(xhci, "%s: restart port polling\n", __func__);
