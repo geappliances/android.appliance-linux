@@ -9,3 +9,7 @@ config RGX_M1_13ED5720833
 
 config RGX_M1_13_5776728
 	tristate "Imagination Rogue GX M1.13_5776728 driver"
+
+config RGX_M1_15_6052913
+	tristate "Imagination Rogue GX M1.15_6052913 driver"
+
