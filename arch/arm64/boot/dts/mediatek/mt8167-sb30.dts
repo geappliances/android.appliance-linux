@@ -308,20 +308,6 @@
 	vqmmc-supply = <&mt6392_vio18_reg>;
 	non-removable;
 	status = "okay";
-
-	mt7668 {
-		wifi: mt7668-wifi@0 {
-			compatible = "mediatek,mt8516-wifi",
-				     "mediatek,mt7668-wifi";
-			mac-address = [00 00 00 00 00 00];
-		};
-
-		bluetooth: mt7668-bluetooth@0 {
-			compatible = "mediatek,mt8516-bluetooth",
-				     "mediatek,mt7668-bluetooth";
-			mac-address = [00 00 00 00 00 00];
-		};
-	};
 };
 
 &dpi1 {

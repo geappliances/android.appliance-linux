@@ -11,8 +11,6 @@
 / {
 	aliases {
 		ethernet0 = &ethernet;
-		ethernet1 = &wifi;
-		ethernet2 = &bluetooth;
 		serial0 = &uart0;
 	};
 
@@ -486,20 +484,6 @@
 	vqmmc-supply = <&mt6392_vio18_reg>;
 	non-removable;
 	status = "okay";
-
-	mt7668 {
-		wifi: mt7668-wifi@0 {
-			compatible = "mediatek,mt8516-wifi",
-				     "mediatek,mt7668-wifi";
-			mac-address = [00 00 00 00 00 00];
-		};
-
-		bluetooth: mt7668-bluetooth@0 {
-			compatible = "mediatek,mt8516-bluetooth",
-				     "mediatek,mt7668-bluetooth";
-			mac-address = [00 00 00 00 00 00];
-		};
-	};
 };
 
 &mmc2 {
