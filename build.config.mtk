@@ -70,7 +70,7 @@ function product_modules_install() {
     (cd ${OUT_DIR} && \
     KERNEL_VERSION=$(make "${TOOL_ARGS[@]}" kernelversion) && \
     cd ${COMMON_OUT_DIR}/$1/ && \
-    PRODUCT_OUT=${DIST_DIR/common-kernel/${2}-binaries} && \
+    PRODUCT_OUT=${DIST_DIR/kernel-binaries/${2}-binaries} && \
     mkdir -p ${PRODUCT_OUT}/ && \
     find -wholename "*${KERNEL_VERSION}*/*.ko" -exec cp {} ${PRODUCT_OUT} \;)
 }
