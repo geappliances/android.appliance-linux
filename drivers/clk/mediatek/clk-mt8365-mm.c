@@ -55,7 +55,7 @@ static const struct mtk_gate mm_clks[] = {
 	GATE_MM0(CLK_MM_MM_MDP_WROT0, "mm_mdp_wrot0", "mm_sel", 5),
 	GATE_MM0(CLK_MM_MM_MDP_WDMA0, "mm_mdp_wdma0", "mm_sel", 6),
 	GATE_MM0(CLK_MM_MM_DISP_OVL0, "mm_disp_ovl0", "mm_sel", 7),
-	GATE_MM0(CLK_MM_MM_DISP_OVL0_21, "mm_disp_ovl0_21", "mm_sel", 8),
+	GATE_MM0(CLK_MM_MM_DISP_OVL0_2L, "mm_disp_ovl0_2l", "mm_sel", 8),
 	GATE_MM0(CLK_MM_MM_DISP_RSZ0, "mm_disp_rsz0", "mm_sel", 9),
 	GATE_MM0(CLK_MM_MM_DISP_RDMA0, "mm_disp_rdma0", "mm_sel", 10),
 	GATE_MM0(CLK_MM_MM_DISP_WDMA0, "mm_disp_wdma0", "mm_sel", 11),
