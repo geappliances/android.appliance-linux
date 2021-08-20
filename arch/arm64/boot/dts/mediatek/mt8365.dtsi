@@ -1092,6 +1092,21 @@
 			#cooling-cells = <2>;
 			cooling-min-level = <0>;
 			cooling-max-level = <15>;
+
+			operating-points-v2 = <&gpu_opp_table>;
+
+			power_model@0 {
+				compatible = "arm,mali-simple-power-model";
+				static-coefficient = <2427750>;
+				dynamic-coefficient = <4687>;
+				ts = <20000 2000 (-20) 2>;
+				/* Note: Enable it when cpu_thermal device can be probed */
+				//thermal-zone = "cpu_thermal";
+			};
+			power_model@1 {
+				compatible = "arm,mali-g52_r1-power-model";
+				scale = <5>;
+			};
 		};
 
 		gpu_core1: mali_gpu_core1 {
@@ -1118,27 +1133,19 @@
 				opp-hz = /bits/ 64 <450000000>;
 				opp-hz-real = /bits/ 64 <450000000>,
 							  /bits/ 64 <450000000>;
-				opp-microvolt = <650000>, /* Supply 0 */
-						<800000>; /* Supply 1 */
-				opp-core-mask = /bits/ 64 <0xf>;
+				opp-microvolt = <650000>;
 			};
-
 			opp-560000000 {
 				opp-hz = /bits/ 64 <560000000>;
 				opp-hz-real = /bits/ 64 <560000000>,
 							  /bits/ 64 <560000000>;
-				opp-microvolt = <700000>, /* Supply 0 */
-						<800000>; /* Supply 1 */
-				opp-core-mask = /bits/ 64 <0xf>;
+				opp-microvolt = <700000>;
 			};
-
 			opp-800000000 {
 				opp-hz = /bits/ 64 <800000000>;
 				opp-hz-real = /bits/ 64 <800000000>,
 							  /bits/ 64 <800000000>;
-				opp-microvolt = <800000>, /* Supply 0 */
-						<900000>; /* Supply 1 */
-				opp-core-mask = /bits/ 64 <0xf>;
+				opp-microvolt = <800000>;
 			};
 		};
 
