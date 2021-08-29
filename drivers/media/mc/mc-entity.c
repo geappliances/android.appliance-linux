@@ -403,11 +403,12 @@ EXPORT_SYMBOL_GPL(media_entity_get_fwnode_pad);
  * Pipeline management
  */
 
-__must_check int __media_pipeline_start(struct media_pad *pad,
+__must_check int __media_pipeline_start(struct media_entity *entity,
 					struct media_pipeline *pipe)
 {
-	struct media_device *mdev = pad->graph_obj.mdev;
+	struct media_device *mdev = entity->graph_obj.mdev;
 	struct media_graph *graph = &pipe->graph;
+	struct media_pad *pad = entity->pads;
 	struct media_pad *pad_err = pad;
 	struct media_link *link;
 	int ret;
@@ -540,23 +541,24 @@ error_graph_walk_start:
 }
 EXPORT_SYMBOL_GPL(__media_pipeline_start);
 
-__must_check int media_pipeline_start(struct media_pad *pad,
+__must_check int media_pipeline_start(struct media_entity *entity,
 				      struct media_pipeline *pipe)
 {
-	struct media_device *mdev = pad->graph_obj.mdev;
+	struct media_device *mdev = entity->graph_obj.mdev;
 	int ret;
 
 	mutex_lock(&mdev->graph_mutex);
-	ret = __media_pipeline_start(pad, pipe);
+	ret = __media_pipeline_start(entity, pipe);
 	mutex_unlock(&mdev->graph_mutex);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(media_pipeline_start);
 
-void __media_pipeline_stop(struct media_pad *pad)
+void __media_pipeline_stop(struct media_entity *entity)
 {
-	struct media_pipeline *pipe = pad->pipe;
+	struct media_pipeline *pipe = entity->pads->pipe;
 	struct media_graph *graph = &pipe->graph;
+	struct media_pad *pad;
 
 	/*
 	 * If the following check fails, the driver has performed an
@@ -565,7 +567,7 @@ void __media_pipeline_stop(struct media_pad *pad)
 	if (WARN_ON(!pipe))
 		return;
 
-	media_graph_walk_start(graph, pad);
+	media_graph_walk_start(graph, entity->pads);
 
 	while ((pad = media_graph_walk_next(graph))) {
 		struct media_entity *entity = pad->entity;
@@ -587,12 +589,12 @@ void __media_pipeline_stop(struct media_pad *pad)
 }
 EXPORT_SYMBOL_GPL(__media_pipeline_stop);
 
-void media_pipeline_stop(struct media_pad *pad)
+void media_pipeline_stop(struct media_entity *entity)
 {
-	struct media_device *mdev = pad->graph_obj.mdev;
+	struct media_device *mdev = entity->graph_obj.mdev;
 
 	mutex_lock(&mdev->graph_mutex);
-	__media_pipeline_stop(pad);
+	__media_pipeline_stop(entity);
 	mutex_unlock(&mdev->graph_mutex);
 }
 EXPORT_SYMBOL_GPL(media_pipeline_stop);
