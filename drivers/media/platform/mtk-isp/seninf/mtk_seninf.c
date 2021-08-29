@@ -1665,6 +1665,7 @@ static const struct of_device_id mtk_seninf_of_match[] = {
 		.compatible = "mediatek,mt8183-seninf",
 		.data = &seninf_8183_conf,
 	},
+	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mtk_seninf_of_match);
 
