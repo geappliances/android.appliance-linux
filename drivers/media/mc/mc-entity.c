@@ -198,8 +198,7 @@ int media_entity_pads_init(struct media_entity *entity, u16 num_pads,
 			   struct media_pad *pads)
 {
 	struct media_device *mdev = entity->graph_obj.mdev;
-	struct media_pad *iter;
-	unsigned int i = 0;
+	unsigned int i;
 
 	if (num_pads >= MEDIA_ENTITY_MAX_PADS)
 		return -E2BIG;
@@ -210,12 +209,12 @@ int media_entity_pads_init(struct media_entity *entity, u16 num_pads,
 	if (mdev)
 		mutex_lock(&mdev->graph_mutex);
 
-	media_entity_for_each_pad(entity, iter) {
-		iter->entity = entity;
-		iter->index = i++;
+	for (i = 0; i < num_pads; i++) {
+		pads[i].entity = entity;
+		pads[i].index = i;
 		if (mdev)
 			media_gobj_create(mdev, MEDIA_GRAPH_PAD,
-					&iter->graph_obj);
+					&entity->pads[i].graph_obj);
 	}
 
 	if (mdev)
