@@ -87,6 +87,8 @@
 		interrupt-parent = <&pio>;
 		interrupts = <189 IRQ_TYPE_EDGE_FALLING>;
 		reset-gpios = <&pio 177 GPIO_ACTIVE_LOW>;
+		touchscreen-inverted-y = <1>;
+		touchscreen-swapped-x-y = <1>;
 	};
 };
 
