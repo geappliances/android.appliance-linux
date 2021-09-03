@@ -267,6 +267,7 @@ struct mtk_mmsys_reg_data {
 	u32 dpi1_sel_in_rdma1;
 	u32 dsi0_sel_in;
 	u32 dsi0_sel_in_rdma1;
+	u32 dsi0_sel_in_dither;
 	u32 color0_sel_in;
 	u32 dither0_mout_en;
 };
@@ -491,6 +492,8 @@ const struct mtk_mmsys_reg_data mt8365_mmsys_reg_data = {
 	.dither0_mout_en = 0xf50,
 	.rdma0_sout_sel_in = 0xf4c,
 	.rdma0_sout_color0 = 0x1,
+	.dsi0_sel_in = 0xf68,
+	.dsi0_sel_in_dither = 0x1,
 };
 
 static unsigned int mtk_ddp_mout_en(const struct mtk_mmsys_reg_data *data,
@@ -611,8 +614,8 @@ static unsigned int mtk_ddp_sel_in(const struct mtk_mmsys_reg_data *data,
 		*addr = 0xf64;
 		value = 0;
 	} else if (cur == DDP_COMPONENT_DITHER && next == DDP_COMPONENT_DSI0) {
-		*addr = 0xf68;
-		value = 0x1;
+		*addr = data->dsi0_sel_in;
+		value = data->dsi0_sel_in_dither;
 	} else if (cur == DDP_COMPONENT_RDMA0 && next == DDP_COMPONENT_COLOR0) {
 		*addr = 0xf60;
 		value = 0;
