@@ -80,8 +80,6 @@ struct scpsys_bus_prot_data {
 	bool wayen;
 };
 
-#define MAX_SUBSYS_CLKS 10
-
 /**
  * struct scpsys_domain_data - scp domain data for power on/off flow
  * @name: The name of the power domain.
