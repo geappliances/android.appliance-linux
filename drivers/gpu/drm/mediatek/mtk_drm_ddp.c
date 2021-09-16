@@ -270,6 +270,8 @@ struct mtk_mmsys_reg_data {
 	u32 dsi0_sel_in_dither;
 	u32 color0_sel_in;
 	u32 dither0_mout_en;
+	u32 lvds_sys_cfg_00;
+	u32 lvds_sys_cfg_00_lvds_pxl_clk;
 };
 
 static const unsigned int mt2701_mutex_mod[DDP_COMPONENT_ID_MAX] = {
@@ -494,6 +496,12 @@ const struct mtk_mmsys_reg_data mt8365_mmsys_reg_data = {
 	.rdma0_sout_color0 = 0x1,
 	.dsi0_sel_in = 0xf68,
 	.dsi0_sel_in_dither = 0x1,
+	.dpi0_sel_in = 0xfd8,
+	.dpi0_sel_in_rdma1 = 0x0,
+	.rdma1_sout_sel_in = 0xfd0,
+	.rdma1_sout_dpi0 = 0x1,
+	.lvds_sys_cfg_00 = 0xfdc,
+	.lvds_sys_cfg_00_lvds_pxl_clk = 0x1,
 };
 
 static unsigned int mtk_ddp_mout_en(const struct mtk_mmsys_reg_data *data,
@@ -706,6 +714,10 @@ void mtk_ddp_add_comp_to_path(void __iomem *config_regs,
 			      enum mtk_ddp_comp_id next)
 {
 	unsigned int addr, value, reg;
+
+	if (reg_data->lvds_sys_cfg_00)
+		writel_relaxed(reg_data->lvds_sys_cfg_00_lvds_pxl_clk,
+			       config_regs + reg_data->lvds_sys_cfg_00);
 
 	value = mtk_ddp_mout_en(reg_data, cur, next, &addr);
 	if (value) {
