@@ -447,24 +447,42 @@ int mtk_ddp_comp_get_id(struct device_node *node,
 	return -EINVAL;
 }
 
+static bool mtk_drm_comp_is_enabled(struct drm_device *drm,
+				    enum mtk_ddp_comp_id ddp_comp)
+{
+	struct mtk_drm_private *priv = drm->dev_private;
+	return !!priv->comp_node[ddp_comp];
+}
+
 unsigned int mtk_drm_find_possible_crtc_by_comp(struct drm_device *drm,
 						struct mtk_ddp_comp ddp_comp)
 {
 	struct mtk_drm_private *private = drm->dev_private;
-	unsigned int ret = 0;
+	unsigned int index = 0;
 
-	if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->main_path, private->data->main_len))
-		ret = BIT(0);
-	else if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->ext_path,
-					  private->data->ext_len))
-		ret = BIT(1);
-	else if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->third_path,
+	if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->main_path,
+				     private->data->main_len))
+		return BIT(index);
+
+	if (mtk_drm_comp_is_enabled(drm,
+			private->data->main_path[private->data->main_len - 1]))
+		index++;
+
+	if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->ext_path,
+				     private->data->ext_len))
+		return BIT(index);
+
+	if (mtk_drm_comp_is_enabled(drm,
+			private->data->ext_path[private->data->ext_len - 1]))
+		index++;
+
+	if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->third_path,
 					  private->data->third_len))
-		ret = BIT(2);
-	else
-		DRM_INFO("Failed to find comp in ddp table\n");
+		return BIT(index);
 
-	return ret;
+	DRM_INFO("Failed to find comp in ddp table\n");
+
+	return -EINVAL;
 }
 
 int mtk_ddp_comp_init(struct device *dev, struct device_node *node,
