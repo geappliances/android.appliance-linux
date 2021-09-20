@@ -20,6 +20,7 @@
 	aliases {
 		ovl0 = &ovl0;
 		rdma0 = &rdma0;
+		rdma1 = &rdma1;
 		color0 = &color0;
 		ccorr0 = &ccorr0;
 		aal0 = &aal0;
@@ -951,8 +952,11 @@
 			power-domains = <&spm MT8365_POWER_DOMAIN_MM>;
 			clocks = <&mmsys CLK_MM_DPI0_DPI0>,
 				 <&mmsys CLK_MM_MM_DPI0>,
-				 <&apmixedsys CLK_APMIXED_LVDSPLL>;
-			clock-names = "pixel", "engine", "pll";
+				 <&apmixedsys CLK_APMIXED_LVDSPLL>,
+				 <&topckgen CLK_TOP_DPI0_SEL>;
+			clock-names = "pixel", "engine", "pll", "dpi_sel";
+			assigned-clocks = <&topckgen CLK_TOP_DPI0_SEL>;
+			assigned-clock-parents = <&topckgen CLK_TOP_LVDSPLL_D4>;
 			status = "disabled";
 		};
 
@@ -967,13 +971,36 @@
 			mediatek,larb = <&larb0>;
 		};
 
+		ovl0_2l: ovl@1400c000 {
+			compatible = "mediatek,mt8365-disp-ovl-2l",
+				     "mediatek,mt8183-disp-ovl-2l";
+			reg = <0 0x1400c000 0 0x1000>;
+			interrupts = <GIC_SPI 173 IRQ_TYPE_LEVEL_LOW>;
+			power-domains = <&spm MT8365_POWER_DOMAIN_MM>;
+			clocks = <&mmsys CLK_MM_MM_DISP_OVL0_2L>;
+			iommus = <&iommu M4U_PORT_DISP_OVL0_2L>;
+			mediatek,larb = <&larb0>;
+		};
+
 		rdma0: rdma@1400d000 {
-			compatible = "mediatek,mt8365-disp-rdma";
+			compatible = "mediatek,mt8365-disp-rdma",
+				     "mediatek,mt8183-disp-rdma";
 			reg = <0 0x1400d000 0 0x1000>;
 			interrupts = <GIC_SPI 162 IRQ_TYPE_LEVEL_LOW>;
 			power-domains = <&spm MT8365_POWER_DOMAIN_MM>;
 			clocks = <&mmsys CLK_MM_MM_DISP_RDMA0>;
 			iommus = <&iommu M4U_PORT_DISP_RDMA0>;
+			mediatek,larb = <&larb0>;
+		};
+
+		rdma1: rdma@14016000 {
+			compatible = "mediatek,mt8365-disp-rdma1",
+				     "mediatek,mt8183-disp-rdma1";
+			reg = <0 0x14016000 0 0x1000>;
+			interrupts = <GIC_SPI 195 IRQ_TYPE_LEVEL_LOW>;
+			power-domains = <&spm MT8365_POWER_DOMAIN_MM>;
+			clocks = <&mmsys CLK_MM_MM_DISP_RDMA1>;
+			iommus = <&iommu M4U_PORT_DISP_RDMA1>;
 			mediatek,larb = <&larb0>;
 		};
 
@@ -1092,6 +1119,21 @@
 			#cooling-cells = <2>;
 			cooling-min-level = <0>;
 			cooling-max-level = <15>;
+
+			operating-points-v2 = <&gpu_opp_table>;
+
+			power_model@0 {
+				compatible = "arm,mali-simple-power-model";
+				static-coefficient = <2427750>;
+				dynamic-coefficient = <4687>;
+				ts = <20000 2000 (-20) 2>;
+				/* Note: Enable it when cpu_thermal device can be probed */
+				//thermal-zone = "cpu_thermal";
+			};
+			power_model@1 {
+				compatible = "arm,mali-g52_r1-power-model";
+				scale = <5>;
+			};
 		};
 
 		gpu_core1: mali_gpu_core1 {
@@ -1118,27 +1160,19 @@
 				opp-hz = /bits/ 64 <450000000>;
 				opp-hz-real = /bits/ 64 <450000000>,
 							  /bits/ 64 <450000000>;
-				opp-microvolt = <650000>, /* Supply 0 */
-						<800000>; /* Supply 1 */
-				opp-core-mask = /bits/ 64 <0xf>;
+				opp-microvolt = <650000>;
 			};
-
 			opp-560000000 {
 				opp-hz = /bits/ 64 <560000000>;
 				opp-hz-real = /bits/ 64 <560000000>,
 							  /bits/ 64 <560000000>;
-				opp-microvolt = <700000>, /* Supply 0 */
-						<800000>; /* Supply 1 */
-				opp-core-mask = /bits/ 64 <0xf>;
+				opp-microvolt = <700000>;
 			};
-
 			opp-800000000 {
 				opp-hz = /bits/ 64 <800000000>;
 				opp-hz-real = /bits/ 64 <800000000>,
 							  /bits/ 64 <800000000>;
-				opp-microvolt = <800000>, /* Supply 0 */
-						<900000>; /* Supply 1 */
-				opp-core-mask = /bits/ 64 <0xf>;
+				opp-microvolt = <800000>;
 			};
 		};
 
@@ -1211,6 +1245,18 @@
 						 <&topckgen CLK_TOP_APLL1_D8>,
 						 <&topckgen CLK_TOP_APLL2_D8>;
 			mediatek,topckgen-regmap = <&topckgen>;
+			status = "disabled";
+		};
+
+		ethernet: ethernet@112a0000 {
+			compatible = "mediatek,mt8365-eth";
+			reg = <0 0x112a0000 0 0x1000>;
+			mediatek,pericfg = <&infracfg>;
+			interrupts = <GIC_SPI 25 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&topckgen CLK_TOP_ETH_SEL>,
+				 <&infracfg CLK_IFR_NIC_AXI>,
+				 <&infracfg CLK_IFR_NIC_SLV_AXI>;
+			clock-names = "core", "reg", "trans";
 			status = "disabled";
 		};
 	};

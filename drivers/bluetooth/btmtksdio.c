@@ -17,6 +17,7 @@
 #include <linux/iopoll.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/of_net.h>
 #include <linux/pm_runtime.h>
 #include <linux/skbuff.h>
 
@@ -889,6 +890,7 @@ static int btmtksdio_setup(struct hci_dev *hdev)
 	struct sk_buff *skb;
 	int err, status;
 	u8 param = 0x1;
+	const bdaddr_t *bdaddr;
 
 	calltime = ktime_get();
 
@@ -950,6 +952,14 @@ ignore_setup_fw:
 	err = mtk_setup_bdaddr_efuse(hdev);
 	if (err < 0)
 		return err;
+
+	/* Setup the bdaddr from the device-tree if present */
+	bdaddr = of_get_mac_address(bdev->dev->of_node);
+	if (!IS_ERR(bdaddr)) {
+		err = btmtksdio_set_bdaddr(hdev, bdaddr);
+		if (err < 0)
+			return err;
+	}
 
 ignore_func_on:
 	/* Apply the low power environment setup */

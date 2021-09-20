@@ -209,6 +209,7 @@
 #define MT8365_DISP_MUTEX0_SOF0			0x2c
 
 #define MT8365_MUTEX_MOD_DISP_OVL0		7
+#define MT8365_MUTEX_MOD_DISP_OVL0_2L		8
 #define MT8365_MUTEX_MOD_DISP_RDMA0		9
 #define MT8365_MUTEX_MOD_DISP_RDMA1		10
 #define MT8365_MUTEX_MOD_DISP_WDMA0		11
@@ -270,6 +271,8 @@ struct mtk_mmsys_reg_data {
 	u32 dsi0_sel_in_dither;
 	u32 color0_sel_in;
 	u32 dither0_mout_en;
+	u32 lvds_sys_cfg_00;
+	u32 lvds_sys_cfg_00_lvds_pxl_clk;
 };
 
 static const unsigned int mt2701_mutex_mod[DDP_COMPONENT_ID_MAX] = {
@@ -355,10 +358,12 @@ static const unsigned int mt8365_mutex_mod[DDP_COMPONENT_ID_MAX] = {
 	[DDP_COMPONENT_GAMMA] = MT8365_MUTEX_MOD_DISP_GAMMA,
 	[DDP_COMPONENT_DITHER] = MT8365_MUTEX_MOD_DISP_DITHER,
 	[DDP_COMPONENT_OVL0] = MT8365_MUTEX_MOD_DISP_OVL0,
+	[DDP_COMPONENT_OVL_2L0] = MT8365_MUTEX_MOD_DISP_OVL0_2L,
 	[DDP_COMPONENT_PWM0] = MT8365_MUTEX_MOD_DISP_PWM0,
 	[DDP_COMPONENT_RDMA0] = MT8365_MUTEX_MOD_DISP_RDMA0,
 	[DDP_COMPONENT_RDMA1] = MT8365_MUTEX_MOD_DISP_RDMA1,
 	[DDP_COMPONENT_WDMA0] = MT8365_MUTEX_MOD_DISP_WDMA0,
+	[DDP_COMPONENT_DPI0] = MT8365_MUTEX_MOD_DISP_DPI0,
 };
 
 static const unsigned int mt2712_mutex_sof[DDP_MUTEX_SOF_DSI3 + 1] = {
@@ -390,8 +395,7 @@ static const unsigned int mt8183_mutex_sof[DDP_MUTEX_SOF_DSI3 + 1] = {
 static const unsigned int mt8365_mutex_sof[MUTEX_SOF_DSI3 + 1] = {
 	[DDP_MUTEX_SOF_SINGLE_MODE] = MUTEX_SOF_SINGLE_MODE,
 	[DDP_MUTEX_SOF_DSI0] = MUTEX_SOF_DSI0 | MUTEX_EOF_DSI0,
-	[DDP_MUTEX_SOF_DSI1] = MUTEX_SOF_DSI1,
-	[DDP_MUTEX_SOF_DPI0] = MUTEX_SOF_DPI0 | MUTEX_EOF_DPI0,
+	[DDP_MUTEX_SOF_DPI0] = MT8183_MUTEX_SOF_DPI0 | MT8183_MUTEX_EOF_DPI0,
 };
 
 static const struct mtk_ddp_data mt2701_ddp_driver_data = {
@@ -494,6 +498,12 @@ const struct mtk_mmsys_reg_data mt8365_mmsys_reg_data = {
 	.rdma0_sout_color0 = 0x1,
 	.dsi0_sel_in = 0xf68,
 	.dsi0_sel_in_dither = 0x1,
+	.dpi0_sel_in = 0xfd8,
+	.dpi0_sel_in_rdma1 = 0x0,
+	.rdma1_sout_sel_in = 0xfd0,
+	.rdma1_sout_dpi0 = 0x1,
+	.lvds_sys_cfg_00 = 0xfdc,
+	.lvds_sys_cfg_00_lvds_pxl_clk = 0x1,
 };
 
 static unsigned int mtk_ddp_mout_en(const struct mtk_mmsys_reg_data *data,
@@ -706,6 +716,10 @@ void mtk_ddp_add_comp_to_path(void __iomem *config_regs,
 			      enum mtk_ddp_comp_id next)
 {
 	unsigned int addr, value, reg;
+
+	if (reg_data->lvds_sys_cfg_00)
+		writel_relaxed(reg_data->lvds_sys_cfg_00_lvds_pxl_clk,
+			       config_regs + reg_data->lvds_sys_cfg_00);
 
 	value = mtk_ddp_mout_en(reg_data, cur, next, &addr);
 	if (value) {

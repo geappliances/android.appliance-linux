@@ -10,10 +10,8 @@
 
 / {
 	aliases {
-		ethernet0 = &ethernet;
-		ethernet1 = &wifi;
-		ethernet2 = &bluetooth;
 		serial0 = &uart0;
+		ethernet0 = &ethernet;
 	};
 
 	chosen {
@@ -420,21 +418,6 @@
 		};
 	};
 
-	ethernet_pins_default: ethernet {
-		pins_ethernet {
-			pinmux = <MT8516_PIN_0_EINT0__FUNC_EXT_TXD0>,
-				 <MT8516_PIN_1_EINT1__FUNC_EXT_TXD1>,
-				 <MT8516_PIN_5_EINT5__FUNC_EXT_RXER>,
-				 <MT8516_PIN_6_EINT6__FUNC_EXT_RXC>,
-				 <MT8516_PIN_7_EINT7__FUNC_EXT_RXDV>,
-				 <MT8516_PIN_8_EINT8__FUNC_EXT_RXD0>,
-				 <MT8516_PIN_9_EINT9__FUNC_EXT_RXD1>,
-				 <MT8516_PIN_12_EINT12__FUNC_EXT_TXEN>,
-				 <MT8516_PIN_38_MRG_DI__FUNC_EXT_MDIO>,
-				 <MT8516_PIN_39_MRG_DO__FUNC_EXT_MDC>;
-		};
-	};
-
 	usb1_default_pins: usb1_pins {
 	};
 
@@ -451,6 +434,21 @@
 			pinmux = <MT8516_PIN_60_SDA2__FUNC_SDA2_0>,
 				 <MT8516_PIN_61_SCL2__FUNC_SCL2_0>;
 			bias-disable;
+		};
+	};
+
+	ethernet_pins_default: ethernet {
+		pins_ethernet {
+			pinmux = <MT8516_PIN_0_EINT0__FUNC_EXT_TXD0>,
+				 <MT8516_PIN_1_EINT1__FUNC_EXT_TXD1>,
+				 <MT8516_PIN_5_EINT5__FUNC_EXT_RXER>,
+				 <MT8516_PIN_6_EINT6__FUNC_EXT_RXC>,
+				 <MT8516_PIN_7_EINT7__FUNC_EXT_RXDV>,
+				 <MT8516_PIN_8_EINT8__FUNC_EXT_RXD0>,
+				 <MT8516_PIN_9_EINT9__FUNC_EXT_RXD1>,
+				 <MT8516_PIN_12_EINT12__FUNC_EXT_TXEN>,
+				 <MT8516_PIN_38_MRG_DI__FUNC_EXT_MDIO>,
+				 <MT8516_PIN_39_MRG_DO__FUNC_EXT_MDC>;
 		};
 	};
 };
@@ -486,20 +484,6 @@
 	vqmmc-supply = <&mt6392_vio18_reg>;
 	non-removable;
 	status = "okay";
-
-	mt7668 {
-		wifi: mt7668-wifi@0 {
-			compatible = "mediatek,mt8516-wifi",
-				     "mediatek,mt7668-wifi";
-			mac-address = [00 00 00 00 00 00];
-		};
-
-		bluetooth: mt7668-bluetooth@0 {
-			compatible = "mediatek,mt8516-bluetooth",
-				     "mediatek,mt7668-bluetooth";
-			mac-address = [00 00 00 00 00 00];
-		};
-	};
 };
 
 &mmc2 {
@@ -525,10 +509,19 @@
 &ethernet {
 	pinctrl-names = "default";
 	pinctrl-0 = <&ethernet_pins_default>;
-	eth-gpios = <&pio 13 GPIO_ACTIVE_HIGH>;
-	eth-regulator-supply = <&mt6392_vmch_reg>;
+	phy-handle = <&eth_phy>;
+	phy-mode = "rmii";
 	mac-address = [00 00 00 00 00 00];
 	status = "okay";
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		eth_phy: ethernet-phy@0 {
+			reg = <0>;
+		};
+	};
 };
 
 &usb0 {

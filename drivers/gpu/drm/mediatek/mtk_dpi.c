@@ -68,6 +68,7 @@ struct mtk_dpi {
 	struct device *dev;
 	struct clk *engine_clk;
 	struct clk *pixel_clk;
+	struct clk *dpi_sel_clk;
 	struct clk *tvd_clk;
 	struct clk *dpi_sel;
 	struct clk *tvd_d2;
@@ -123,6 +124,7 @@ enum mtk_dpi_chip {
 	MTK_DPI_MT2701,
 	MTK_DPI_MT8167,
 	MTK_DPI_MT8173,
+	MTK_DPI_MT8365,
 };
 
 struct mtk_dpi_conf {
@@ -410,6 +412,7 @@ static void mtk_dpi_power_off(struct mtk_dpi *dpi)
 	mtk_dpi_disable(dpi);
 	clk_disable_unprepare(dpi->pixel_clk);
 	clk_disable_unprepare(dpi->engine_clk);
+	clk_disable_unprepare(dpi->dpi_sel_clk);
 }
 
 static int mtk_dpi_power_on(struct mtk_dpi *dpi)
@@ -419,10 +422,16 @@ static int mtk_dpi_power_on(struct mtk_dpi *dpi)
 	if (++dpi->refcount != 1)
 		return 0;
 
+	ret = clk_prepare_enable(dpi->dpi_sel_clk);
+	if (ret) {
+		dev_err(dpi->dev, "failed to enable dpi_sel clock: %d\n", ret);
+		goto err_refcount;
+	}
+
 	ret = clk_prepare_enable(dpi->engine_clk);
 	if (ret) {
 		dev_err(dpi->dev, "Failed to enable engine clock: %d\n", ret);
-		goto err_refcount;
+		goto err_engine;
 	}
 
 	ret = clk_prepare_enable(dpi->pixel_clk);
@@ -439,6 +448,8 @@ static int mtk_dpi_power_on(struct mtk_dpi *dpi)
 
 err_pixel:
 	clk_disable_unprepare(dpi->engine_clk);
+err_engine:
+	clk_disable_unprepare(dpi->dpi_sel_clk);
 err_refcount:
 	dpi->refcount--;
 	return ret;
@@ -750,10 +761,12 @@ static unsigned int mt8183_calculate_factor(int clock)
 
 static unsigned int mt8365_calculate_factor(int clock)
 {
-	if (clock <= 25000)
+	if (clock <= 27000)
 		return 8;
-	else
+	else if (clock <= 167000)
 		return 4;
+	else
+		return 2;
 }
 
 static const struct mtk_dpi_conf mt8167_conf = {
@@ -782,6 +795,7 @@ static const struct mtk_dpi_conf mt8183_conf = {
 static const struct mtk_dpi_conf mt8365_conf = {
 	.cal_factor = mt8365_calculate_factor,
 	.reg_h_fre_con = 0xe0,
+	.chip = MTK_DPI_MT8365,
 };
 
 static int mtk_dpi_probe(struct platform_device *pdev)
@@ -884,6 +898,14 @@ static int mtk_dpi_probe(struct platform_device *pdev)
 			dev_err(dev, "Failed to get tvd_d16 clock: %d\n", ret);
 			return ret;
 		}
+	}
+
+	dpi->dpi_sel_clk = devm_clk_get_optional(dev, "dpi_sel");
+	if (IS_ERR(dpi->dpi_sel_clk)) {
+		ret = PTR_ERR(dpi->dpi_sel_clk);
+		dev_err_probe(dev, ret, "Failed to get tvdpll clock: %d\n", ret);
+
+		return ret;
 	}
 
 	dpi->irq = platform_get_irq(pdev, 0);
