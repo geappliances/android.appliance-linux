@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2014-2016,2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014-2016, 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,8 +17,6 @@
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
- * SPDX-License-Identifier: GPL-2.0
- *
  */
 
 #include <mali_kbase.h>
@@ -27,7 +25,7 @@
 
 #include <linux/interrupt.h>
 
-#if !defined(CONFIG_MALI_NO_MALI)
+#if !IS_ENABLED(CONFIG_MALI_NO_MALI)
 
 /* GPU IRQ Tags */
 #define	JOB_IRQ_TAG	0
@@ -234,7 +232,7 @@ int kbase_set_custom_irq_handler(struct kbase_device *kbdev,
 		result = -EINVAL;
 		dev_err(kbdev->dev, "Can't request interrupt %d (index %d)\n",
 					kbdev->irqs[irq_type].irq, irq_type);
-#ifdef CONFIG_SPARSE_IRQ
+#if IS_ENABLED(CONFIG_SPARSE_IRQ)
 		dev_err(kbdev->dev, "You have CONFIG_SPARSE_IRQ support enabled - is the interrupt number correct for this configuration?\n");
 #endif /* CONFIG_SPARSE_IRQ */
 	}
@@ -463,7 +461,7 @@ int kbase_install_interrupts(struct kbase_device *kbdev)
 		if (err) {
 			dev_err(kbdev->dev, "Can't request interrupt %d (index %d)\n",
 							kbdev->irqs[i].irq, i);
-#ifdef CONFIG_SPARSE_IRQ
+#if IS_ENABLED(CONFIG_SPARSE_IRQ)
 			dev_err(kbdev->dev, "You have CONFIG_SPARSE_IRQ support enabled - is the interrupt number correct for this configuration?\n");
 #endif /* CONFIG_SPARSE_IRQ */
 			goto release;
@@ -503,4 +501,4 @@ void kbase_synchronize_irqs(struct kbase_device *kbdev)
 
 KBASE_EXPORT_TEST_API(kbase_synchronize_irqs);
 
-#endif /* !defined(CONFIG_MALI_NO_MALI) */
+#endif /* !IS_ENABLED(CONFIG_MALI_NO_MALI) */
