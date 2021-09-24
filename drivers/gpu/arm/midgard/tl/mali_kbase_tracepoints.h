@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -255,6 +235,9 @@ void __kbase_tlstream_tl_arbiter_stop_requested(
 	struct kbase_tlstream *stream,
 	const void *gpu);
 void __kbase_tlstream_tl_arbiter_stopped(
+	struct kbase_tlstream *stream,
+	const void *gpu);
+void __kbase_tlstream_tl_arbiter_requested(
 	struct kbase_tlstream *stream,
 	const void *gpu);
 void __kbase_tlstream_jd_gpu_soft_reset(
@@ -1321,6 +1304,25 @@ struct kbase_tlstream;
 	} while (0)
 
 /**
+ * KBASE_TLSTREAM_TL_ARBITER_REQUESTED -
+ *   Driver has requested the arbiter for gpu access
+ *
+ * @kbdev: Kbase device
+ * @gpu: Name of the GPU object
+ */
+#define KBASE_TLSTREAM_TL_ARBITER_REQUESTED(	\
+	kbdev,	\
+	gpu	\
+	)	\
+	do {	\
+		int enabled = atomic_read(&kbdev->timeline_flags);	\
+		if (enabled & TLSTREAM_ENABLED)	\
+			__kbase_tlstream_tl_arbiter_requested(	\
+				__TL_DISPATCH_STREAM(kbdev, obj),	\
+				gpu);	\
+	} while (0)
+
+/**
  * KBASE_TLSTREAM_JD_GPU_SOFT_RESET -
  *   gpu soft reset
  *
@@ -1930,7 +1932,7 @@ struct kbase_tlstream;
  *
  * @kbdev: Kbase device
  * @kcpu_queue: KCPU queue
- * @cqs_obj_gpu_addr: CQS Object GPU ptr
+ * @cqs_obj_gpu_addr: CQS Object GPU pointer
  * @cqs_obj_compare_value: Semaphore value that should be exceeded
  * for the WAIT to pass
  * @cqs_obj_inherit_error: Indicates the error state should be inherited into the queue or not
@@ -1967,7 +1969,7 @@ struct kbase_tlstream;
  *
  * @kbdev: Kbase device
  * @kcpu_queue: KCPU queue
- * @cqs_obj_gpu_addr: CQS Object GPU ptr
+ * @cqs_obj_gpu_addr: CQS Object GPU pointer
  */
 #if MALI_USE_CSF
 #define KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_ENQUEUE_CQS_SET(	\
@@ -1997,7 +1999,7 @@ struct kbase_tlstream;
  *
  * @kbdev: Kbase device
  * @kcpu_queue: KCPU queue
- * @map_import_buf_gpu_addr: Map import buffer GPU ptr
+ * @map_import_buf_gpu_addr: Map import buffer GPU pointer
  */
 #if MALI_USE_CSF
 #define KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_ENQUEUE_MAP_IMPORT(	\
@@ -2027,7 +2029,7 @@ struct kbase_tlstream;
  *
  * @kbdev: Kbase device
  * @kcpu_queue: KCPU queue
- * @map_import_buf_gpu_addr: Map import buffer GPU ptr
+ * @map_import_buf_gpu_addr: Map import buffer GPU pointer
  */
 #if MALI_USE_CSF
 #define KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_ENQUEUE_UNMAP_IMPORT(	\
@@ -2057,7 +2059,7 @@ struct kbase_tlstream;
  *
  * @kbdev: Kbase device
  * @kcpu_queue: KCPU queue
- * @map_import_buf_gpu_addr: Map import buffer GPU ptr
+ * @map_import_buf_gpu_addr: Map import buffer GPU pointer
  */
 #if MALI_USE_CSF
 #define KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_ENQUEUE_UNMAP_IMPORT_FORCE(	\

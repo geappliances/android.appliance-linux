@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,15 +17,13 @@
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
- * SPDX-License-Identifier: GPL-2.0
- *
  */
 
 #include "mali_kbase_csf_cpu_queue_debugfs.h"
 #include <mali_kbase.h>
 #include <linux/seq_file.h>
 
-#ifdef CONFIG_DEBUG_FS
+#if IS_ENABLED(CONFIG_DEBUG_FS)
 
 bool kbase_csf_cpu_queue_read_dump_req(struct kbase_context *kctx,
 					struct base_csf_notification *req)
@@ -156,8 +154,7 @@ int kbase_csf_cpu_queue_dump(struct kbase_context *kctx,
 
 	mutex_lock(&kctx->csf.lock);
 
-	if (kctx->csf.cpu_queue.buffer)
-		kfree(kctx->csf.cpu_queue.buffer);
+	kfree(kctx->csf.cpu_queue.buffer);
 
 	if (atomic_read(&kctx->csf.cpu_queue.dump_req_status) ==
 			BASE_CSF_CPU_QUEUE_DUMP_PENDING) {

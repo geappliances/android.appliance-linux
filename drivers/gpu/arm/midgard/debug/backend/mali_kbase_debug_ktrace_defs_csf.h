@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -63,9 +43,14 @@
  * ringbuffer RBUF (mali_trace) between csi and info_val, which is empty
  * for non-kcpu related traces, and usually displays the KCPU Queue ID and
  * an extra information value. ftrace also displays these KCPU traces.
+ *
+ * 1.3:
+ * Add a lot of extra new traces. Tweak some existing scheduler related traces
+ * to contain extra information information/happen at slightly different times.
+ * SCHEDULER_EXIT_PROTM now has group information
  */
 #define KBASE_KTRACE_VERSION_MAJOR 1
-#define KBASE_KTRACE_VERSION_MINOR 2
+#define KBASE_KTRACE_VERSION_MINOR 3
 
 /* indicates if the trace message has valid queue-group related info. */
 #define KBASE_KTRACE_FLAG_CSF_GROUP     (((kbase_ktrace_flag_t)1) << 0)
@@ -81,26 +66,29 @@
 		(KBASE_KTRACE_FLAG_CSF_GROUP | KBASE_KTRACE_FLAG_CSF_QUEUE | \
 		 KBASE_KTRACE_FLAG_CSF_KCPU)
 
-
 /**
  * union kbase_ktrace_backend - backend specific part of a trace message
- *
- * @code:           Identifies the event, refer to enum kbase_ktrace_code.
- * @flags:          indicates information about the trace message itself. Used
+ * @kcpu:           kcpu union member
+ * @kcpu.code:      Identifies the event, refer to enum kbase_ktrace_code.
+ * @kcpu.flags:     indicates information about the trace message itself. Used
  *                  during dumping of the message.
- * @id:             ID of the KCPU queue.
- * @extra_info_val: value specific to the type of KCPU event being traced.
+ * @kcpu.id:        ID of the KCPU queue.
+ * @kcpu.extra_info_val: value specific to the type of KCPU event being traced.
  *                  Refer to the KPU specific code in enum kbase_ktrace_code in
  *                  mali_kbase_debug_ktrace_codes_csf.h
- * @group_handle:   Handle identifying the associated queue group. Only valid
+ * @gpu:            gpu union member
+ * @gpu.code:       Identifies the event, refer to enum kbase_ktrace_code.
+ * @gpu.flags:      indicates information about the trace message itself. Used
+ *                  during dumping of the message.
+ * @gpu.group_handle: Handle identifying the associated queue group. Only valid
  *                  when @flags contains KBASE_KTRACE_FLAG_CSF_GROUP.
- * @csg_nr:         Number/index of the associated queue group's CS
- *                  group to which it is mapped, or negative if none associated.
- *                  Only valid when @flags contains KBASE_KTRACE_FLAG_CSF_GROUP.
- * @slot_prio:      The priority of the slot for the associated group, if it was
- *                  scheduled. Hence, only valid when @csg_nr >=0 and @flags
- *                  contains KBASE_KTRACE_FLAG_CSF_GROUP.
- * @csi_index:      ID of the associated queue's CS HW interface.
+ * @gpu.csg_nr:     Number/index of the associated queue group's CS group to
+ *                  which it is mapped, or negative if none associated. Only
+ *                  valid when @flags contains KBASE_KTRACE_FLAG_CSF_GROUP.
+ * @gpu.slot_prio:  The priority of the slot for the associated group, if it
+ *                  was scheduled. Hence, only valid when @csg_nr >=0 and
+ *                  @flags contains KBASE_KTRACE_FLAG_CSF_GROUP.
+ * @gpu.csi_index:  ID of the associated queue's CS HW interface.
  *                  Only valid when @flags contains KBASE_KTRACE_FLAG_CSF_QUEUE.
  */
 

@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -598,14 +596,14 @@ int kbase_csf_tiler_heap_alloc_new_chunk(struct kbase_context *kctx,
 	if (likely(heap)) {
 		err = alloc_new_chunk(heap, nr_in_flight, pending_frag_count,
 			new_chunk_ptr);
-	}
 
-	KBASE_TLSTREAM_AUX_TILER_HEAP_STATS(
-		kctx->kbdev, kctx->id, heap->heap_id,
-		PFN_UP(heap->chunk_size * heap->max_chunks),
-		PFN_UP(heap->chunk_size * heap->chunk_count), heap->max_chunks,
-		heap->chunk_size, heap->chunk_count, heap->target_in_flight,
-		nr_in_flight);
+		KBASE_TLSTREAM_AUX_TILER_HEAP_STATS(
+			kctx->kbdev, kctx->id, heap->heap_id,
+			PFN_UP(heap->chunk_size * heap->max_chunks),
+			PFN_UP(heap->chunk_size * heap->chunk_count),
+			heap->max_chunks, heap->chunk_size, heap->chunk_count,
+			heap->target_in_flight, nr_in_flight);
+	}
 
 	mutex_unlock(&kctx->csf.tiler_heaps.lock);
 

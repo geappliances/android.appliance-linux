@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2017-2018, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2017-2018, 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -45,7 +25,7 @@
 #include <mali_kbase.h>
 
 /**
- * The Context Scheduler manages address space assignment and reference
+ * DOC: The Context Scheduler manages address space assignment and reference
  * counting to kbase_context. The interface has been designed to minimise
  * interactions between the Job Scheduler and Power Management/MMU to support
  * the existing Job Scheduler interface.
@@ -60,7 +40,7 @@
  */
 
 /**
- * kbase_ctx_sched_init - Initialise the context scheduler
+ * kbase_ctx_sched_init() - Initialise the context scheduler
  * @kbdev: The device for which the context scheduler needs to be initialised
  *
  * This must be called during device initialisation. The number of hardware
@@ -242,23 +222,20 @@ void kbase_ctx_sched_release_ctx_lock(struct kbase_context *kctx);
 
 #if MALI_USE_CSF
 /**
- * kbase_ctx_sched_refcount_mmu_flush - Refcount the context for the MMU flush
- *                                      operation.
+ * kbase_ctx_sched_inc_refcount_if_as_valid - Refcount the context if it has GPU
+ *                                            address space slot assigned to it.
  *
- * @kctx: Context to be refcounted.
- * @sync: Flag passed to the caller function kbase_mmu_flush_invalidate().
+ * @kctx: Context to be refcounted
  *
- * This function takes a reference on the context for the MMU flush operation.
- * The refcount is taken only if the context is busy/active.
- * If the context isn't active but has a GPU address space slot assigned to it
- * then a flag is set to indicate that MMU flush operation is pending, which
- * will be performed when the context becomes active.
+ * This function takes a reference on the context if it has a GPU address space
+ * slot assigned to it. The address space slot will not be available for
+ * re-assignment until the reference is released.
  *
  * Return: true if refcount succeeded and the address space slot will not be
- * reassigned, false if the refcount failed (because the context was inactive)
+ * reassigned, false if the refcount failed (because the address space slot
+ * was not assigned).
  */
-bool kbase_ctx_sched_refcount_mmu_flush(struct kbase_context *kctx,
-					bool sync);
+bool kbase_ctx_sched_inc_refcount_if_as_valid(struct kbase_context *kctx);
 #endif
 
 #endif /* _KBASE_CTX_SCHED_H_ */

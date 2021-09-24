@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,13 +17,10 @@
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
- * SPDX-License-Identifier: GPL-2.0
- *
  */
 
 /**
- * @file mali_kbase_mem_linux.c
- * Base kernel memory APIs, Linux implementation.
+ * DOC: Base kernel memory APIs, Linux implementation.
  */
 
 #include <linux/compat.h>
@@ -45,7 +42,7 @@
 #include <mali_kbase.h>
 #include <mali_kbase_mem_linux.h>
 #include <tl/mali_kbase_tracepoints.h>
-#include <mali_kbase_ioctl.h>
+#include <uapi/gpu/arm/midgard/mali_kbase_ioctl.h>
 #include <mmu/mali_kbase_mmu.h>
 #include <mali_kbase_caps.h>
 #include <mali_kbase_trace_gpu_mem.h>
@@ -330,7 +327,7 @@ struct kbase_va_region *kbase_mem_alloc(struct kbase_context *kctx,
 		goto bad_flags;
 	}
 
-#ifdef CONFIG_DEBUG_FS
+#if IS_ENABLED(CONFIG_DEBUG_FS)
 	if (unlikely(kbase_ctx_flag(kctx, KCTX_INFINITE_CACHE))) {
 		/* Mask coherency flags if infinite cache is enabled to prevent
 		 * the skipping of syncs from BASE side.
@@ -639,18 +636,17 @@ unsigned long kbase_mem_evictable_reclaim_count_objects(struct shrinker *s,
 		struct shrink_control *sc)
 {
 	struct kbase_context *kctx;
-	struct kbase_mem_phy_alloc *alloc;
-	unsigned long pages = 0;
 
 	kctx = container_of(s, struct kbase_context, reclaim);
 
-	mutex_lock(&kctx->jit_evict_lock);
+	WARN((sc->gfp_mask & __GFP_ATOMIC),
+	     "Shrinkers cannot be called for GFP_ATOMIC allocations. Check kernel mm for problems. gfp_mask==%x\n",
+	     sc->gfp_mask);
+	WARN(in_atomic(),
+	     "Shrinker called whilst in atomic context. The caller must switch to using GFP_ATOMIC or similar. gfp_mask==%x\n",
+	     sc->gfp_mask);
 
-	list_for_each_entry(alloc, &kctx->evict_list, evict_node)
-		pages += alloc->nents;
-
-	mutex_unlock(&kctx->jit_evict_lock);
-	return pages;
+	return atomic_read(&kctx->evict_nents);
 }
 
 /**
@@ -682,6 +678,7 @@ unsigned long kbase_mem_evictable_reclaim_scan_objects(struct shrinker *s,
 	unsigned long freed = 0;
 
 	kctx = container_of(s, struct kbase_context, reclaim);
+
 	mutex_lock(&kctx->jit_evict_lock);
 
 	list_for_each_entry_safe(alloc, tmp, &kctx->evict_list, evict_node) {
@@ -708,6 +705,7 @@ unsigned long kbase_mem_evictable_reclaim_scan_objects(struct shrinker *s,
 
 		kbase_free_phy_pages_helper(alloc, alloc->evicted);
 		freed += alloc->evicted;
+		WARN_ON(atomic_sub_return(alloc->evicted, &kctx->evict_nents) < 0);
 		list_del_init(&alloc->evict_node);
 
 		/*
@@ -730,6 +728,8 @@ int kbase_mem_evictable_init(struct kbase_context *kctx)
 {
 	INIT_LIST_HEAD(&kctx->evict_list);
 	mutex_init(&kctx->jit_evict_lock);
+
+	atomic_set(&kctx->evict_nents, 0);
 
 	kctx->reclaim.count_objects = kbase_mem_evictable_reclaim_count_objects;
 	kctx->reclaim.scan_objects = kbase_mem_evictable_reclaim_scan_objects;
@@ -814,6 +814,7 @@ int kbase_mem_evictable_make(struct kbase_mem_phy_alloc *gpu_alloc)
 	 * can reclaim it.
 	 */
 	list_add(&gpu_alloc->evict_node, &kctx->evict_list);
+	atomic_add(gpu_alloc->nents, &kctx->evict_nents);
 	mutex_unlock(&kctx->jit_evict_lock);
 	kbase_mem_evictable_mark_reclaim(gpu_alloc);
 
@@ -833,6 +834,7 @@ bool kbase_mem_evictable_unmake(struct kbase_mem_phy_alloc *gpu_alloc)
 	 * First remove the allocation from the eviction list as it's no
 	 * longer eligible for eviction.
 	 */
+	WARN_ON(atomic_sub_return(gpu_alloc->nents, &kctx->evict_nents) < 0);
 	list_del_init(&gpu_alloc->evict_node);
 	mutex_unlock(&kctx->jit_evict_lock);
 
@@ -922,6 +924,9 @@ int kbase_mem_flags_change(struct kbase_context *kctx, u64 gpu_addr, unsigned in
 		 *   (==GPU VA) locations.
 		 */
 		if (atomic_read(&reg->cpu_alloc->gpu_mappings) > 1)
+			goto out_unlock;
+
+		if (atomic_read(&reg->cpu_alloc->kernel_mappings) > 0)
 			goto out_unlock;
 
 		if (new_needed) {
@@ -1097,7 +1102,7 @@ int kbase_mem_do_sync_imported(struct kbase_context *kctx,
 				dir);
 #endif /* KBASE_MEM_ION_SYNC_WORKAROUND */
 		break;
-	};
+	}
 
 	if (unlikely(ret))
 		dev_warn(kctx->kbdev->dev,
@@ -1398,7 +1403,7 @@ static struct kbase_va_region *kbase_mem_from_umm(struct kbase_context *kctx,
 	if (*flags & BASE_MEM_IMPORT_SYNC_ON_MAP_UNMAP)
 		need_sync = true;
 
-#ifdef CONFIG_64BIT
+#if IS_ENABLED(CONFIG_64BIT)
 	if (!kbase_ctx_flag(kctx, KCTX_COMPAT)) {
 		/*
 		 * 64-bit tasks require us to reserve VA on the CPU that we use
@@ -1508,6 +1513,7 @@ static struct kbase_va_region *kbase_mem_from_user_buffer(
 	u32 cache_line_alignment = kbase_get_cache_line_alignment(kctx->kbdev);
 	struct kbase_alloc_import_user_buf *user_buf;
 	struct page **pages = NULL;
+	int write;
 
 	/* Flag supported only for dma-buf imported memory */
 	if (*flags & BASE_MEM_IMPORT_SYNC_ON_MAP_UNMAP)
@@ -1550,7 +1556,7 @@ static struct kbase_va_region *kbase_mem_from_user_buffer(
 	if (*flags & BASE_MEM_IMPORT_SHARED)
 		shared_zone = true;
 
-#ifdef CONFIG_64BIT
+#if IS_ENABLED(CONFIG_64BIT)
 	if (!kbase_ctx_flag(kctx, KCTX_COMPAT)) {
 		/*
 		 * 64-bit tasks require us to reserve VA on the CPU that we use
@@ -1621,22 +1627,22 @@ static struct kbase_va_region *kbase_mem_from_user_buffer(
 
 	down_read(kbase_mem_get_process_mmap_lock());
 
+	write = reg->flags & (KBASE_REG_CPU_WR | KBASE_REG_GPU_WR);
+
 #if KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE
 	faulted_pages = get_user_pages(current, current->mm, address, *va_pages,
 #if KERNEL_VERSION(4, 4, 168) <= LINUX_VERSION_CODE && \
 KERNEL_VERSION(4, 5, 0) > LINUX_VERSION_CODE
-			reg->flags & KBASE_REG_CPU_WR ? FOLL_WRITE : 0,
-			pages, NULL);
+			write ? FOLL_WRITE : 0, pages, NULL);
 #else
-			reg->flags & KBASE_REG_CPU_WR, 0, pages, NULL);
+			write, 0, pages, NULL);
 #endif
 #elif KERNEL_VERSION(4, 9, 0) > LINUX_VERSION_CODE
 	faulted_pages = get_user_pages(address, *va_pages,
-			reg->flags & KBASE_REG_CPU_WR, 0, pages, NULL);
+			write, 0, pages, NULL);
 #else
 	faulted_pages = get_user_pages(address, *va_pages,
-			reg->flags & KBASE_REG_CPU_WR ? FOLL_WRITE : 0,
-			pages, NULL);
+			write ? FOLL_WRITE : 0, pages, NULL);
 #endif
 
 	up_read(kbase_mem_get_process_mmap_lock());
@@ -1744,7 +1750,7 @@ u64 kbase_mem_alias(struct kbase_context *kctx, u64 *flags, u64 stride,
 	/* calculate the number of pages this alias will cover */
 	*num_pages = nents * stride;
 
-#ifdef CONFIG_64BIT
+#if IS_ENABLED(CONFIG_64BIT)
 	if (!kbase_ctx_flag(kctx, KCTX_COMPAT)) {
 		/* 64-bit tasks must MMAP anyway, but not expose this address to
 		 * clients
@@ -1865,7 +1871,7 @@ u64 kbase_mem_alias(struct kbase_context *kctx, u64 *flags, u64 stride,
 		}
 	}
 
-#ifdef CONFIG_64BIT
+#if IS_ENABLED(CONFIG_64BIT)
 	if (!kbase_ctx_flag(kctx, KCTX_COMPAT)) {
 		/* Bind to a cookie */
 		if (bitmap_empty(kctx->cookies, BITS_PER_LONG)) {
@@ -1900,7 +1906,7 @@ u64 kbase_mem_alias(struct kbase_context *kctx, u64 *flags, u64 stride,
 
 	return gpu_va;
 
-#ifdef CONFIG_64BIT
+#if IS_ENABLED(CONFIG_64BIT)
 no_cookie:
 #endif
 no_mmap:
@@ -1988,7 +1994,7 @@ int kbase_mem_import(struct kbase_context *kctx, enum base_mem_import_type type,
 				sizeof(user_buffer))) {
 			reg = NULL;
 		} else {
-#ifdef CONFIG_COMPAT
+#if IS_ENABLED(CONFIG_COMPAT)
 			if (kbase_ctx_flag(kctx, KCTX_COMPAT))
 				uptr = compat_ptr(user_buffer.ptr);
 			else
@@ -2172,6 +2178,9 @@ int kbase_mem_commit(struct kbase_context *kctx, u64 gpu_addr, u64 new_pages)
 	 * such allocs is not a supported use-case.
 	 */
 	if (atomic_read(&reg->gpu_alloc->gpu_mappings) > 1)
+		goto out_unlock;
+
+	if (atomic_read(&reg->cpu_alloc->kernel_mappings) > 0)
 		goto out_unlock;
 	/* can't grow regions which are ephemeral */
 	if (reg->flags & KBASE_REG_DONT_NEED)
@@ -2707,7 +2716,7 @@ int kbase_context_mmap(struct kbase_context *const kctx,
 {
 	struct kbase_va_region *reg = NULL;
 	void *kaddr = NULL;
-	size_t nr_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
+	size_t nr_pages = vma_pages(vma);
 	int err = 0;
 	int free_on_close = 0;
 	struct device *dev = kctx->kbdev->dev;
@@ -2966,7 +2975,6 @@ static int kbase_vmap_phy_pages(struct kbase_context *kctx,
 	 * - CPU-arch-specific integration required
 	 * - kbase_vmap() requires no access checks to be made/enforced
 	 */
-
 	cpu_addr = vmap(pages, page_count, VM_MAP, prot);
 
 	kfree(pages);
@@ -2987,6 +2995,7 @@ static int kbase_vmap_phy_pages(struct kbase_context *kctx,
 	if (map->sync_needed)
 		kbase_sync_mem_regions(kctx, map, KBASE_SYNC_TO_CPU);
 
+	kbase_mem_phy_alloc_kernel_mapped(reg->cpu_alloc);
 	return 0;
 }
 
@@ -3057,6 +3066,7 @@ static void kbase_vunmap_phy_pages(struct kbase_context *kctx,
 	if (map->sync_needed)
 		kbase_sync_mem_regions(kctx, map, KBASE_SYNC_TO_DEVICE);
 
+	kbase_mem_phy_alloc_kernel_unmapped(map->cpu_alloc);
 	map->offset_in_page = 0;
 	map->cpu_pages = NULL;
 	map->gpu_pages = NULL;
@@ -3176,10 +3186,8 @@ static unsigned long get_queue_doorbell_pfn(struct kbase_device *kbdev,
 	 * assigned one, otherwise a dummy page. Always return the
 	 * dummy page in no mali builds.
 	 */
-	if ((queue->doorbell_nr == KBASEP_USER_DB_NR_INVALID) ||
-			IS_ENABLED(CONFIG_MALI_NO_MALI))
+	if (queue->doorbell_nr == KBASEP_USER_DB_NR_INVALID)
 		return PFN_DOWN(as_phys_addr_t(kbdev->csf.dummy_db_page));
-
 	return (PFN_DOWN(kbdev->reg_start + CSF_HW_DOORBELL_PAGE_OFFSET +
 			 (u64)queue->doorbell_nr * CSF_HW_DOORBELL_PAGE_SIZE));
 }
@@ -3321,7 +3329,7 @@ static int kbase_csf_cpu_mmap_user_io_pages(struct kbase_context *kctx,
 {
 	unsigned long cookie =
 		vma->vm_pgoff - PFN_DOWN(BASEP_MEM_CSF_USER_IO_PAGES_HANDLE);
-	size_t nr_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
+	size_t nr_pages = vma_pages(vma);
 	struct kbase_queue *queue;
 	int err = 0;
 
@@ -3425,7 +3433,7 @@ static vm_fault_t kbase_csf_user_reg_vm_fault(struct vm_fault *vmf)
 	/* Don't map in the actual register page if GPU is powered down.
 	 * Always map in the dummy page in no mali builds.
 	 */
-	if (!kbdev->pm.backend.gpu_powered || IS_ENABLED(CONFIG_MALI_NO_MALI))
+	if (!kbdev->pm.backend.gpu_powered)
 		pfn = PFN_DOWN(as_phys_addr_t(kbdev->csf.dummy_user_reg_page));
 
 	ret = mgm_dev->ops.mgm_vmf_insert_pfn_prot(mgm_dev,

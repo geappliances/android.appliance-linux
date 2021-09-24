@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,8 +17,6 @@
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
- * SPDX-License-Identifier: GPL-2.0
- *
  */
 
 #include "mali_kbase_csf_csg_debugfs.h"
@@ -27,7 +25,7 @@
 #include <linux/delay.h>
 #include <csf/mali_kbase_csf_trace_buffer.h>
 
-#ifdef CONFIG_DEBUG_FS
+#if IS_ENABLED(CONFIG_DEBUG_FS)
 #include "mali_kbase_csf_tl_reader.h"
 
 /**
@@ -89,6 +87,32 @@ static void kbasep_csf_scheduler_dump_active_queue_cs_status_wait(
 			   blocked_reason)));
 }
 
+static void kbasep_csf_scheduler_dump_active_cs_trace(struct seq_file *file,
+			struct kbase_csf_cmd_stream_info const *const stream)
+{
+	u32 val = kbase_csf_firmware_cs_input_read(stream,
+			CS_INSTR_BUFFER_BASE_LO);
+	u64 addr = ((u64)kbase_csf_firmware_cs_input_read(stream,
+				CS_INSTR_BUFFER_BASE_HI) << 32) | val;
+	val = kbase_csf_firmware_cs_input_read(stream,
+				CS_INSTR_BUFFER_SIZE);
+
+	seq_printf(file, "CS_TRACE_BUF_ADDR: 0x%16llx, SIZE: %u\n", addr, val);
+
+	/* Write offset variable address (pointer) */
+	val = kbase_csf_firmware_cs_input_read(stream,
+			CS_INSTR_BUFFER_OFFSET_POINTER_LO);
+	addr = ((u64)kbase_csf_firmware_cs_input_read(stream,
+			CS_INSTR_BUFFER_OFFSET_POINTER_HI) << 32) | val;
+	seq_printf(file, "CS_TRACE_BUF_OFFSET_PTR: 0x%16llx\n", addr);
+
+	/* EVENT_SIZE and EVENT_STATEs */
+	val = kbase_csf_firmware_cs_input_read(stream, CS_INSTR_CONFIG);
+	seq_printf(file, "TRACE_EVENT_SIZE: 0x%x, TRACE_EVENT_STAES 0x%x\n",
+			CS_INSTR_CONFIG_EVENT_SIZE_GET(val),
+			CS_INSTR_CONFIG_EVENT_STATE_GET(val));
+}
+
 /**
  * kbasep_csf_scheduler_dump_active_queue() - Print GPU command queue
  *                                            debug information
@@ -136,7 +160,9 @@ static void kbasep_csf_scheduler_dump_active_queue(struct seq_file *file,
 			queue->csi_index, queue->base_addr, queue->priority,
 			cs_insert, cs_extract, cs_active, queue->doorbell_nr);
 
-	/* Print status information for blocked group waiting for sync object */
+	/* Print status information for blocked group waiting for sync object. For on-slot queues,
+	 * if cs_trace is enabled, dump the interface's cs_trace configuration.
+	 */
 	if (kbase_csf_scheduler_group_get_slot(queue->group) < 0) {
 		if (CS_STATUS_WAIT_SYNC_WAIT_GET(queue->status_wait)) {
 			wait_status = queue->status_wait;
@@ -214,6 +240,11 @@ static void kbasep_csf_scheduler_dump_active_queue(struct seq_file *file,
 			file, wait_status, wait_sync_value,
 			wait_sync_live_value, wait_sync_pointer, sb_status,
 			blocked_reason);
+		/* Dealing with cs_trace */
+		if (kbase_csf_scheduler_queue_has_trace(queue))
+			kbasep_csf_scheduler_dump_active_cs_trace(file, stream);
+		else
+			seq_puts(file, "NO CS_TRACE\n");
 	}
 
 	seq_puts(file, "\n");

@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -109,7 +107,7 @@ int kbase_instr_hwcnt_enable_internal(struct kbase_device *kbdev,
 
 	err = 0;
 
-	dev_dbg(kbdev->dev, "HW counters dumping set-up for context %p", kctx);
+	dev_dbg(kbdev->dev, "HW counters dumping set-up for context %pK", kctx);
 	return err;
  out_err:
 	return err;
@@ -169,7 +167,7 @@ int kbase_instr_hwcnt_disable_internal(struct kbase_context *kctx)
 	spin_unlock_irqrestore(&kbdev->hwcnt.lock, flags);
 	spin_unlock_irqrestore(&kbdev->hwaccess_lock, pm_flags);
 
-	dev_dbg(kbdev->dev, "HW counters dumping disabled for context %p",
+	dev_dbg(kbdev->dev, "HW counters dumping disabled for context %pK",
 									kctx);
 
 	err = 0;
@@ -216,7 +214,7 @@ int kbase_instr_hwcnt_request_dump(struct kbase_context *kctx)
 	kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_COMMAND),
 					GPU_COMMAND_PRFCNT_SAMPLE);
 
-	dev_dbg(kbdev->dev, "HW counters dumping done for context %p", kctx);
+	dev_dbg(kbdev->dev, "HW counters dumping done for context %pK", kctx);
 
 	err = 0;
 
@@ -327,7 +325,7 @@ KBASE_EXPORT_SYMBOL(kbase_instr_hwcnt_clear);
 
 int kbase_instr_backend_init(struct kbase_device *kbdev)
 {
-	int ret = 0;
+	spin_lock_init(&kbdev->hwcnt.lock);
 
 	kbdev->hwcnt.backend.state = KBASE_INSTR_STATE_DISABLED;
 
@@ -346,12 +344,12 @@ int kbase_instr_backend_init(struct kbase_device *kbdev)
 	kbdev->hwcnt.backend.override_counter_set = KBASE_HWCNT_SET_PRIMARY;
 #endif
 #endif
-	return ret;
+	return 0;
 }
 
 void kbase_instr_backend_term(struct kbase_device *kbdev)
 {
-	(void)kbdev;
+	CSTD_UNUSED(kbdev);
 }
 
 #ifdef CONFIG_MALI_PRFCNT_SET_SELECT_VIA_DEBUG_FS
