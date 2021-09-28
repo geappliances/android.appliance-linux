@@ -56,6 +56,10 @@ static const struct scpsys_domain_data scpsys_domain_data_mt8167[] = {
 		.pwr_sta2nd_offs = SPM_PWR_STATUS_2ND,
 		.sram_pdn_bits = 0,
 		.sram_pdn_ack_bits = 0,
+		.bp_infracfg = {
+			BUS_PROT_UPDATE_TOPAXI(MT8167_TOP_AXI_PROT_EN_MCU_MFG |
+					       MT8167_TOP_AXI_PROT_EN_MFG_EMI),
+		},
 	},
 	[MT8167_POWER_DOMAIN_MFG_2D] = {
 		.name = "mfg_2d",
