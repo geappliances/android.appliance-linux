@@ -1,0 +1,34 @@
+[ -n "${MTK_RESTRICTED_BUILD_CONFIG_INCLUDED}" ] && return; MTK_RESTRICTED_BUILD_CONFIG_INCLUDED="y"
+
+. ${ROOT_DIR}/src/build.config.mtk
+
+# Build restricted kernel modules
+# These require an NDA from MediaTek in order to have access
+
+# Configure and enable build MT8183 EVB Connectivity modules
+WLAN_CHIP_ID=MT7668
+
+EXT_MODULES="$EXT_MODULES mt7668-wifi-mod"
+
+RESTRICTED_MODULES_FILES="
+  wlan_drv_gen4_MT7668_prealloc.ko
+  wlan_drv_gen4_MT7668.ko
+"
+
+function install_restricted_modules() {
+  mkdir "${COMMON_OUT_DIR}/kernel-restricted"
+  pushd ${MODULES_STAGING_DIR}
+  for MODULE in ${RESTRICTED_MODULES_FILES}; do
+    find . -type f -name "${MODULE}" \
+    -exec cp --parents '{}' "${COMMON_OUT_DIR}/kernel-restricted/" \;
+
+    # remove module from MODULES_STAGING_DIR so that it does not
+    # get copied to DIST_DIR
+    find . -name "${MODULE}" -delete
+  done
+  popd
+
+  product_modules_install "kernel-restricted" "kernel-restricted"
+}
+
+EXTRA_CMDS="install_restricted_modules; $EXTRA_CMDS"

@@ -60,11 +60,6 @@ KCFLAGS="-Werror"
 
 EXTRA_CMDS="update_prebuilt"
 
-# Configure and enable build MT8183 EVB Connectivity modules
-WLAN_CHIP_ID=MT7668
-
-EXT_MODULES="mt7668-wifi-mod"
-
 function product_modules_install() {
     (cd ${OUT_DIR} && \
     KERNEL_VERSION=$(make "${TOOL_ARGS[@]}" kernelversion) && \
