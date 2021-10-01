@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -62,18 +42,6 @@ void kbase_device_vinstr_term(struct kbase_device *kbdev);
 int kbase_device_timeline_init(struct kbase_device *kbdev);
 void kbase_device_timeline_term(struct kbase_device *kbdev);
 
-#if MALI_USE_CSF
-int kbase_device_hwcnt_backend_csf_init(struct kbase_device *kbdev);
-void kbase_device_hwcnt_backend_csf_term(struct kbase_device *kbdev);
-int kbase_device_hwcnt_backend_csf_if_init(struct kbase_device *kbdev);
-void kbase_device_hwcnt_backend_csf_if_term(struct kbase_device *kbdev);
-int kbase_device_hwcnt_backend_csf_metadata_init(struct kbase_device *kbdev);
-void kbase_device_hwcnt_backend_csf_metadata_term(struct kbase_device *kbdev);
-#else
-int kbase_device_hwcnt_backend_jm_init(struct kbase_device *kbdev);
-void kbase_device_hwcnt_backend_jm_term(struct kbase_device *kbdev);
-#endif
-
 int kbase_device_hwcnt_context_init(struct kbase_device *kbdev);
 void kbase_device_hwcnt_context_term(struct kbase_device *kbdev);
 
@@ -104,3 +72,17 @@ int kbase_device_early_init(struct kbase_device *kbdev);
  * @kbdev:	Device pointer
  */
 void kbase_device_early_term(struct kbase_device *kbdev);
+
+/**
+ * kbase_device_late_init - Complete any device-specific initialization.
+ * @kbdev:	Device pointer
+ *
+ * Return: 0 on success, or an error code on failure.
+ */
+int kbase_device_late_init(struct kbase_device *kbdev);
+
+/**
+ * kbase_device_late_term - Complete any device-specific termination.
+ * @kbdev:	Device pointer
+ */
+void kbase_device_late_term(struct kbase_device *kbdev);

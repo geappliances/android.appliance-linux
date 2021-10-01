@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -59,7 +39,7 @@
  */
 #define KBASEP_USER_DB_NR_INVALID ((s8)-1)
 
-#define FIRMWARE_PING_INTERVAL_MS (2000) /* 2 seconds */
+#define FIRMWARE_PING_INTERVAL_MS (4000) /* 4 seconds */
 
 #define FIRMWARE_IDLE_HYSTERESIS_TIME_MS (10) /* Default 10 milliseconds */
 
@@ -233,6 +213,22 @@ int kbase_csf_queue_register(struct kbase_context *kctx,
 			     struct kbase_ioctl_cs_queue_register *reg);
 
 /**
+ * kbase_csf_queue_register_ex - Register a GPU command queue with
+ *                               extended format.
+ *
+ * @kctx:	Pointer to the kbase context within which the
+ *		queue is to be registered.
+ * @reg:	Pointer to the structure which contains details of the
+ *		queue to be registered within the provided
+ *		context, together with the extended parameter fields
+ *              for supporting cs trace command.
+ *
+ * Return:	0 on success, or negative on failure.
+ */
+int kbase_csf_queue_register_ex(struct kbase_context *kctx,
+			     struct kbase_ioctl_cs_queue_register_ex *reg);
+
+/**
  * kbase_csf_queue_terminate - Terminate a GPU command queue.
  *
  * @kctx:	Pointer to the kbase context within which the
@@ -384,19 +380,6 @@ int kbase_csf_queue_group_suspend(struct kbase_context *kctx,
 void kbase_csf_add_group_fatal_error(
 	struct kbase_queue_group *const group,
 	struct base_gpu_queue_group_error const *const err_payload);
-
-/**
- * kbase_csf_add_queue_fatal_error - Report a fatal queue error to userspace
- *
- * @queue:         Pointer to queue for which fatal event was received.
- * @cs_fatal:      Fault information
- * @cs_fatal_info: Additional fault information
- *
- * If a queue has already been in fatal error status,
- * subsequent fatal error on the queue should never take place.
- */
-void kbase_csf_add_queue_fatal_error(struct kbase_queue *const queue,
-				     u32 cs_fatal, u64 cs_fatal_info);
 
 /**
  * kbase_csf_interrupt - Handle interrupts issued by CSF firmware.
