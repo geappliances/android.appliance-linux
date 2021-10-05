@@ -74,13 +74,15 @@ void mtk_vcodec_enc_clock_on(struct mtk_vcodec_pm *pm)
 {
 	int ret;
 
-	ret = mtk_smi_larb_get(pm->larbvenc);
-
+	ret = pm_runtime_get_sync(pm->dev);
 	if (ret)
-	    mtk_v4l2_err("mtk_smi_larb_get larb3 fail %d", ret);
+		mtk_v4l2_err("%s power domain fail %d", __func__, ret);
+
+	ret = mtk_smi_larb_get(pm->larbvenc);
+	if (ret)
+		mtk_v4l2_err("mtk_smi_larb_get larb3 fail %d", ret);
 
 	ret = clk_prepare_enable(pm->venc_sel);
-
 	if (ret)
 		mtk_v4l2_err("clk_prepare_enable fail %d", ret);
 }
@@ -89,5 +91,6 @@ void mtk_vcodec_enc_clock_off(struct mtk_vcodec_pm *pm)
 {
 	clk_disable_unprepare(pm->venc_sel);
 	mtk_smi_larb_put(pm->larbvenc);
+	pm_runtime_put_sync(pm->dev);
 }
 
