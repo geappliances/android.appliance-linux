@@ -29,7 +29,7 @@
 #define SENINF_HS_TRAIL_PARAMETER	0x8
 
 #define SENINF_MAX_NUM_INPUTS		4
-#define SENINF_MAX_NUM_OUTPUTS		4
+#define SENINF_MAX_NUM_OUTPUTS		6
 #define SENINF_MAX_NUM_MUXES		6
 #define SENINF_MAX_NUM_PADS		(SENINF_MAX_NUM_INPUTS + \
 					 SENINF_MAX_NUM_OUTPUTS)
@@ -793,7 +793,7 @@ static void mtk_seninf_top_mux_setup(struct mtk_seninf *priv,
 	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, 0x00043210);
 
 	if (conf->seninf_version == SENINF_50) {
-		pos = source_pad - conf->nb_inputs + 2;
+		pos = source_pad - conf->nb_inputs;
 		val = (mtk_seninf_read(priv, SENINF_TOP_CAM_MUX_CTRL)
 		       & ~(0xF << (pos * 4))) |
 		       ((mux->mux_id & 0xF) << (pos * 4));
@@ -1401,7 +1401,11 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	input = &priv->inputs[port];
 
 	input->bus = vep->bus.mipi_csi2;
-	input->source_pad = port + conf->nb_inputs;
+	/*
+	 * Default routing configuration: Connect SENINF inputs to CAMSV
+	 * outputs.
+	 */
+	input->source_pad = port + conf->nb_inputs + 2;
 
 	/*
 	 * Select the PHY. SENINF2, SENINF3 and SENINF5 are hardwired to the
@@ -1814,7 +1818,7 @@ static const struct mtk_seninf_conf seninf_8183_conf = {
 	.csi2_rx_type = MTK_SENINF_CSI2_RX_CSI2,
 	.nb_inputs = 4,
 	.nb_muxes = 6,
-	.nb_outputs = 4,
+	.nb_outputs = 6,
 	.nb_phy = 5,
 };
 
