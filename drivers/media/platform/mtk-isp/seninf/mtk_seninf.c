@@ -311,7 +311,7 @@ static const struct mtk_seninf_format_info *mtk_seninf_format_info(u32 code)
 }
 
 /* -----------------------------------------------------------------------------
- * Hardware Configuration
+ * I/O Accessors
  */
 
 /*
@@ -404,6 +404,250 @@ static void __mtk_seninf_input_update(struct mtk_seninf_input *input, u32 reg,
 	__mtk_seninf_input_update(input, reg, reg##_##field##_MASK,	\
 				  reg##_##field##_SHIFT, val)
 
+/* -----------------------------------------------------------------------------
+ * Hardware Configuration
+ *
+ * The SENINF is the camera sensor interface. On the input side it contains
+ * input channels (also named SENINF), each made of a CSI-2 receiver, an
+ * interface for parallel sensors, and a test pattern generator. The inputs are
+ * routed through a N:M crossbar switch (TOP MUX) to VC/DT filters with a FIFO
+ * (MUX). The MUX are routed to another N:M crossbar switch (CAM MUX), whose
+ * output is then connected to other IP cores.
+ *
+ *            +-------------------------------------------------------+
+ *            | SENINF                                                |
+ *            |                                                       |
+ * +-------+  |   +----------+    TOP MUX                             |
+ * |       |  |   |  SENINF  |      |\                        CAM MUX |
+ * | D-PHY | ---> | CSI-2 RX | ---> | |      +------------+      |\   |
+ * |       |  |   |   TPG    |   -> | | ---> | MUX (FIFO) | ---> | | ---> CAMSV
+ * +-------+  |   +----------+   -> | |      +------------+   -> | |  |
+ *            |                     |/                        -> | |  |
+ *            |                                                  |/   |
+ *            |                                                       |
+ *    ...     |       ...                         ...                --->
+ *            |                                                       |
+ *            |                                                       |
+ *            +-------------------------------------------------------+
+ *
+ * The number of PHYs, SENINF and MUX differ between SoCs. MT8167 has a single
+ * MUX and thus no output CAM MUX crossbar switch.
+ */
+
+static void mtk_seninf_csi2_setup_phy(struct mtk_seninf *priv)
+{
+	/* CSI0(A) and CSI0B */
+	if (priv->inputs[CSI_PORT_0].phy_mode ||
+	    priv->inputs[CSI_PORT_0B].phy_mode) {
+		struct mtk_seninf_input *input_a = &priv->inputs[CSI_PORT_0];
+		struct mtk_seninf_input *input_b = &priv->inputs[CSI_PORT_0B];
+		unsigned int csi0b_clock;
+		unsigned int dphy_mode;
+
+		/*
+		 * If CSI0B is enabled, use its clock lane. Otherwise set it to
+		 * CSI0B lane 2 to ensure it won't conflict with any lane used
+		 * by CSI0(A).
+		 */
+		csi0b_clock = input_b->phy_mode ? input_b->bus.clock_lane : 2;
+
+		/*
+		 * If CSI0A operates in 4D1C then the whole port operates in
+		 * 4D1C, otherwise we have either a single or a dual 2D1C
+		 * configuration.
+		 */
+		dphy_mode = input_a->phy_mode == SENINF_PHY_MODE_4D1C ? 0 : 1;
+
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+				  DPHY_MODE, dphy_mode);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+				  CK_SEL_1, input_a->bus.clock_lane);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+				  CK_SEL_2, csi0b_clock);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
+				  PHY_SENINF_LANE_MUX_CSI0_EN, 1);
+	}
+
+	/* CSI1 */
+	if (priv->inputs[CSI_PORT_1].phy_mode) {
+		struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_1];
+
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI1,
+				  DPHY_MODE, 0 /* 4D1C */);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI1,
+				  CK_SEL_1, input->bus.clock_lane);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI1,
+				  PHY_SENINF_LANE_MUX_CSI1_EN, 1);
+	}
+
+	/* CSI2 */
+	if (priv->inputs[CSI_PORT_2].phy_mode) {
+		struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_2];
+
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI2,
+				  DPHY_MODE, 0 /* 4D1C */);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI2,
+				  CK_SEL_1, input->bus.clock_lane);
+		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI2,
+				  PHY_SENINF_LANE_MUX_CSI2_EN, 1);
+	}
+}
+
+static void mtk_seninf_input_setup_csi2_rx(struct mtk_seninf_input *input)
+{
+	unsigned int lanes[4] = { };
+	unsigned int i;
+
+	/*
+	 * Configure data lane muxing. In 2D1C mode, lanes 0 to 2 correspond to
+	 * CSIx[AB]_L{0,1,2}, and in 4D1C lanes 0 to 5 correspond to
+	 * CSIxA_L{0,1,2}, CSIxB_L{0,1,2}.
+	 *
+	 * The clock lane must be skipped when calculating the index of the
+	 * physical data lane. For instance, in 4D1C mode, the sensor clock
+	 * lane is typically connected to lane 2 (CSIxA_L2), and the sensor
+	 * data lanes 0-3 to lanes 1 (CSIxA_L1), 3 (CSIxB_L0), 0 (CSIxA_L0) and
+	 * 4 (CSIxB_L1). The when skipping the clock lane, the data lane
+	 * indices become 1, 2, 0 and 3.
+	 */
+	for (i = 0; i < input->bus.num_data_lanes; ++i) {
+		lanes[i] = input->bus.data_lanes[i];
+		if (lanes[i] > input->bus.clock_lane)
+			lanes[i]--;
+	}
+
+	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
+				CSI0_BIST_LN0_MUX, lanes[0]);
+	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
+				CSI0_BIST_LN1_MUX, lanes[1]);
+	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
+				CSI0_BIST_LN2_MUX, lanes[2]);
+	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
+				CSI0_BIST_LN3_MUX, lanes[3]);
+}
+
+static void mtk_seninf_input_setup_csi2(struct mtk_seninf_input *input)
+{
+	const struct mtk_seninf_format_info *fmtinfo;
+	unsigned int dpcm;
+	unsigned int data_lane_num = input->bus.num_data_lanes;
+	unsigned int data_header_order = 1;
+	unsigned int val = 0;
+
+	fmtinfo = mtk_seninf_format_info(input->format.code);
+
+	/* Configure timestamp */
+	mtk_seninf_input_write(input, SENINF_TG1_TM_STP, SENINF_TIMESTAMP_STEP);
+
+	/* HQ */
+	mtk_seninf_input_write(input, SENINF_TG1_PH_CNT, 0x0);
+	mtk_seninf_input_write(input, SENINF_TG1_SEN_CK, 0x10001);
+
+	/* First Enable Sensor interface and select pad (0x1a04_0200) */
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CTRL, PAD2CAM_DATA_SEL, SENINF_PAD_10BIT);
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_SRC_SEL, 0);
+	mtk_seninf_input_update(input, SENINF_CTRL_EXT, SENINF_CSI2_IP_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CTRL_EXT, SENINF_NCSI2_IP_EN, 0);
+
+	/* DPCM Enable */
+	dpcm = fmtinfo->flags & MTK_SENINF_FORMAT_DPCM ? 0x2a : 0;
+	val = 1 << ((dpcm == 0x2a) ? 15 : ((dpcm & 0xF) + 7));
+	mtk_seninf_input_write(input, SENINF_CSI2_DPCM, val);
+
+	/* Settle delay */
+	mtk_seninf_input_update(input, SENINF_CSI2_LNRD_TIMING,
+				DATA_SETTLE_PARAMETER, SENINF_SETTLE_DELAY);
+
+	/* HQ */
+	mtk_seninf_input_write(input, SENINF_CSI2_LNRC_FSM, 0x10);
+
+	/* CSI2 control */
+	val = mtk_seninf_input_read(input, SENINF_CSI2_CTL)
+	    | (data_header_order << 16) | 0x10 | ((1 << data_lane_num) - 1);
+	mtk_seninf_input_write(input, SENINF_CSI2_CTL, val);
+
+	mtk_seninf_input_update(input, SENINF_CSI2_RESYNC_MERGE_CTL,
+				BYPASS_LANE_RESYNC, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_RESYNC_MERGE_CTL, CDPHY_SEL, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_RESYNC_MERGE_CTL,
+				CPHY_LANE_RESYNC_CNT, 3);
+	mtk_seninf_input_update(input, SENINF_CSI2_MODE, CSR_CSI2_MODE, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_MODE, CSR_CSI2_HEADER_LEN, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_DPHY_SYNC, SYNC_SEQ_MASK_0, 0xff00);
+	mtk_seninf_input_update(input, SENINF_CSI2_DPHY_SYNC, SYNC_SEQ_PAT_0, 0x001d);
+
+	mtk_seninf_input_update(input, SENINF_CSI2_CTL, CLOCK_HS_OPTION, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_CTL, HSRX_DET_EN, 0);
+	mtk_seninf_input_update(input, SENINF_CSI2_CTL, HS_TRAIL_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CSI2_HS_TRAIL, HS_TRAIL_PARAMETER,
+				SENINF_HS_TRAIL_PARAMETER);
+
+	/* Set debug port to output packet number */
+	mtk_seninf_input_update(input, SENINF_CSI2_DGB_SEL, DEBUG_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CSI2_DGB_SEL, DEBUG_SEL, 0x1a);
+
+	/* HQ */
+	mtk_seninf_input_write(input, SENINF_CSI2_SPARE0, 0xfffffffe);
+
+	/* Enable CSI2 IRQ mask */
+	/* Turn on all interrupt */
+	mtk_seninf_input_write(input, SENINF_CSI2_INT_EN, 0xffffffff);
+	/* Write clear CSI2 IRQ */
+	mtk_seninf_input_write(input, SENINF_CSI2_INT_STATUS, 0xffffffff);
+	/* Enable CSI2 Extend IRQ mask */
+	/* Turn on all interrupt */
+	mtk_seninf_input_update(input, SENINF_CTRL, CSI2_SW_RST, 1);
+	udelay(1);
+	mtk_seninf_input_update(input, SENINF_CTRL, CSI2_SW_RST, 0);
+}
+
+static void mtk_seninf_input_setup_ncsi2(struct mtk_seninf_input *input)
+{
+	unsigned int val;
+
+	/* HQ */
+	mtk_seninf_input_write(input, SENINF_TG1_PH_CNT, 0x0);
+	mtk_seninf_input_write(input, SENINF_TG1_SEN_CK, 0x10001);
+
+	/* First Enable Sensor interface and select pad (0x1a04_0200) */
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CTRL, PAD2CAM_DATA_SEL,
+		    SENINF_PAD_10BIT);
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_SRC_SEL, 8);
+
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 1U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_3C, 0x00051545U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 5U);
+	mdelay(1);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 4U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_3C, 0U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, 0x11U);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, ED_SEL, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_LANE, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE3, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE2, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE1, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE0, 1);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_HS_OPTION, 0);
+	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_HS_OPTION, 1);
+	mtk_seninf_input_write(input, SENINF_NCSI2_LNRD_TIMING, 0x2800U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_INT_STATUS,
+			       SENINF_NCSI2_INT_STATUS_ALL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_INT_EN,
+			       SENINF_NCSI2_INT_EN_ALL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_24, 0xE4000000U);
+	val = 0xFFFFFF00U & mtk_seninf_input_read(input, SENINF_NCSI2_DBG_SEL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, val);
+	val = 0xFFFFFF45U | mtk_seninf_input_read(input, SENINF_NCSI2_DBG_SEL);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, val);
+	val = 0xFFFFFFEFU & mtk_seninf_input_read(input, SENINF_NCSI2_HSRX_DBG);
+	mtk_seninf_input_write(input, SENINF_NCSI2_HSRX_DBG, val);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DI_CTRL, 0x01010101U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DI, 0x03020100U);
+	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, 0x10);
+}
+
 static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 			       struct mtk_seninf_input *input)
 {
@@ -484,223 +728,6 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 		       ((input->seninf_id & 0xF) << (pos * 4));
 		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, val);
 	}
-}
-
-static void mtk_seninf_csi2_setup_phy(struct mtk_seninf *priv)
-{
-	/* CSI0(A) and CSI0B */
-	if (priv->inputs[CSI_PORT_0].phy_mode ||
-	    priv->inputs[CSI_PORT_0B].phy_mode) {
-		struct mtk_seninf_input *input_a = &priv->inputs[CSI_PORT_0];
-		struct mtk_seninf_input *input_b = &priv->inputs[CSI_PORT_0B];
-		unsigned int csi0b_clock;
-		unsigned int dphy_mode;
-
-		/*
-		 * If CSI0B is enabled, use its clock lane. Otherwise set it to
-		 * CSI0B lane 2 to ensure it won't conflict with any lane used
-		 * by CSI0(A).
-		 */
-		csi0b_clock = input_b->phy_mode ? input_b->bus.clock_lane : 2;
-
-		/*
-		 * If CSI0A operates in 4D1C then the whole port operates in
-		 * 4D1C, otherwise we have either a single or a dual 2D1C
-		 * configuration.
-		 */
-		dphy_mode = input_a->phy_mode == SENINF_PHY_MODE_4D1C ? 0 : 1;
-
-		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-				  DPHY_MODE, dphy_mode);
-		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-				  CK_SEL_1, input_a->bus.clock_lane);
-		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-				  CK_SEL_2, csi0b_clock);
-		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI0,
-				  PHY_SENINF_LANE_MUX_CSI0_EN, 1);
-	}
-
-	/* CSI1 */
-	if (priv->inputs[CSI_PORT_1].phy_mode) {
-		struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_1];
-
-		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI1,
-				  DPHY_MODE, 0 /* 4D1C */);
-		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI1,
-				  CK_SEL_1, input->bus.clock_lane);
-		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI1,
-				  PHY_SENINF_LANE_MUX_CSI1_EN, 1);
-	}
-
-	/* CSI2 */
-	if (priv->inputs[CSI_PORT_2].phy_mode) {
-		struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_2];
-
-		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI2,
-				  DPHY_MODE, 0 /* 4D1C */);
-		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI2,
-				  CK_SEL_1, input->bus.clock_lane);
-		mtk_seninf_update(priv, SENINF_TOP_PHY_SENINF_CTL_CSI2,
-				  PHY_SENINF_LANE_MUX_CSI2_EN, 1);
-	}
-}
-
-static void mtk_seninf_csi2_rx_config(struct mtk_seninf *priv,
-				 struct mtk_seninf_input *input)
-{
-	unsigned int lanes[4] = { };
-	unsigned int i;
-
-	/*
-	 * Configure data lane muxing. In 2D1C mode, lanes 0 to 2 correspond to
-	 * CSIx[AB]_L{0,1,2}, and in 4D1C lanes 0 to 5 correspond to
-	 * CSIxA_L{0,1,2}, CSIxB_L{0,1,2}.
-	 *
-	 * The clock lane must be skipped when calculating the index of the
-	 * physical data lane. For instance, in 4D1C mode, the sensor clock
-	 * lane is typically connected to lane 2 (CSIxA_L2), and the sensor
-	 * data lanes 0-3 to lanes 1 (CSIxA_L1), 3 (CSIxB_L0), 0 (CSIxA_L0) and
-	 * 4 (CSIxB_L1). The when skipping the clock lane, the data lane
-	 * indices become 1, 2, 0 and 3.
-	 */
-	for (i = 0; i < input->bus.num_data_lanes; ++i) {
-		lanes[i] = input->bus.data_lanes[i];
-		if (lanes[i] > input->bus.clock_lane)
-			lanes[i]--;
-	}
-
-	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
-				CSI0_BIST_LN0_MUX, lanes[0]);
-	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
-				CSI0_BIST_LN1_MUX, lanes[1]);
-	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
-				CSI0_BIST_LN2_MUX, lanes[2]);
-	mtk_seninf_input_update(input, MIPI_RX_CON24_CSI0,
-				CSI0_BIST_LN3_MUX, lanes[3]);
-}
-
-static void mtk_seninf_csi2_set_mipi(struct mtk_seninf *priv,
-				     struct mtk_seninf_input *input)
-{
-	const struct mtk_seninf_format_info *fmtinfo;
-	unsigned int dpcm;
-	unsigned int data_lane_num = input->bus.num_data_lanes;
-	unsigned int data_header_order = 1;
-	unsigned int val = 0;
-
-	fmtinfo = mtk_seninf_format_info(input->format.code);
-
-	/* Configure timestamp */
-	mtk_seninf_input_write(input, SENINF_TG1_TM_STP, SENINF_TIMESTAMP_STEP);
-
-	/* HQ */
-	mtk_seninf_input_write(input, SENINF_TG1_PH_CNT, 0x0);
-	mtk_seninf_input_write(input, SENINF_TG1_SEN_CK, 0x10001);
-
-	/* First Enable Sensor interface and select pad (0x1a04_0200) */
-	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_EN, 1);
-	mtk_seninf_input_update(input, SENINF_CTRL, PAD2CAM_DATA_SEL, SENINF_PAD_10BIT);
-	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_SRC_SEL, 0);
-	mtk_seninf_input_update(input, SENINF_CTRL_EXT, SENINF_CSI2_IP_EN, 1);
-	mtk_seninf_input_update(input, SENINF_CTRL_EXT, SENINF_NCSI2_IP_EN, 0);
-
-	/* DPCM Enable */
-	dpcm = fmtinfo->flags & MTK_SENINF_FORMAT_DPCM ? 0x2a : 0;
-	val = 1 << ((dpcm == 0x2a) ? 15 : ((dpcm & 0xF) + 7));
-	mtk_seninf_input_write(input, SENINF_CSI2_DPCM, val);
-
-	/* Settle delay */
-	mtk_seninf_input_update(input, SENINF_CSI2_LNRD_TIMING,
-				DATA_SETTLE_PARAMETER, SENINF_SETTLE_DELAY);
-
-	/* HQ */
-	mtk_seninf_input_write(input, SENINF_CSI2_LNRC_FSM, 0x10);
-
-	/* CSI2 control */
-	val = mtk_seninf_input_read(input, SENINF_CSI2_CTL)
-	    | (data_header_order << 16) | 0x10 | ((1 << data_lane_num) - 1);
-	mtk_seninf_input_write(input, SENINF_CSI2_CTL, val);
-
-	mtk_seninf_input_update(input, SENINF_CSI2_RESYNC_MERGE_CTL,
-				BYPASS_LANE_RESYNC, 0);
-	mtk_seninf_input_update(input, SENINF_CSI2_RESYNC_MERGE_CTL, CDPHY_SEL, 0);
-	mtk_seninf_input_update(input, SENINF_CSI2_RESYNC_MERGE_CTL,
-				CPHY_LANE_RESYNC_CNT, 3);
-	mtk_seninf_input_update(input, SENINF_CSI2_MODE, CSR_CSI2_MODE, 0);
-	mtk_seninf_input_update(input, SENINF_CSI2_MODE, CSR_CSI2_HEADER_LEN, 0);
-	mtk_seninf_input_update(input, SENINF_CSI2_DPHY_SYNC, SYNC_SEQ_MASK_0, 0xff00);
-	mtk_seninf_input_update(input, SENINF_CSI2_DPHY_SYNC, SYNC_SEQ_PAT_0, 0x001d);
-
-	mtk_seninf_input_update(input, SENINF_CSI2_CTL, CLOCK_HS_OPTION, 0);
-	mtk_seninf_input_update(input, SENINF_CSI2_CTL, HSRX_DET_EN, 0);
-	mtk_seninf_input_update(input, SENINF_CSI2_CTL, HS_TRAIL_EN, 1);
-	mtk_seninf_input_update(input, SENINF_CSI2_HS_TRAIL, HS_TRAIL_PARAMETER,
-				SENINF_HS_TRAIL_PARAMETER);
-
-	/* Set debug port to output packet number */
-	mtk_seninf_input_update(input, SENINF_CSI2_DGB_SEL, DEBUG_EN, 1);
-	mtk_seninf_input_update(input, SENINF_CSI2_DGB_SEL, DEBUG_SEL, 0x1a);
-
-	/* HQ */
-	mtk_seninf_input_write(input, SENINF_CSI2_SPARE0, 0xfffffffe);
-
-	/* Enable CSI2 IRQ mask */
-	/* Turn on all interrupt */
-	mtk_seninf_input_write(input, SENINF_CSI2_INT_EN, 0xffffffff);
-	/* Write clear CSI2 IRQ */
-	mtk_seninf_input_write(input, SENINF_CSI2_INT_STATUS, 0xffffffff);
-	/* Enable CSI2 Extend IRQ mask */
-	/* Turn on all interrupt */
-	mtk_seninf_input_update(input, SENINF_CTRL, CSI2_SW_RST, 1);
-	udelay(1);
-	mtk_seninf_input_update(input, SENINF_CTRL, CSI2_SW_RST, 0);
-}
-
-static void mtk_seninf_ncsi2_set_mipi(struct mtk_seninf *priv,
-				      struct mtk_seninf_input *input)
-{
-	unsigned int val;
-
-	/* HQ */
-	mtk_seninf_input_write(input, SENINF_TG1_PH_CNT, 0x0);
-	mtk_seninf_input_write(input, SENINF_TG1_SEN_CK, 0x10001);
-
-	/* First Enable Sensor interface and select pad (0x1a04_0200) */
-	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_EN, 1);
-	mtk_seninf_input_update(input, SENINF_CTRL, PAD2CAM_DATA_SEL,
-		    SENINF_PAD_10BIT);
-	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_SRC_SEL, 8);
-
-	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 1U);
-	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_3C, 0x00051545U);
-	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 5U);
-	mdelay(1);
-	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_38, 4U);
-	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_3C, 0U);
-	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, 0x11U);
-	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, ED_SEL, 1);
-	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_LANE, 1);
-	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE3, 1);
-	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE2, 1);
-	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE1, 1);
-	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, DATA_LANE0, 1);
-	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_HS_OPTION, 0);
-	mtk_seninf_input_update(input, SENINF_NCSI2_CTL, CLOCK_HS_OPTION, 1);
-	mtk_seninf_input_write(input, SENINF_NCSI2_LNRD_TIMING, 0x2800U);
-	mtk_seninf_input_write(input, SENINF_NCSI2_INT_STATUS,
-			       SENINF_NCSI2_INT_STATUS_ALL);
-	mtk_seninf_input_write(input, SENINF_NCSI2_INT_EN,
-			       SENINF_NCSI2_INT_EN_ALL);
-	mtk_seninf_input_write(input, SENINF_NCSI2_CAL_24, 0xE4000000U);
-	val = 0xFFFFFF00U & mtk_seninf_input_read(input, SENINF_NCSI2_DBG_SEL);
-	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, val);
-	val = 0xFFFFFF45U | mtk_seninf_input_read(input, SENINF_NCSI2_DBG_SEL);
-	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, val);
-	val = 0xFFFFFFEFU & mtk_seninf_input_read(input, SENINF_NCSI2_HSRX_DBG);
-	mtk_seninf_input_write(input, SENINF_NCSI2_HSRX_DBG, val);
-	mtk_seninf_input_write(input, SENINF_NCSI2_DI_CTRL, 0x01010101U);
-	mtk_seninf_input_write(input, SENINF_NCSI2_DI, 0x03020100U);
-	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, 0x10);
 }
 
 static void seninf_enable_test_pattern(struct mtk_seninf *priv)
@@ -833,10 +860,10 @@ static void mtk_seninf_start(struct mtk_seninf *priv)
 	phy_power_on(input->phy);
 
 	if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2) {
-		mtk_seninf_csi2_rx_config(priv, input);
-		mtk_seninf_csi2_set_mipi(priv, input);
+		mtk_seninf_input_setup_csi2_rx(input);
+		mtk_seninf_input_setup_csi2(input);
 	} else if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_NCSI2) {
-		mtk_seninf_ncsi2_set_mipi(priv, input);
+		mtk_seninf_input_setup_ncsi2(input);
 	}
 
 	mtk_seninf_set_mux(priv, input);
