@@ -778,27 +778,23 @@ static void mtk_seninf_mux_setup(struct mtk_seninf_mux *mux,
 }
 
 static void mtk_seninf_top_mux_setup(struct mtk_seninf *priv,
-				     struct mtk_seninf_mux *mux,
-				     unsigned int source_pad)
+				     enum mtk_seninf_id seninf_id,
+				     struct mtk_seninf_mux *mux)
 {
 	const struct mtk_seninf_conf *conf = priv->conf;
 	unsigned int val;
-	unsigned int pos;
 
 	/*
-	 * Hardcode the top mux (from SENINF input to async FIFO) with a direct
-	 * mapping, and use the top cam mux to configure routing from the MUX
-	 * to the outputs (CAM and CAMSV).
+	 * Use the top mux (from SENINF input to MUX) to configure routing, and
+	 * hardcode a 1:1 mapping from the MUX instances to the SENINF outputs.
 	 */
-	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, 0x00043210);
+	val = mtk_seninf_read(priv, SENINF_TOP_MUX_CTRL)
+	    & ~(0xf << (mux->mux_id * 4));
+	val |= (seninf_id & 0xf) << (mux->mux_id * 4);
+	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, val);
 
-	if (conf->seninf_version == SENINF_50) {
-		pos = source_pad - conf->nb_inputs;
-		val = (mtk_seninf_read(priv, SENINF_TOP_CAM_MUX_CTRL)
-		       & ~(0xF << (pos * 4))) |
-		       ((mux->mux_id & 0xF) << (pos * 4));
-		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, val);
-	}
+	if (conf->seninf_version == SENINF_50)
+		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76543210);
 }
 
 static void seninf_enable_test_pattern(struct mtk_seninf *priv)
@@ -937,15 +933,14 @@ static void mtk_seninf_start(struct mtk_seninf *priv)
 	}
 
 	/*
-	 * MT8167 (SENINF 2.0) has a single MUX, while MT8183 has one MUX per
-	 * output. On the latter, we hardcode a 1:1 mapping of SENINF to MUX
-	 * instances to match the TOP_MUX configuration in
+	 * Both SENINF 2.0 and SENINF 5.0 have the same number of MUX instances
+	 * and outputs. Hardcode a 1:1 mapping of MUX instances to SENINF
+	 * outputs to match the TOP_CAM_MUX configuration in
 	 * mtk_seninf_top_mux_setup().
 	 */
-	mux = conf->seninf_version == SENINF_20
-	    ? &priv->muxes[0] : &priv->muxes[input->seninf_id];
+	mux = &priv->muxes[input->source_pad - conf->nb_inputs];
 	mtk_seninf_mux_setup(mux, input);
-	mtk_seninf_top_mux_setup(priv, mux, input->source_pad);
+	mtk_seninf_top_mux_setup(priv, input->seninf_id, mux);
 }
 
 static void mtk_seninf_stop(struct mtk_seninf *priv)
