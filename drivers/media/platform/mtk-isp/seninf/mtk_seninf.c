@@ -138,7 +138,7 @@ struct mtk_seninf_format_info {
  * @phy: PHY connected to the input
  * @phy_mode: PHY operation mode (NONE when the input is not connected)
  * @bus: CSI-2 bus configuration from DT
- * @subdev: Source subdev connected to the input
+ * @source_sd: Source subdev connected to the input
  * @format: Active format on the sink pad
  * @source_pad: Source pad to which this input is routed
  */
@@ -153,7 +153,7 @@ struct mtk_seninf_input {
 
 	struct v4l2_fwnode_bus_mipi_csi2 bus;
 
-	struct v4l2_subdev *subdev;
+	struct v4l2_subdev *source_sd;
 	struct v4l2_mbus_framefmt format;
 
 	unsigned int source_pad;
@@ -1041,7 +1041,7 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 
 	if (!on) {
 		if (priv->active_input && !priv->is_testmode) {
-			source = priv->active_input->subdev;
+			source = priv->active_input->source_sd;
 			ret = v4l2_subdev_call(source, video, s_stream, 0);
 			if (ret)
 				dev_err(priv->dev,
@@ -1073,7 +1073,7 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 	/* Start the SENINF first and then the source. */
 	mtk_seninf_start(priv);
 
-	source = priv->active_input->subdev;
+	source = priv->active_input->source_sd;
 	ret = v4l2_subdev_call(source, video, s_stream, 1);
 	if (ret) {
 		dev_err(priv->dev, "failed to start source %s: %d\n",
@@ -1248,7 +1248,7 @@ static int seninf_set_routing(struct v4l2_subdev *sd,
 
 		pad = -1;
 		for (i = 0; i < conf->nb_inputs; ++i) {
-			if (priv->inputs[i].subdev == NULL)
+			if (priv->inputs[i].source_sd == NULL)
 				continue;
 			if (priv->inputs[i].source_pad == route->source_pad) {
 				pad = i;
@@ -1477,7 +1477,7 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
 	if (mtk_seninf_pad_is_sink(priv, s_asd->port)) {
 		struct mtk_seninf_input *input = s_asd->input;
 
-		input->subdev = sd;
+		input->source_sd = sd;
 
 		link = device_link_add(priv->dev, sd->dev, DL_FLAG_STATELESS);
 		if (!link) {
