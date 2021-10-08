@@ -648,17 +648,16 @@ static void mtk_seninf_input_setup_ncsi2(struct mtk_seninf_input *input)
 	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, 0x10);
 }
 
-static void mtk_seninf_set_mux(struct mtk_seninf *priv,
-			       struct mtk_seninf_input *input)
+static void mtk_seninf_mux_setup(struct mtk_seninf_input *input)
 {
+	const struct mtk_seninf_conf *conf = input->seninf->conf;
 	const struct mtk_seninf_format_info *fmtinfo;
-	unsigned int val, pos;
-	const struct mtk_seninf_conf *conf = priv->conf;
 	unsigned int pix_sel_ext;
 	unsigned int pix_sel;
 	unsigned int hs_pol = 0;
 	unsigned int vs_pol = 0;
 	unsigned int pixel_mode = TWO_PIXEL_MODE;
+	unsigned int val;
 
 	fmtinfo = mtk_seninf_format_info(input->format.code);
 
@@ -711,10 +710,18 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 			       ~(SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
 				 SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK));
 
-	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, 0x00043210);
-
 	/* HQ */
 	mtk_seninf_input_write(input, SENINF_MUX_SPARE, 0xc2000);
+}
+
+static void mtk_seninf_top_mux_setup(struct mtk_seninf *priv,
+				     struct mtk_seninf_input *input)
+{
+	const struct mtk_seninf_conf *conf = priv->conf;
+	unsigned int val;
+	unsigned int pos;
+
+	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, 0x00043210);
 
 	/*
 	 * Hardcode the top mux (from SENINF input to async FIFO) with a direct
@@ -866,7 +873,8 @@ static void mtk_seninf_start(struct mtk_seninf *priv)
 		mtk_seninf_input_setup_ncsi2(input);
 	}
 
-	mtk_seninf_set_mux(priv, input);
+	mtk_seninf_mux_setup(input);
+	mtk_seninf_top_mux_setup(priv, input);
 }
 
 static void mtk_seninf_stop(struct mtk_seninf *priv)
