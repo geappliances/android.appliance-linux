@@ -119,7 +119,7 @@ struct mtk_cam_video_device {
  * @subdev_pads: Media pads of this sub-device.
  * @formats: Media bus format for all pads.
  * @vdev: The video device node.
- * @seninf: Pointer to the seninf sub-device.
+ * @seninf: Pointer to the seninf pad.
  * @streaming: Indicate the overall streaming status is on or off.
  * @stream_count: Number of streaming video nodes
  * @sequence: Buffer sequence number
@@ -152,7 +152,7 @@ struct mtk_cam_dev {
 	struct media_pad subdev_pads[MTK_CAM_CIO_NUM_PADS];
 	struct v4l2_mbus_framefmt formats[MTK_CAM_CIO_NUM_PADS];
 	struct mtk_cam_video_device vdev;
-	struct v4l2_subdev *seninf;
+	struct media_pad *seninf;
 	unsigned int streaming;
 	unsigned int stream_count;
 	unsigned int sequence;

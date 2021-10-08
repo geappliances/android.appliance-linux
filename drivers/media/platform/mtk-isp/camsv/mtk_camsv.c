@@ -39,24 +39,25 @@ static const u32 mtk_cam_mbus_formats[] = {
 static int mtk_cam_cio_stream_on(struct mtk_cam_dev *cam)
 {
 	struct device *dev = cam->dev;
-	struct media_pad *seninf_pad;
+	struct v4l2_subdev *seninf;
 	int ret;
 
 	if (!cam->seninf) {
-		seninf_pad = media_entity_remote_pad(
+		cam->seninf = media_entity_remote_pad(
 				&cam->subdev_pads[MTK_CAM_CIO_PAD_SENINF]);
-		if (!seninf_pad) {
+		if (!cam->seninf) {
 			dev_err(dev, "%s: No SENINF connected\n", __func__);
 			return -ENOLINK;
 		}
-		cam->seninf = media_entity_to_v4l2_subdev(seninf_pad->entity);
 	}
 
+	seninf = media_entity_to_v4l2_subdev(cam->seninf->entity);
+
 	/* Seninf must stream on first */
-	ret = v4l2_subdev_call(cam->seninf, video, s_stream, 1);
+	ret = v4l2_subdev_call(seninf, pad, s_stream, cam->seninf->index, 1);
 	if (ret) {
 		dev_err(dev, "failed to stream on %s:%d\n",
-			cam->seninf->entity.name, ret);
+			seninf->entity.name, ret);
 		return ret;
 	}
 
@@ -68,13 +69,17 @@ static int mtk_cam_cio_stream_on(struct mtk_cam_dev *cam)
 static int mtk_cam_cio_stream_off(struct mtk_cam_dev *cam)
 {
 	struct device *dev = cam->dev;
+	struct v4l2_subdev *seninf;
 	int ret;
 
 	if (cam->seninf) {
-		ret = v4l2_subdev_call(cam->seninf, video, s_stream, 0);
+		seninf = media_entity_to_v4l2_subdev(cam->seninf->entity);
+
+		ret = v4l2_subdev_call(seninf, pad, s_stream,
+				       cam->seninf->index, 0);
 		if (ret) {
 			dev_err(dev, "failed to stream off %s:%d\n",
-				cam->seninf->entity.name, ret);
+				seninf->entity.name, ret);
 			return ret;
 		}
 	}

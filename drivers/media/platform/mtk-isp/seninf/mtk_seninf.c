@@ -183,7 +183,6 @@ struct mtk_seninf_mux {
  * @ctrl_handler: V4L2 controls handler
  * @source_format: Active format on the source pad
  * @inputs: Array of SENINF inputs
- * @active_input: Currently active input
  * @muxes: Array of MUXes
  * @conf: Model-specific SENINF parameters
  * @is_testmode: Whether or not the test pattern generator is enabled
@@ -203,7 +202,6 @@ struct mtk_seninf {
 	struct v4l2_ctrl_handler ctrl_handler;
 
 	struct mtk_seninf_input inputs[SENINF_MAX_NUM_INPUTS];
-	struct mtk_seninf_input *active_input;
 	struct mtk_seninf_mux muxes[SENINF_MAX_NUM_MUXES];
 
 	const struct mtk_seninf_conf *conf;
@@ -917,12 +915,11 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv,
 }
 
 static void mtk_seninf_start(struct mtk_seninf *priv,
-			     struct v4l2_subdev_state *state)
+			     struct v4l2_subdev_state *state,
+			     struct mtk_seninf_input *input,
+			     struct mtk_seninf_mux *mux)
 {
 	const struct mtk_seninf_conf *conf = priv->conf;
-	struct mtk_seninf_input *input = priv->active_input;
-	struct mtk_seninf_mux *mux;
-	u32 source_pad;
 
 	phy_power_on(input->phy);
 
@@ -933,48 +930,37 @@ static void mtk_seninf_start(struct mtk_seninf *priv,
 		mtk_seninf_input_setup_ncsi2(input);
 	}
 
-	/*
-	 * Both SENINF 2.0 and SENINF 5.0 have the same number of MUX instances
-	 * and outputs. Hardcode a 1:1 mapping of MUX instances to SENINF
-	 * outputs to match the TOP_CAM_MUX configuration in
-	 * mtk_seninf_top_mux_setup().
-	 */
-	v4l2_state_find_opposite_end(state, input->pad, 0, &source_pad, NULL);
-	mux = &priv->muxes[source_pad - conf->nb_inputs];
 	mtk_seninf_mux_setup(mux, input, state);
 	mtk_seninf_top_mux_setup(priv, input->seninf_id, mux);
 }
 
-static void mtk_seninf_stop(struct mtk_seninf *priv)
+static void mtk_seninf_stop(struct mtk_seninf *priv,
+			    struct mtk_seninf_input *input)
 {
 	const struct mtk_seninf_conf *conf = priv->conf;
 	unsigned int val;
 
-	if (priv->active_input) {
-		struct mtk_seninf_input *input = priv->active_input;
-
-		if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2) {
-			/* Disable CSI2(2.5G) first */
-			val = mtk_seninf_input_read(input, SENINF_CSI2_CTL);
-			val &= ~(SENINF_CSI2_CTL_CLOCK_LANE_EN_MASK |
-				 SENINF_CSI2_CTL_DATA_LANE3_EN_MASK |
-				 SENINF_CSI2_CTL_DATA_LANE2_EN_MASK |
-				 SENINF_CSI2_CTL_DATA_LANE1_EN_MASK |
-				 SENINF_CSI2_CTL_DATA_LANE0_EN_MASK);
-			mtk_seninf_input_write(input, SENINF_CSI2_CTL, val);
-		} else if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_NCSI2) {
-			val = mtk_seninf_input_read(input, SENINF_NCSI2_CTL);
-			val &= ~(SENINF_NCSI2_CTL_CLOCK_LANE_MASK |
-				 SENINF_NCSI2_CTL_DATA_LANE3_MASK |
-				 SENINF_NCSI2_CTL_DATA_LANE2_MASK |
-				 SENINF_NCSI2_CTL_DATA_LANE1_MASK |
-				 SENINF_NCSI2_CTL_DATA_LANE0_MASK);
-			mtk_seninf_input_write(input, SENINF_NCSI2_CTL, val);
-		}
-
-		if (!priv->is_testmode)
-			phy_power_off(input->phy);
+	if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2) {
+		/* Disable CSI2(2.5G) first */
+		val = mtk_seninf_input_read(input, SENINF_CSI2_CTL);
+		val &= ~(SENINF_CSI2_CTL_CLOCK_LANE_EN_MASK |
+			 SENINF_CSI2_CTL_DATA_LANE3_EN_MASK |
+			 SENINF_CSI2_CTL_DATA_LANE2_EN_MASK |
+			 SENINF_CSI2_CTL_DATA_LANE1_EN_MASK |
+			 SENINF_CSI2_CTL_DATA_LANE0_EN_MASK);
+		mtk_seninf_input_write(input, SENINF_CSI2_CTL, val);
+	} else if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_NCSI2) {
+		val = mtk_seninf_input_read(input, SENINF_NCSI2_CTL);
+		val &= ~(SENINF_NCSI2_CTL_CLOCK_LANE_MASK |
+			 SENINF_NCSI2_CTL_DATA_LANE3_MASK |
+			 SENINF_NCSI2_CTL_DATA_LANE2_MASK |
+			 SENINF_NCSI2_CTL_DATA_LANE1_MASK |
+			 SENINF_NCSI2_CTL_DATA_LANE0_MASK);
+		mtk_seninf_input_write(input, SENINF_NCSI2_CTL, val);
 	}
+
+	if (!priv->is_testmode)
+		phy_power_off(input->phy);
 }
 
 /* -----------------------------------------------------------------------------
@@ -1038,16 +1024,48 @@ static int seninf_initialize_controls(struct mtk_seninf *priv)
  * V4L2 Subdev Operations
  */
 
-static int seninf_s_stream(struct v4l2_subdev *sd, int on)
+static int seninf_s_stream(struct v4l2_subdev *sd, unsigned int source_pad,
+			   int on)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
 	struct v4l2_subdev_state *state;
+	struct mtk_seninf_input *input;
+	struct mtk_seninf_mux *mux;
 	struct v4l2_subdev *source;
+	u32 sink_pad;
 	int ret;
 
+	/* Stream control can only operate on source pads. */
+	if (source_pad < priv->conf->nb_inputs ||
+	    source_pad >= priv->conf->nb_inputs + priv->conf->nb_outputs)
+		return -EINVAL;
+
+	/*
+	 * Locate the SENINF input and MUX for the source pad.
+	 *
+	 * Both SENINF 2.0 and SENINF 5.0 have the same number of MUX instances
+	 * and outputs. Hardcode a 1:1 mapping of MUX instances to SENINF
+	 * outputs to match the TOP_CAM_MUX configuration in
+	 * mtk_seninf_top_mux_setup().
+	 */
+	state = v4l2_subdev_lock_active_state(&priv->subdev);
+	if (!state)
+		return -EPIPE;
+
+	ret = v4l2_state_find_opposite_end(state, source_pad, 0, &sink_pad,
+					   NULL);
+	if (ret) {
+		dev_dbg(priv->dev, "No sink pad routed to source pad %u\n",
+			source_pad);
+		goto unlock;
+	}
+
+	input = &priv->inputs[sink_pad];
+	mux = &priv->muxes[source_pad - priv->conf->nb_inputs];
+
 	if (!on) {
-		if (priv->active_input && !priv->is_testmode) {
-			source = priv->active_input->source_sd;
+		if (!priv->is_testmode) {
+			source = input->source_sd;
 			ret = v4l2_subdev_call(source, video, s_stream, 0);
 			if (ret)
 				dev_err(priv->dev,
@@ -1055,14 +1073,10 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 					source->entity.name, ret);
 		}
 
-		mtk_seninf_stop(priv);
+		mtk_seninf_stop(priv, input);
 		pm_runtime_put(priv->dev);
-		return 0;
+		goto unlock;
 	}
-
-	state = v4l2_subdev_lock_active_state(&priv->subdev);
-	if (!state)
-		return -EPIPE;
 
 	ret = pm_runtime_get_sync(priv->dev);
 	if (ret < 0) {
@@ -1071,25 +1085,22 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 		goto unlock;
 	}
 
-	/*
-	 * If no input is selected, or test mode is enabled, just enable the
-	 * test pattern generator.
-	 */
-	if (!priv->active_input || priv->is_testmode) {
+	/* If test mode is enabled, just enable the test pattern generator. */
+	if (priv->is_testmode) {
 		seninf_enable_test_pattern(priv, state);
 		ret = 0;
 		goto unlock;
 	}
 
 	/* Start the SENINF first and then the source. */
-	mtk_seninf_start(priv, state);
+	mtk_seninf_start(priv, state, input, mux);
 
-	source = priv->active_input->source_sd;
+	source = input->source_sd;
 	ret = v4l2_subdev_call(source, video, s_stream, 1);
 	if (ret) {
 		dev_err(priv->dev, "failed to start source %s: %d\n",
 			source->entity.name, ret);
-		mtk_seninf_stop(priv);
+		mtk_seninf_stop(priv, input);
 		pm_runtime_put(priv->dev);
 	}
 
@@ -1257,10 +1268,6 @@ static const struct v4l2_subdev_core_ops seninf_subdev_core_ops = {
 	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
 };
 
-static const struct v4l2_subdev_video_ops seninf_subdev_video_ops = {
-	.s_stream = seninf_s_stream,
-};
-
 static const struct v4l2_subdev_pad_ops seninf_subdev_pad_ops = {
 	.init_cfg = seninf_init_cfg,
 	.enum_mbus_code = seninf_enum_mbus_code,
@@ -1268,11 +1275,11 @@ static const struct v4l2_subdev_pad_ops seninf_subdev_pad_ops = {
 	.set_fmt = seninf_set_fmt,
 	.link_validate = v4l2_subdev_link_validate_default,
 	.set_routing = seninf_set_routing,
+	.s_stream = seninf_s_stream,
 };
 
 static const struct v4l2_subdev_ops seninf_subdev_ops = {
 	.core = &seninf_subdev_core_ops,
-	.video = &seninf_subdev_video_ops,
 	.pad = &seninf_subdev_pad_ops,
 };
 
@@ -1280,31 +1287,8 @@ static const struct v4l2_subdev_ops seninf_subdev_ops = {
  * Media Entity Operations
  */
 
-static int seninf_link_setup(struct media_entity *entity,
-			     const struct media_pad *local,
-			     const struct media_pad *remote, u32 flags)
-{
-	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(entity);
-	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
-
-	if (!(local->flags & MEDIA_PAD_FL_SINK))
-		return 0;
-
-	if (flags & MEDIA_LNK_FL_ENABLED) {
-		if (priv->active_input)
-			return -EBUSY;
-
-		priv->active_input = &priv->inputs[local->index];
-	} else {
-		priv->active_input = NULL;
-	}
-
-	return 0;
-}
-
 static const struct media_entity_operations seninf_media_ops = {
 	.get_fwnode_pad = v4l2_subdev_get_fwnode_pad_1_to_1,
-	.link_setup = seninf_link_setup,
 	.link_validate = v4l2_subdev_link_validate,
 	.has_route = v4l2_subdev_has_route,
 };
@@ -1448,7 +1432,8 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
 			return -EINVAL;
 		}
 
-		ret = v4l2_create_fwnode_links_to_pad(sd, &priv->pads[input->pad], 0);
+		ret = v4l2_create_fwnode_links_to_pad(sd, &priv->pads[input->pad],
+					MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED);
 	} else {
 		link = device_link_add(sd->dev, priv->dev, DL_FLAG_STATELESS);
 		if (!link) {
