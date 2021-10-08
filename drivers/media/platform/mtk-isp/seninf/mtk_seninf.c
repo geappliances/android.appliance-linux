@@ -1297,13 +1297,6 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 				   struct v4l2_fwnode_endpoint *vep,
 				   struct v4l2_async_subdev *asd)
 {
-	static const u32 port_to_seninf_id[] = {
-		[CSI_PORT_0] = SENINF_1,
-		[CSI_PORT_1] = SENINF_3,
-		[CSI_PORT_2] = SENINF_5,
-		[CSI_PORT_0B] = SENINF_2,
-	};
-
 	struct mtk_seninf *priv = dev_get_drvdata(dev);
 	const struct mtk_seninf_conf *conf = priv->conf;
 	struct mtk_seninf_async_subdev *s_asd =
@@ -1340,10 +1333,6 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 
 	input = &priv->inputs[port];
 
-	input->seninf = priv;
-	input->pad = port;
-	input->seninf_id = port_to_seninf_id[port];
-	input->base = priv->base + 0x1000 * input->seninf_id;
 	input->bus = vep->bus.mipi_csi2;
 	input->source_pad = port + conf->nb_inputs;
 
@@ -1626,6 +1615,12 @@ static int seninf_probe(struct platform_device *pdev)
 		[SENINF_PHY_CSI0A] = "csi0a",
 		[SENINF_PHY_CSI0B] = "csi0b",
 	};
+	static const u32 port_to_seninf_id[] = {
+		[CSI_PORT_0] = SENINF_1,
+		[CSI_PORT_1] = SENINF_3,
+		[CSI_PORT_2] = SENINF_5,
+		[CSI_PORT_0B] = SENINF_2,
+	};
 
 	struct mtk_seninf *priv;
 	struct device *dev = &pdev->dev;
@@ -1670,6 +1665,15 @@ static int seninf_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(dev, "failed to get seninf clock:%d\n", ret);
 		return ret;
+	}
+
+	for (i = 0; i < priv->conf->nb_inputs; ++i) {
+		struct mtk_seninf_input *input = &priv->inputs[i];
+
+		input->pad = i;
+		input->seninf_id = port_to_seninf_id[i];
+		input->base = priv->base + 0x1000 * input->seninf_id;
+		input->seninf = priv;
 	}
 
 	ret = mtk_seninf_v4l2_register(priv);
