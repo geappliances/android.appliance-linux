@@ -30,6 +30,7 @@
 
 #define SENINF_MAX_NUM_INPUTS		4
 #define SENINF_MAX_NUM_OUTPUTS		4
+#define SENINF_MAX_NUM_MUXES		6
 #define SENINF_MAX_NUM_PADS		(SENINF_MAX_NUM_INPUTS + \
 					 SENINF_MAX_NUM_OUTPUTS)
 
@@ -108,6 +109,7 @@ struct mtk_seninf_conf {
 	char *model;
 	enum mtk_seninf_csi2_rx_type csi2_rx_type;
 	u8 nb_inputs;
+	u8 nb_muxes;
 	u8 nb_outputs;
 	u8 nb_phy;
 };
@@ -117,6 +119,7 @@ static const struct mtk_seninf_conf seninf_8183_conf = {
 	.model = "mtk-camsys-5.0",
 	.csi2_rx_type = MTK_SENINF_CSI2_RX_CSI2,
 	.nb_inputs = 4,
+	.nb_muxes = 6,
 	.nb_outputs = 4,
 	.nb_phy = 5,
 };
@@ -126,6 +129,7 @@ static const struct mtk_seninf_conf seninf_8167_conf = {
 	.model = "mtk-camsys-2.0",
 	.csi2_rx_type = MTK_SENINF_CSI2_RX_NCSI2,
 	.nb_inputs = 4,
+	.nb_muxes = 1,
 	.nb_outputs = 1,
 	.nb_phy = 1,
 };
@@ -161,6 +165,13 @@ struct mtk_seninf_input {
 	unsigned int source_pad;
 };
 
+struct mtk_seninf_mux {
+	unsigned int pad;
+	unsigned int mux_id;
+	void __iomem *base;
+	struct mtk_seninf *seninf;
+};
+
 struct mtk_seninf {
 	struct device *dev;
 	struct phy *phy[5];
@@ -179,6 +190,7 @@ struct mtk_seninf {
 
 	struct mtk_seninf_input inputs[SENINF_MAX_NUM_INPUTS];
 	struct mtk_seninf_input *active_input;
+	struct mtk_seninf_mux muxes[SENINF_MAX_NUM_MUXES];
 
 	const struct mtk_seninf_conf *conf;
 
@@ -333,7 +345,7 @@ static const u16 mtk_seninf_20_translation_table[] = {
 	0xffff, /* 0xa: NA */
 	0xffff, /* 0xb: NA */
 	0xffff, /* 0xc: NA */
-	0x0120, /* 0xd: top_mux_ctrl */
+	0x0120, /* 0xd: mux_ctrl */
 	0xffff, /* 0xe: NA */
 	0xffff, /* 0xf: NA */
 };
@@ -403,6 +415,35 @@ static void __mtk_seninf_input_update(struct mtk_seninf_input *input, u32 reg,
 #define mtk_seninf_input_update(input, reg, field, val)			\
 	__mtk_seninf_input_update(input, reg, reg##_##field##_MASK,	\
 				  reg##_##field##_SHIFT, val)
+
+static u32 mtk_seninf_mux_read(struct mtk_seninf_mux *mux, u32 reg)
+{
+	if (mux->seninf->conf->seninf_version == SENINF_20)
+		reg = mtk_seninf_20_address_translation(reg);
+
+	return readl(mux->base + reg);
+}
+
+static void mtk_seninf_mux_write(struct mtk_seninf_mux *mux, u32 reg,
+				 u32 value)
+{
+	if (mux->seninf->conf->seninf_version == SENINF_20)
+		reg = mtk_seninf_20_address_translation(reg);
+
+	writel(value, mux->base + reg);
+}
+
+static void __mtk_seninf_mux_update(struct mtk_seninf_mux *mux, u32 reg,
+				    u32 mask, u32 shift, u32 value)
+{
+	u32 val = mtk_seninf_mux_read(mux, reg);
+
+	mtk_seninf_mux_write(mux, reg, (val & ~mask) | (value << shift));
+}
+
+#define mtk_seninf_mux_update(mux, reg, field, val)			\
+	__mtk_seninf_mux_update(mux, reg, reg##_##field##_MASK,	\
+				reg##_##field##_SHIFT, val)
 
 /* -----------------------------------------------------------------------------
  * Hardware Configuration
@@ -648,9 +689,10 @@ static void mtk_seninf_input_setup_ncsi2(struct mtk_seninf_input *input)
 	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, 0x10);
 }
 
-static void mtk_seninf_mux_setup(struct mtk_seninf_input *input)
+static void mtk_seninf_mux_setup(struct mtk_seninf_mux *mux,
+				 struct mtk_seninf_input *input)
 {
-	const struct mtk_seninf_conf *conf = input->seninf->conf;
+	const struct mtk_seninf_conf *conf = mux->seninf->conf;
 	const struct mtk_seninf_format_info *fmtinfo;
 	unsigned int pix_sel_ext;
 	unsigned int pix_sel;
@@ -662,12 +704,12 @@ static void mtk_seninf_mux_setup(struct mtk_seninf_input *input)
 	fmtinfo = mtk_seninf_format_info(input->format.code);
 
 	/* Enable mux */
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_SRC_SEL,
-				SENINF_MIPI_SENSOR);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_SRC_SEL,
+			      SENINF_MIPI_SENSOR);
 	if (conf->seninf_version == SENINF_50)
-		mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT,
-			    SENINF_SRC_SEL_EXT, SENINF_NORMAL_MODEL);
+		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL_EXT,
+				      SENINF_SRC_SEL_EXT, SENINF_NORMAL_MODEL);
 
 	switch (pixel_mode) {
 	case 1: /* 2 Pixel */
@@ -685,54 +727,55 @@ static void mtk_seninf_mux_setup(struct mtk_seninf_input *input)
 	}
 
 	if (conf->seninf_version == SENINF_50)
-		mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT,
-			    SENINF_PIX_SEL_EXT, pix_sel_ext);
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
+		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL_EXT,
+				      SENINF_PIX_SEL_EXT, pix_sel_ext);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
 
 	if (!(fmtinfo->flags & MTK_SENINF_FORMAT_JPEG)) {
-		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
-		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1b);
-		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1f);
+		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
+		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1b);
+		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1f);
 	} else {
-		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 0);
-		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x18);
-		mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1e);
+		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 0);
+		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x18);
+		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1e);
 	}
 
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
 
-	val = mtk_seninf_input_read(input, SENINF_MUX_CTRL);
-	mtk_seninf_input_write(input, SENINF_MUX_CTRL, val |
-			       SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
-			       SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK);
-	mtk_seninf_input_write(input, SENINF_MUX_CTRL, val &
-			       ~(SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
-				 SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK));
+	val = mtk_seninf_mux_read(mux, SENINF_MUX_CTRL);
+	mtk_seninf_mux_write(mux, SENINF_MUX_CTRL, val |
+			     SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
+			     SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK);
+	mtk_seninf_mux_write(mux, SENINF_MUX_CTRL, val &
+			     ~(SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
+			       SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK));
 
 	/* HQ */
-	mtk_seninf_input_write(input, SENINF_MUX_SPARE, 0xc2000);
+	mtk_seninf_mux_write(mux, SENINF_MUX_SPARE, 0xc2000);
 }
 
 static void mtk_seninf_top_mux_setup(struct mtk_seninf *priv,
-				     struct mtk_seninf_input *input)
+				     struct mtk_seninf_mux *mux,
+				     unsigned int source_pad)
 {
 	const struct mtk_seninf_conf *conf = priv->conf;
 	unsigned int val;
 	unsigned int pos;
 
-	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, 0x00043210);
-
 	/*
 	 * Hardcode the top mux (from SENINF input to async FIFO) with a direct
-	 * mapping, and use the top cam mux to configure routing from the async
-	 * FIFOs to the outputs (CAM and CAMSV).
+	 * mapping, and use the top cam mux to configure routing from the MUX
+	 * to the outputs (CAM and CAMSV).
 	 */
+	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, 0x00043210);
+
 	if (conf->seninf_version == SENINF_50) {
-		pos = input->source_pad - conf->nb_inputs + 2;
+		pos = source_pad - conf->nb_inputs + 2;
 		val = (mtk_seninf_read(priv, SENINF_TOP_CAM_MUX_CTRL)
 		       & ~(0xF << (pos * 4))) |
-		       ((input->seninf_id & 0xF) << (pos * 4));
+		       ((mux->mux_id & 0xF) << (pos * 4));
 		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, val);
 	}
 }
@@ -740,6 +783,7 @@ static void mtk_seninf_top_mux_setup(struct mtk_seninf *priv,
 static void seninf_enable_test_pattern(struct mtk_seninf *priv)
 {
 	struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_0];
+	struct mtk_seninf_mux *mux = &priv->muxes[0];
 	const struct mtk_seninf_format_info *fmtinfo;
 	const struct mtk_seninf_conf *conf = priv->conf;
 	unsigned int val;
@@ -749,7 +793,7 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv)
 	unsigned int hs_pol = 0;
 	unsigned int vs_pol = 0;
 	unsigned int seninf = 0;
-	unsigned int mux = 0;
+	unsigned int mux_id = mux->mux_id;
 
 	fmtinfo = mtk_seninf_format_info(priv->source_format.code);
 
@@ -795,15 +839,15 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv)
 		mtk_seninf_input_write(input, SENINF_TG1_TM_STP, 0x1);
 
 	/* Set top mux */
-	val = (mtk_seninf_read(priv, SENINF_TOP_MUX_CTRL) & (~(0xf << (mux * 4)))) |
-	      ((seninf & 0xf) << (mux * 4));
+	val = (mtk_seninf_read(priv, SENINF_TOP_MUX_CTRL) & (~(0xf << (mux_id * 4)))) |
+	      ((seninf & 0xf) << (mux_id * 4));
 	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, val);
 
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
 	if (conf->seninf_version == SENINF_50)
-		mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT,
-					SENINF_SRC_SEL_EXT, SENINF_TEST_MODEL);
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_SRC_SEL, 1);
+		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL_EXT,
+				      SENINF_SRC_SEL_EXT, SENINF_TEST_MODEL);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_SRC_SEL, 1);
 
 	switch (pixel_mode) {
 	case 1:
@@ -821,34 +865,31 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv)
 	}
 
 	if (conf->seninf_version == SENINF_50)
-		mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT,
-					SENINF_PIX_SEL_EXT, pix_sel_ext);
+		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL_EXT,
+				      SENINF_PIX_SEL_EXT, pix_sel_ext);
 
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_PIX_SEL,
-				pix_sel);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
 
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1f);
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1b);
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1f);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1b);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
 
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_HSYNC_POL,
-				hs_pol);
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_VSYNC_POL,
-				vs_pol);
-	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_HSYNC_MASK, 1);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
+	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_HSYNC_MASK, 1);
 
-	mtk_seninf_input_write(input, SENINF_MUX_INTEN,
-			       SENINF_IRQ_CLR_SEL | SENINF_ALL_ERR_IRQ_EN);
+	mtk_seninf_mux_write(mux, SENINF_MUX_INTEN,
+			     SENINF_IRQ_CLR_SEL | SENINF_ALL_ERR_IRQ_EN);
 
-	mtk_seninf_input_write(input, SENINF_MUX_CTRL,
-			       mtk_seninf_input_read(input, SENINF_MUX_CTRL) |
-			       SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
-			       SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK);
+	mtk_seninf_mux_write(mux, SENINF_MUX_CTRL,
+			     mtk_seninf_mux_read(mux, SENINF_MUX_CTRL) |
+			     SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
+			     SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK);
 	udelay(1);
-	mtk_seninf_input_write(input, SENINF_MUX_CTRL,
-			       mtk_seninf_input_read(input, SENINF_MUX_CTRL) &
-			       ~(SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
-				 SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK));
+	mtk_seninf_mux_write(mux, SENINF_MUX_CTRL,
+			     mtk_seninf_mux_read(mux, SENINF_MUX_CTRL) &
+			     ~(SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
+			        SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK));
 
 	if (conf->seninf_version == SENINF_50)
 		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76540010);
@@ -858,8 +899,9 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv)
 
 static void mtk_seninf_start(struct mtk_seninf *priv)
 {
-	struct mtk_seninf_input *input = priv->active_input;
 	const struct mtk_seninf_conf *conf = priv->conf;
+	struct mtk_seninf_input *input = priv->active_input;
+	struct mtk_seninf_mux *mux;
 
 	if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2)
 		mtk_seninf_csi2_setup_phy(priv);
@@ -873,8 +915,16 @@ static void mtk_seninf_start(struct mtk_seninf *priv)
 		mtk_seninf_input_setup_ncsi2(input);
 	}
 
-	mtk_seninf_mux_setup(input);
-	mtk_seninf_top_mux_setup(priv, input);
+	/*
+	 * MT8167 (SENINF 2.0) has a single MUX, while MT8183 has one MUX per
+	 * output. On the latter, we hardcode a 1:1 mapping of SENINF to MUX
+	 * instances to match the TOP_MUX configuration in
+	 * mtk_seninf_top_mux_setup().
+	 */
+	mux = conf->seninf_version == SENINF_20
+	    ? &priv->muxes[0] : &priv->muxes[input->seninf_id];
+	mtk_seninf_mux_setup(mux, input);
+	mtk_seninf_top_mux_setup(priv, mux, input->source_pad);
 }
 
 static void mtk_seninf_stop(struct mtk_seninf *priv)
@@ -1674,6 +1724,15 @@ static int seninf_probe(struct platform_device *pdev)
 		input->seninf_id = port_to_seninf_id[i];
 		input->base = priv->base + 0x1000 * input->seninf_id;
 		input->seninf = priv;
+	}
+
+	for (i = 0; i < priv->conf->nb_muxes; ++i) {
+		struct mtk_seninf_mux *mux = &priv->muxes[i];
+
+		mux->pad = priv->conf->nb_inputs + i;
+		mux->mux_id = i;
+		mux->base = priv->base + 0x1000 * i;
+		mux->seninf = priv;
 	}
 
 	ret = mtk_seninf_v4l2_register(priv);
