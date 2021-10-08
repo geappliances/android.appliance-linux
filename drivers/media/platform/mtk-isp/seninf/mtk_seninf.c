@@ -460,8 +460,12 @@ static void mtk_seninf_set_mux(struct mtk_seninf *priv,
 	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
 
 	val = mtk_seninf_input_read(input, SENINF_MUX_CTRL);
-	mtk_seninf_input_write(input, SENINF_MUX_CTRL, val | 0x00000003);
-	mtk_seninf_input_write(input, SENINF_MUX_CTRL, val & 0xfffffffc);
+	mtk_seninf_input_write(input, SENINF_MUX_CTRL, val |
+			       SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
+			       SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK);
+	mtk_seninf_input_write(input, SENINF_MUX_CTRL, val &
+			       ~(SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
+				 SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK));
 
 	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, 0x00043210);
 
@@ -804,11 +808,13 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv)
 
 	mtk_seninf_input_write(input, SENINF_MUX_CTRL,
 			       mtk_seninf_input_read(input, SENINF_MUX_CTRL) |
-			       0x3);
+			       SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
+			       SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK);
 	udelay(1);
 	mtk_seninf_input_write(input, SENINF_MUX_CTRL,
 			       mtk_seninf_input_read(input, SENINF_MUX_CTRL) &
-			       ~0x3);
+			       ~(SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
+				 SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK));
 
 	if (conf->seninf_version == SENINF_50)
 		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76540010);
@@ -847,12 +853,20 @@ static void mtk_seninf_stop(struct mtk_seninf *priv)
 		if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2) {
 			/* Disable CSI2(2.5G) first */
 			val = mtk_seninf_input_read(input, SENINF_CSI2_CTL);
-			mtk_seninf_input_write(
-				input, SENINF_CSI2_CTL, val & 0xffffffe0);
+			val &= ~(SENINF_CSI2_CTL_CLOCK_LANE_EN_MASK |
+				 SENINF_CSI2_CTL_DATA_LANE3_EN_MASK |
+				 SENINF_CSI2_CTL_DATA_LANE2_EN_MASK |
+				 SENINF_CSI2_CTL_DATA_LANE1_EN_MASK |
+				 SENINF_CSI2_CTL_DATA_LANE0_EN_MASK);
+			mtk_seninf_input_write(input, SENINF_CSI2_CTL, val);
 		} else if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_NCSI2) {
 			val = mtk_seninf_input_read(input, SENINF_NCSI2_CTL);
-			mtk_seninf_input_write(
-				input, SENINF_NCSI2_CTL, val & 0xffffffe0);
+			val &= ~(SENINF_NCSI2_CTL_CLOCK_LANE_MASK |
+				 SENINF_NCSI2_CTL_DATA_LANE3_MASK |
+				 SENINF_NCSI2_CTL_DATA_LANE2_MASK |
+				 SENINF_NCSI2_CTL_DATA_LANE1_MASK |
+				 SENINF_NCSI2_CTL_DATA_LANE0_MASK);
+			mtk_seninf_input_write(input, SENINF_NCSI2_CTL, val);
 		}
 
 		if (!priv->is_testmode)
