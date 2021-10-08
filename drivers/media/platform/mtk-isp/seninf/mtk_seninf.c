@@ -920,9 +920,6 @@ static void mtk_seninf_start(struct mtk_seninf *priv)
 	struct mtk_seninf_input *input = priv->active_input;
 	struct mtk_seninf_mux *mux;
 
-	if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2)
-		mtk_seninf_csi2_setup_phy(priv);
-
 	phy_power_on(input->phy);
 
 	if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2) {
@@ -1779,6 +1776,9 @@ static int seninf_pm_resume(struct device *dev)
 		dev_err(dev, "failed to enable clock:%d\n", ret);
 		return ret;
 	}
+
+	if (priv->conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2)
+		mtk_seninf_csi2_setup_phy(priv);
 
 	return 0;
 }
