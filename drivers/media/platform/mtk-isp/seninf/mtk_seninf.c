@@ -99,6 +99,16 @@ enum mtk_seninf_csi2_rx_type {
 	MTK_SENINF_CSI2_RX_CSI2,
 };
 
+/**
+ * struct mtk_seninf_conf - Model-specific SENINF parameters
+ * @seninf_version: SENINF version (2.0 or 5.0)
+ * @model: Model description
+ * @csi2_rx_type: Type of CSI-2 receiver
+ * @nb_inputs: Number of SENINF inputs
+ * @nb_muxes: Number of SENINF MUX (FIFO) instances
+ * @nb_outputs: Number of outputs (to CAM and CAMSV instances)
+ * @nb_phy: Number of PHYs
+ */
 struct mtk_seninf_conf {
 	enum mtk_seninf_version seninf_version;
 	char *model;
@@ -109,11 +119,29 @@ struct mtk_seninf_conf {
 	u8 nb_phy;
 };
 
+/**
+ * struct mtk_seninf_format_info - Information about media bus formats
+ * @code: V4L2 media bus code
+ * @flags: Flags describing the format, as a combination of MTK_SENINF_FORMAT_*
+ */
 struct mtk_seninf_format_info {
 	u32 code;
 	u32 flags;
 };
 
+/**
+ * struct mtk_seninf_input - SENINF input block
+ * @pad: DT port and media entity pad number
+ * @seninf_id: SENINF hardware instance ID
+ * @base: Memory mapped I/O based address
+ * @seninf: Back pointer to the mtk_seninf
+ * @phy: PHY connected to the input
+ * @phy_mode: PHY operation mode (NONE when the input is not connected)
+ * @bus: CSI-2 bus configuration from DT
+ * @subdev: Source subdev connected to the input
+ * @format: Active format on the sink pad
+ * @source_pad: Source pad to which this input is routed
+ */
 struct mtk_seninf_input {
 	enum mtk_seninf_port pad;
 	enum mtk_seninf_id seninf_id;
@@ -131,6 +159,13 @@ struct mtk_seninf_input {
 	unsigned int source_pad;
 };
 
+/**
+ * struct mtk_seninf_mux - SENINF MUX channel
+ * @pad: DT port and media entity pad number
+ * @mux_id: MUX hardware instance ID
+ * @base: Memory mapped I/O based address
+ * @seninf: Back pointer to the mtk_seninf
+ */
 struct mtk_seninf_mux {
 	unsigned int pad;
 	unsigned int mux_id;
@@ -138,6 +173,26 @@ struct mtk_seninf_mux {
 	struct mtk_seninf *seninf;
 };
 
+/**
+ * struct mtk_seninf - Top-level SENINF device
+ * @dev: The (platform) device
+ * @phy: PHYs at the SENINF inputs
+ * @num_clks: Number of clocks in the clks array
+ * @clks: Clocks
+ * @base: Memory mapped I/O base address
+ * @media_dev: Media controller device
+ * @v4l2_dev: V4L2 device
+ * @subdev: V4L2 subdevice
+ * @pads: Media entity pads
+ * @notifier: V4L2 async notifier for source subdevs
+ * @ctrl_handler: V4L2 controls handler
+ * @source_format: Active format on the source pad
+ * @inputs: Array of SENINF inputs
+ * @active_input: Currently active input
+ * @muxes: Array of MUXes
+ * @conf: Model-specific SENINF parameters
+ * @is_testmode: Whether or not the test pattern generator is enabled
+ */
 struct mtk_seninf {
 	struct device *dev;
 	struct phy *phy[5];
