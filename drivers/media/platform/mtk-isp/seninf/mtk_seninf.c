@@ -111,7 +111,7 @@ enum mtk_seninf_csi2_rx_type {
  */
 struct mtk_seninf_conf {
 	enum mtk_seninf_version seninf_version;
-	char *model;
+	const char *model;
 	enum mtk_seninf_csi2_rx_type csi2_rx_type;
 	u8 nb_inputs;
 	u8 nb_muxes;
