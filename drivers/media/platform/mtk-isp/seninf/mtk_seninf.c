@@ -114,35 +114,6 @@ struct mtk_seninf_conf {
 	u8 nb_phy;
 };
 
-static const struct mtk_seninf_conf seninf_8183_conf = {
-	.seninf_version = SENINF_50,
-	.model = "mtk-camsys-5.0",
-	.csi2_rx_type = MTK_SENINF_CSI2_RX_CSI2,
-	.nb_inputs = 4,
-	.nb_muxes = 6,
-	.nb_outputs = 4,
-	.nb_phy = 5,
-};
-
-static const struct mtk_seninf_conf seninf_8167_conf = {
-	.seninf_version = SENINF_20,
-	.model = "mtk-camsys-2.0",
-	.csi2_rx_type = MTK_SENINF_CSI2_RX_NCSI2,
-	.nb_inputs = 4,
-	.nb_muxes = 1,
-	.nb_outputs = 1,
-	.nb_phy = 1,
-};
-
-static const struct mtk_seninf_conf seninf_8365_conf = {
-	.seninf_version = SENINF_50,
-	.model = "mtk-camsys-5.0",
-	.csi2_rx_type = MTK_SENINF_CSI2_RX_CSI2,
-	.nb_inputs = 4,
-	.nb_outputs = 4,
-	.nb_phy = 4,
-};
-
 struct mtk_seninf_format_info {
 	u32 code;
 	u32 flags;
@@ -1790,6 +1761,35 @@ static int seninf_remove(struct platform_device *pdev)
 
 	return 0;
 }
+
+static const struct mtk_seninf_conf seninf_8183_conf = {
+	.seninf_version = SENINF_50,
+	.model = "mtk-camsys-5.0",
+	.csi2_rx_type = MTK_SENINF_CSI2_RX_CSI2,
+	.nb_inputs = 4,
+	.nb_muxes = 6,
+	.nb_outputs = 4,
+	.nb_phy = 5,
+};
+
+static const struct mtk_seninf_conf seninf_8167_conf = {
+	.seninf_version = SENINF_20,
+	.model = "mtk-camsys-2.0",
+	.csi2_rx_type = MTK_SENINF_CSI2_RX_NCSI2,
+	.nb_inputs = 4,
+	.nb_muxes = 1,
+	.nb_outputs = 1,
+	.nb_phy = 1,
+};
+
+static const struct mtk_seninf_conf seninf_8365_conf = {
+	.seninf_version = SENINF_50,
+	.model = "mtk-camsys-5.0",
+	.csi2_rx_type = MTK_SENINF_CSI2_RX_CSI2,
+	.nb_inputs = 4,
+	.nb_outputs = 4,
+	.nb_phy = 4,
+};
 
 static const struct of_device_id mtk_seninf_of_match[] = {
 	{
