@@ -47,11 +47,6 @@
 
 #define SENINF_MIPI_SENSOR		0x8
 
-enum TEST_MODE {
-	TEST_PATTERN_DISABLED = 0x0,
-	TEST_PATTERN_ENABLED
-};
-
 /* Port number in the device tree. */
 enum mtk_seninf_port {
 	CSI_PORT_0 = 0,	/* 4D1C or 2D1C */
@@ -941,12 +936,8 @@ static int seninf_set_ctrl(struct v4l2_ctrl *ctrl)
 
 	switch (ctrl->id) {
 	case V4L2_CID_TEST_PATTERN:
-		if (ctrl->val == TEST_PATTERN_ENABLED)
-			priv->is_testmode = true;
-		else if (ctrl->val == TEST_PATTERN_DISABLED)
-			priv->is_testmode = false;
-		else
-			return -EINVAL;
+		priv->is_testmode = !!ctrl->val;
+		break;
 	}
 
 	return 0;
