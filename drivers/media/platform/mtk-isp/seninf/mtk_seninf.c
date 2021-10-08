@@ -139,7 +139,6 @@ struct mtk_seninf_format_info {
  * @phy_mode: PHY operation mode (NONE when the input is not connected)
  * @bus: CSI-2 bus configuration from DT
  * @source_sd: Source subdev connected to the input
- * @source_pad: Source pad to which this input is routed
  */
 struct mtk_seninf_input {
 	enum mtk_seninf_port pad;
@@ -153,8 +152,6 @@ struct mtk_seninf_input {
 	struct v4l2_fwnode_bus_mipi_csi2 bus;
 
 	struct v4l2_subdev *source_sd;
-
-	unsigned int source_pad;
 };
 
 /**
@@ -925,6 +922,7 @@ static void mtk_seninf_start(struct mtk_seninf *priv,
 	const struct mtk_seninf_conf *conf = priv->conf;
 	struct mtk_seninf_input *input = priv->active_input;
 	struct mtk_seninf_mux *mux;
+	u32 source_pad;
 
 	phy_power_on(input->phy);
 
@@ -941,7 +939,8 @@ static void mtk_seninf_start(struct mtk_seninf *priv,
 	 * outputs to match the TOP_CAM_MUX configuration in
 	 * mtk_seninf_top_mux_setup().
 	 */
-	mux = &priv->muxes[input->source_pad - conf->nb_inputs];
+	v4l2_state_find_opposite_end(state, input->pad, 0, &source_pad, NULL);
+	mux = &priv->muxes[source_pad - conf->nb_inputs];
 	mtk_seninf_mux_setup(mux, input, state);
 	mtk_seninf_top_mux_setup(priv, input->seninf_id, mux);
 }
@@ -1110,18 +1109,61 @@ static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
 	.quantization = V4L2_QUANTIZATION_DEFAULT,
 };
 
+static int __seninf_set_routing(struct v4l2_subdev *sd,
+				struct v4l2_subdev_state *state,
+				struct v4l2_subdev_krouting *routing)
+{
+	int ret;
+
+	ret = v4l2_routing_simple_verify(routing);
+	if (ret)
+		return ret;
+
+	state = v4l2_subdev_validate_and_lock_state(sd, state);
+
+	ret = v4l2_subdev_set_routing_with_fmt(sd, state, routing,
+					       &mtk_seninf_default_fmt);
+
+	v4l2_subdev_unlock_state(state);
+
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
 static int seninf_init_cfg(struct v4l2_subdev *sd,
 			   struct v4l2_subdev_state *state)
 {
-	struct v4l2_mbus_framefmt *format;
-	unsigned int pad;
+	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
+	struct v4l2_subdev_route routes[SENINF_MAX_NUM_OUTPUTS] = { };
+	struct v4l2_subdev_krouting routing = {
+		.routes = routes,
+	};
+	unsigned int skip_outputs;
+	unsigned int i;
 
-	for (pad = 0; pad < sd->entity.num_pads; pad++) {
-		format = v4l2_state_get_stream_format(state, pad, 0);
-		*format = mtk_seninf_default_fmt;
+	/*
+	 * Initialize one route for supported source pads. With SENINF 2.0 that
+	 * will be a single route from the first sink pad to the source pad,
+	 * while on SENINF 5.0 the routing table will map sink pads to source
+	 * pads connected to CAMSV 1:1 (skipping the first two source pads
+	 * connected to the CAM instances).
+	 */
+	skip_outputs = priv->conf->seninf_version == SENINF_20 ? 0 : 2;
+	routing.num_routes = priv->conf->nb_outputs - skip_outputs;
+
+	for (i = 0; i < routing.num_routes; i++) {
+		struct v4l2_subdev_route *route = &routes[i];
+
+		route->sink_pad = i;
+		route->sink_stream = 0;
+		route->source_pad = priv->conf->nb_inputs + skip_outputs + i;
+		route->source_stream = 0;
+		route->flags = V4L2_SUBDEV_ROUTE_FL_ACTIVE;
 	}
 
-	return 0;
+	return __seninf_set_routing(sd, state, &routing);
 }
 
 static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
@@ -1151,7 +1193,6 @@ static int seninf_set_fmt(struct v4l2_subdev *sd,
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
 	const struct mtk_seninf_format_info *fmtinfo;
 	struct v4l2_mbus_framefmt *format;
-	unsigned int source_pad;
 	int ret = 0;
 
 	/*
@@ -1189,91 +1230,26 @@ static int seninf_set_fmt(struct v4l2_subdev *sd,
 		goto unlock;
 
 	/* Propagate the format to the corresponding source pad. */
-	source_pad = priv->inputs[fmt->pad].source_pad;
-	if (source_pad) {
-		format = v4l2_state_get_stream_format(state, source_pad,
-						      fmt->stream);
-		if (!format) {
-			ret = -EINVAL;
-			goto unlock;
-		}
-
-		*format = fmt->format;
+	format = v4l2_state_get_opposite_stream_format(state, fmt->pad,
+						       fmt->stream);
+	if (!format) {
+		ret = -EINVAL;
+		goto unlock;
 	}
+
+	*format = fmt->format;
 
 unlock:
 	v4l2_subdev_unlock_state(state);
 	return ret;
 }
 
-static int seninf_get_routing(struct v4l2_subdev *sd,
-			     struct v4l2_subdev_krouting *routing)
-{
-	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
-	const struct mtk_seninf_conf *conf = priv->conf;
-	struct v4l2_subdev_route *route = routing->routes;
-	unsigned int sink, source;
-	unsigned int num_routes = routing->num_routes;
-
-	routing->num_routes = conf->nb_inputs * conf->nb_outputs;
-	if (num_routes < routing->num_routes)
-		return -ENOSPC;
-
-	for (sink = 0; sink < conf->nb_inputs; ++sink) {
-		for (source = 0; source < conf->nb_outputs; ++source) {
-			route->sink_pad = sink;
-			route->sink_stream = 0;
-			route->source_pad = source + conf->nb_inputs;
-			route->source_stream = 0;
-
-			if (priv->inputs[sink].source_pad == route->source_pad)
-				route->flags = V4L2_SUBDEV_ROUTE_FL_ACTIVE;
-
-			route++;
-		}
-	}
-
-	return 0;
-}
-
 static int seninf_set_routing(struct v4l2_subdev *sd,
-			     struct v4l2_subdev_state *sd_state,
-			     enum  v4l2_subdev_format_whence which,
-			     struct v4l2_subdev_krouting *routing)
+			      struct v4l2_subdev_state *state,
+			      enum v4l2_subdev_format_whence which,
+			      struct v4l2_subdev_krouting *routing)
 {
-	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
-	const struct mtk_seninf_conf *conf = priv->conf;
-	struct v4l2_subdev_route *route = routing->routes;
-	unsigned int i, k;
-	int pad;
-
-	for (k = 0; k < routing->num_routes; ++k) {
-		struct mtk_seninf_input *input = &priv->inputs[route->sink_pad];
-
-		if (route->sink_stream != 0 || route->source_stream != 0)
-			return -EINVAL;
-
-		pad = -1;
-		for (i = 0; i < conf->nb_inputs; ++i) {
-			if (priv->inputs[i].source_sd == NULL)
-				continue;
-			if (priv->inputs[i].source_pad == route->source_pad) {
-				pad = i;
-				break;
-			}
-		}
-
-		if (route->flags == V4L2_SUBDEV_ROUTE_FL_ACTIVE) {
-			if ((input->source_pad != 0) || ((pad != -1) && (pad != route->sink_pad)))
-				return -EMLINK;
-			input->source_pad = route->source_pad;
-		} else {
-			if (input->source_pad == route->source_pad)
-				input->source_pad = 0;
-		}
-	}
-
-	return 0;
+	return __seninf_set_routing(sd, state, routing);
 }
 
 static const struct v4l2_subdev_core_ops seninf_subdev_core_ops = {
@@ -1291,7 +1267,6 @@ static const struct v4l2_subdev_pad_ops seninf_subdev_pad_ops = {
 	.get_fmt = v4l2_subdev_get_fmt,
 	.set_fmt = seninf_set_fmt,
 	.link_validate = v4l2_subdev_link_validate_default,
-	.get_routing = seninf_get_routing,
 	.set_routing = seninf_set_routing,
 };
 
@@ -1327,26 +1302,11 @@ static int seninf_link_setup(struct media_entity *entity,
 	return 0;
 }
 
-static bool seninf_has_route(struct media_entity *entity,
-			unsigned int pad0, unsigned int pad1)
-{
-	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(entity);
-	struct mtk_seninf *priv = v4l2_get_subdevdata(sd);
-	const struct mtk_seninf_conf *conf = priv->conf;
-	unsigned int i;
-
-	for (i = 0; i < conf->nb_inputs; ++i)
-		if (pad0 == i && pad1 == priv->inputs[i].source_pad)
-			return true;
-
-	return false;
-}
-
 static const struct media_entity_operations seninf_media_ops = {
 	.get_fwnode_pad = v4l2_subdev_get_fwnode_pad_1_to_1,
 	.link_setup = seninf_link_setup,
 	.link_validate = v4l2_subdev_link_validate,
-	.has_route = seninf_has_route,
+	.has_route = v4l2_subdev_has_route,
 };
 
 /* -----------------------------------------------------------------------------
@@ -1400,11 +1360,6 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	input = &priv->inputs[port];
 
 	input->bus = vep->bus.mipi_csi2;
-	/*
-	 * Default routing configuration: Connect SENINF inputs to CAMSV
-	 * outputs.
-	 */
-	input->source_pad = port + conf->nb_inputs + 2;
 
 	/*
 	 * Select the PHY. SENINF2, SENINF3 and SENINF5 are hardwired to the
@@ -1625,7 +1580,8 @@ static int mtk_seninf_v4l2_register(struct mtk_seninf *priv)
 	sd->dev = dev;
 	sd->entity.function = MEDIA_ENT_F_VID_IF_BRIDGE;
 	sd->entity.ops = &seninf_media_ops;
-	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
+	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS
+		  |  V4L2_SUBDEV_FL_MULTIPLEXED;
 	strscpy(sd->name, dev_name(dev), V4L2_SUBDEV_NAME_SIZE);
 	ret = seninf_initialize_controls(priv);
 	if (ret) {
