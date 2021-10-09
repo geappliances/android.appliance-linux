@@ -1270,7 +1270,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 	if (!fwnode_device_is_available(asd->match.fwnode))
 		return -ENOTCONN;
 
-	if (port >= (conf->nb_inputs + conf->nb_outputs)) {
+	if (port >= conf->nb_inputs + conf->nb_outputs) {
 		dev_err(dev, "Invalid port %u\n", port);
 		return -EINVAL;
 	}
@@ -1470,7 +1470,7 @@ static int mtk_seninf_v4l2_async_register(struct mtk_seninf *priv)
 
 	v4l2_async_notifier_init(&priv->notifier);
 
-	for (i = 0; i < (conf->nb_inputs + conf->nb_outputs); ++i) {
+	for (i = 0; i < conf->nb_inputs + conf->nb_outputs; ++i) {
 		ret = v4l2_async_notifier_parse_fwnode_endpoints_by_port(
 			dev, &priv->notifier,
 			sizeof(struct mtk_seninf_async_subdev), i,
