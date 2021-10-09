@@ -699,7 +699,7 @@ static void mtk_seninf_ncsi2_set_mipi(struct mtk_seninf *priv,
 	mtk_seninf_input_write(input, SENINF_NCSI2_DBG_SEL, 0x10);
 }
 
-static int seninf_enable_test_pattern(struct mtk_seninf *priv)
+static void seninf_enable_test_pattern(struct mtk_seninf *priv)
 {
 	struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_0];
 	const struct mtk_seninf_format_info *fmtinfo;
@@ -712,16 +712,8 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	unsigned int vs_pol = 0;
 	unsigned int seninf = 0;
 	unsigned int mux = 0;
-	int ret;
 
 	fmtinfo = mtk_seninf_format_info(priv->source_format.code);
-
-	ret = pm_runtime_get_sync(priv->dev);
-	if (ret < 0) {
-		dev_err(priv->dev, "Failed to pm_runtime_get_sync: %d\n", ret);
-		pm_runtime_put_noidle(priv->dev);
-		return ret;
-	}
 
 	mtk_seninf_update(priv, SENINF_TOP_CTRL, MUX_LP_MODE, 0);
 
@@ -822,21 +814,12 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76540010);
 
 	dev_dbg(priv->dev, "%s: OK\n", __func__);
-	return 0;
 }
 
-static int mtk_seninf_power_on(struct mtk_seninf *priv)
+static void mtk_seninf_start(struct mtk_seninf *priv)
 {
 	struct mtk_seninf_input *input = priv->active_input;
 	const struct mtk_seninf_conf *conf = priv->conf;
-	int ret;
-
-	ret = pm_runtime_get_sync(priv->dev);
-	if (ret < 0) {
-		dev_err(priv->dev, "Failed to pm_runtime_get_sync: %d\n", ret);
-		pm_runtime_put_noidle(priv->dev);
-		return ret;
-	}
 
 	if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2)
 		mtk_seninf_csi2_setup_phy(priv);
@@ -851,11 +834,9 @@ static int mtk_seninf_power_on(struct mtk_seninf *priv)
 	}
 
 	mtk_seninf_set_mux(priv, input);
-
-	return 0;
 }
 
-static void mtk_seninf_power_off(struct mtk_seninf *priv)
+static void mtk_seninf_stop(struct mtk_seninf *priv)
 {
 	const struct mtk_seninf_conf *conf = priv->conf;
 	unsigned int val;
@@ -877,8 +858,6 @@ static void mtk_seninf_power_off(struct mtk_seninf *priv)
 		if (!priv->is_testmode)
 			phy_power_off(input->phy);
 	}
-
-	pm_runtime_put(priv->dev);
 }
 
 /* -----------------------------------------------------------------------------
@@ -1145,28 +1124,37 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 					source->entity.name, ret);
 		}
 
-		mtk_seninf_power_off(priv);
+		mtk_seninf_stop(priv);
+		pm_runtime_put(priv->dev);
 		return 0;
+	}
+
+	ret = pm_runtime_get_sync(priv->dev);
+	if (ret < 0) {
+		dev_err(priv->dev, "Failed to pm_runtime_get_sync: %d\n", ret);
+		pm_runtime_put_noidle(priv->dev);
+		return ret;
 	}
 
 	/*
 	 * If no input is selected, or test mode is enabled, just enable the
 	 * test pattern generator.
 	 */
-	if (!priv->active_input || priv->is_testmode)
-		return seninf_enable_test_pattern(priv);
+	if (!priv->active_input || priv->is_testmode) {
+		seninf_enable_test_pattern(priv);
+		return 0;
+	}
 
 	/* Start the SENINF first and then the source. */
-	ret = mtk_seninf_power_on(priv);
-	if (ret < 0)
-		return ret;
+	mtk_seninf_start(priv);
 
 	source = priv->active_input->subdev;
 	ret = v4l2_subdev_call(source, video, s_stream, 1);
 	if (ret) {
 		dev_err(priv->dev, "failed to start source %s: %d\n",
 			source->entity.name, ret);
-		mtk_seninf_power_off(priv);
+		mtk_seninf_stop(priv);
+		pm_runtime_put(priv->dev);
 		return ret;
 	}
 
