@@ -704,6 +704,7 @@ static void mtk_seninf_ncsi2_set_mipi(struct mtk_seninf *priv,
 
 static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 {
+	struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_0];
 	const struct mtk_seninf_format_info *fmtinfo;
 	const struct mtk_seninf_conf *conf = priv->conf;
 	unsigned int val;
@@ -730,53 +731,52 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	mtk_seninf_update(priv, SENINF_TOP_CTRL, SENINF_PCLK_EN, 1);
 	mtk_seninf_update(priv, SENINF_TOP_CTRL, SENINF2_PCLK_EN, 1);
 
-	mtk_seninf_update(priv, SENINF_CTRL, SENINF_EN, 1);
-	mtk_seninf_update(priv, SENINF_CTRL, SENINF_SRC_SEL, 1);
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_EN, 1);
+	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_SRC_SEL, 1);
 	if (conf->seninf_version == SENINF_50)
-		mtk_seninf_update(priv, SENINF_CTRL_EXT,
-			    SENINF_TESTMDL_IP_EN, 1);
+		mtk_seninf_input_update(input, SENINF_CTRL_EXT,
+					SENINF_TESTMDL_IP_EN, 1);
 
-	mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_EN, 1);
-	mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_PAT, 0xc);
-	mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_VSYNC, 4);
-	mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_DUMMYPXL, 0x28);
+	mtk_seninf_input_update(input, SENINF_TG1_TM_CTL, TM_EN, 1);
+	mtk_seninf_input_update(input, SENINF_TG1_TM_CTL, TM_PAT, 0xc);
+	mtk_seninf_input_update(input, SENINF_TG1_TM_CTL, TM_VSYNC, 4);
+	mtk_seninf_input_update(input, SENINF_TG1_TM_CTL, TM_DUMMYPXL, 0x28);
 
 	if (fmtinfo->flags & MTK_SENINF_FORMAT_BAYER)
-		mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_FMT, 0x0);
+		mtk_seninf_input_update(input, SENINF_TG1_TM_CTL, TM_FMT, 0x0);
 	else
-		mtk_seninf_update(priv, SENINF_TG1_TM_CTL, TM_FMT, 0x1);
+		mtk_seninf_input_update(input, SENINF_TG1_TM_CTL, TM_FMT, 0x1);
 
 	switch (priv->source_format.code) {
 	case MEDIA_BUS_FMT_UYVY8_1X16:
 	case MEDIA_BUS_FMT_VYUY8_1X16:
 	case MEDIA_BUS_FMT_YUYV8_1X16:
 	case MEDIA_BUS_FMT_YVYU8_1X16:
-		mtk_seninf_write(priv, SENINF_TG1_TM_SIZE,
-				 (priv->source_format.height + 8) << 16 |
-				 priv->source_format.width * 2);
+		mtk_seninf_input_write(input, SENINF_TG1_TM_SIZE,
+				       (priv->source_format.height + 8) << 16 |
+				       priv->source_format.width * 2);
 		break;
 	default:
-		mtk_seninf_write(priv, SENINF_TG1_TM_SIZE,
-				 (priv->source_format.height + 8) << 16 |
-				 priv->source_format.width);
+		mtk_seninf_input_write(input, SENINF_TG1_TM_SIZE,
+				       (priv->source_format.height + 8) << 16 |
+				       priv->source_format.width);
 		break;
 	}
 
-	mtk_seninf_write(priv, SENINF_TG1_TM_CLK, 0x8);
+	mtk_seninf_input_write(input, SENINF_TG1_TM_CLK, 0x8);
 	if (conf->seninf_version == SENINF_50)
-		mtk_seninf_write(priv, SENINF_TG1_TM_STP, 0x1);
+		mtk_seninf_input_write(input, SENINF_TG1_TM_STP, 0x1);
 
 	/* Set top mux */
 	val = (mtk_seninf_read(priv, SENINF_TOP_MUX_CTRL) & (~(0xf << (mux * 4)))) |
 	      ((seninf & 0xf) << (mux * 4));
 	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, val);
 
-	/* TODO : if mux != 0 => use pseninf + 0x1000 * mux */
-	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
 	if (conf->seninf_version == SENINF_50)
-		mtk_seninf_update(priv, SENINF_MUX_CTRL_EXT,
-			    SENINF_SRC_SEL_EXT, SENINF_TEST_MODEL);
-	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_SRC_SEL, 1);
+		mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT,
+					SENINF_SRC_SEL_EXT, SENINF_TEST_MODEL);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_SRC_SEL, 1);
 
 	switch (pixel_mode) {
 	case 1:
@@ -794,30 +794,32 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 	}
 
 	if (conf->seninf_version == SENINF_50)
-		mtk_seninf_update(priv, SENINF_MUX_CTRL_EXT,
-			    SENINF_PIX_SEL_EXT, pix_sel_ext);
+		mtk_seninf_input_update(input, SENINF_MUX_CTRL_EXT,
+					SENINF_PIX_SEL_EXT, pix_sel_ext);
 
-	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_PIX_SEL,
+				pix_sel);
 
-	mtk_seninf_update(priv, SENINF_MUX_CTRL, FIFO_PUSH_EN,
-		    0x1f);
-	mtk_seninf_update(priv, SENINF_MUX_CTRL, FIFO_FLUSH_EN,
-		    0x1b);
-	mtk_seninf_update(priv, SENINF_MUX_CTRL, FIFO_FULL_WR_EN,
-		    2);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_PUSH_EN, 0x1f);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FLUSH_EN, 0x1b);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, FIFO_FULL_WR_EN, 2);
 
-	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_HSYNC_POL, hs_pol);
-	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_VSYNC_POL, vs_pol);
-	mtk_seninf_update(priv, SENINF_MUX_CTRL, SENINF_HSYNC_MASK, 1);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_HSYNC_POL,
+				hs_pol);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_VSYNC_POL,
+				vs_pol);
+	mtk_seninf_input_update(input, SENINF_MUX_CTRL, SENINF_HSYNC_MASK, 1);
 
-	mtk_seninf_write(priv, SENINF_MUX_INTEN,
-			 SENINF_IRQ_CLR_SEL | SENINF_ALL_ERR_IRQ_EN);
+	mtk_seninf_input_write(input, SENINF_MUX_INTEN,
+			       SENINF_IRQ_CLR_SEL | SENINF_ALL_ERR_IRQ_EN);
 
-	mtk_seninf_write(priv, SENINF_MUX_CTRL,
-			 mtk_seninf_read(priv, SENINF_MUX_CTRL) | 0x3);
+	mtk_seninf_input_write(input, SENINF_MUX_CTRL,
+			       mtk_seninf_input_read(input, SENINF_MUX_CTRL) |
+			       0x3);
 	udelay(1);
-	mtk_seninf_write(priv, SENINF_MUX_CTRL,
-			 mtk_seninf_read(priv, SENINF_MUX_CTRL) & ~0x3);
+	mtk_seninf_input_write(input, SENINF_MUX_CTRL,
+			       mtk_seninf_input_read(input, SENINF_MUX_CTRL) &
+			       ~0x3);
 
 	if (conf->seninf_version == SENINF_50)
 		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76540010);
