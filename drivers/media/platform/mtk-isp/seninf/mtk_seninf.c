@@ -655,10 +655,7 @@ static void mtk_seninf_csi2_set_mipi(struct mtk_seninf *priv,
 static void mtk_seninf_ncsi2_set_mipi(struct mtk_seninf *priv,
 				      struct mtk_seninf_input *input)
 {
-	const struct mtk_seninf_format_info *fmtinfo;
 	unsigned int val;
-
-	fmtinfo = mtk_seninf_format_info(input->format.code);
 
 	/* HQ */
 	mtk_seninf_input_write(input, SENINF_TG1_PH_CNT, 0x0);
