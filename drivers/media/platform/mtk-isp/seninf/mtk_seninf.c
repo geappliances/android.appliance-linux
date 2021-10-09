@@ -139,7 +139,6 @@ struct mtk_seninf_format_info {
  * @phy_mode: PHY operation mode (NONE when the input is not connected)
  * @bus: CSI-2 bus configuration from DT
  * @source_sd: Source subdev connected to the input
- * @format: Active format on the sink pad
  * @source_pad: Source pad to which this input is routed
  */
 struct mtk_seninf_input {
@@ -154,7 +153,6 @@ struct mtk_seninf_input {
 	struct v4l2_fwnode_bus_mipi_csi2 bus;
 
 	struct v4l2_subdev *source_sd;
-	struct v4l2_mbus_framefmt format;
 
 	unsigned int source_pad;
 };
@@ -206,8 +204,6 @@ struct mtk_seninf {
 	struct media_pad pads[SENINF_MAX_NUM_PADS];
 	struct v4l2_async_notifier notifier;
 	struct v4l2_ctrl_handler ctrl_handler;
-
-	struct v4l2_mbus_framefmt source_format;
 
 	struct mtk_seninf_input inputs[SENINF_MAX_NUM_INPUTS];
 	struct mtk_seninf_input *active_input;
@@ -588,15 +584,18 @@ static void mtk_seninf_input_setup_csi2_rx(struct mtk_seninf_input *input)
 				CSI0_BIST_LN3_MUX, lanes[3]);
 }
 
-static void mtk_seninf_input_setup_csi2(struct mtk_seninf_input *input)
+static void mtk_seninf_input_setup_csi2(struct mtk_seninf_input *input,
+					struct v4l2_subdev_state *state)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
+	const struct v4l2_mbus_framefmt *format;
 	unsigned int dpcm;
 	unsigned int data_lane_num = input->bus.num_data_lanes;
 	unsigned int data_header_order = 1;
 	unsigned int val = 0;
 
-	fmtinfo = mtk_seninf_format_info(input->format.code);
+	format = v4l2_state_get_stream_format(state, input->pad, 0);
+	fmtinfo = mtk_seninf_format_info(format->code);
 
 	/* Configure timestamp */
 	mtk_seninf_input_write(input, SENINF_TG1_TM_STP, SENINF_TIMESTAMP_STEP);
@@ -711,10 +710,12 @@ static void mtk_seninf_input_setup_ncsi2(struct mtk_seninf_input *input)
 }
 
 static void mtk_seninf_mux_setup(struct mtk_seninf_mux *mux,
-				 struct mtk_seninf_input *input)
+				 struct mtk_seninf_input *input,
+				 struct v4l2_subdev_state *state)
 {
 	const struct mtk_seninf_conf *conf = mux->seninf->conf;
 	const struct mtk_seninf_format_info *fmtinfo;
+	const struct v4l2_mbus_framefmt *format;
 	unsigned int pix_sel_ext;
 	unsigned int pix_sel;
 	unsigned int hs_pol = 0;
@@ -722,7 +723,8 @@ static void mtk_seninf_mux_setup(struct mtk_seninf_mux *mux,
 	unsigned int pixel_mode = TWO_PIXEL_MODE;
 	unsigned int val;
 
-	fmtinfo = mtk_seninf_format_info(input->format.code);
+	format = v4l2_state_get_stream_format(state, input->pad, 0);
+	fmtinfo = mtk_seninf_format_info(format->code);
 
 	/* Enable mux */
 	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
@@ -797,12 +799,14 @@ static void mtk_seninf_top_mux_setup(struct mtk_seninf *priv,
 		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76543210);
 }
 
-static void seninf_enable_test_pattern(struct mtk_seninf *priv)
+static void seninf_enable_test_pattern(struct mtk_seninf *priv,
+				       struct v4l2_subdev_state *state)
 {
 	struct mtk_seninf_input *input = &priv->inputs[CSI_PORT_0];
 	struct mtk_seninf_mux *mux = &priv->muxes[0];
 	const struct mtk_seninf_format_info *fmtinfo;
 	const struct mtk_seninf_conf *conf = priv->conf;
+	const struct v4l2_mbus_framefmt *format;
 	unsigned int val;
 	unsigned int pixel_mode = TWO_PIXEL_MODE;
 	unsigned int pix_sel_ext;
@@ -812,7 +816,8 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv)
 	unsigned int seninf = 0;
 	unsigned int mux_id = mux->mux_id;
 
-	fmtinfo = mtk_seninf_format_info(priv->source_format.code);
+	format = v4l2_state_get_stream_format(state, priv->conf->nb_inputs, 0);
+	fmtinfo = mtk_seninf_format_info(format->code);
 
 	mtk_seninf_update(priv, SENINF_TOP_CTRL, MUX_LP_MODE, 0);
 
@@ -835,19 +840,19 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv)
 	else
 		mtk_seninf_input_update(input, SENINF_TG1_TM_CTL, TM_FMT, 0x1);
 
-	switch (priv->source_format.code) {
+	switch (format->code) {
 	case MEDIA_BUS_FMT_UYVY8_1X16:
 	case MEDIA_BUS_FMT_VYUY8_1X16:
 	case MEDIA_BUS_FMT_YUYV8_1X16:
 	case MEDIA_BUS_FMT_YVYU8_1X16:
 		mtk_seninf_input_write(input, SENINF_TG1_TM_SIZE,
-				       (priv->source_format.height + 8) << 16 |
-				       priv->source_format.width * 2);
+				       (format->height + 8) << 16 |
+				       format->width * 2);
 		break;
 	default:
 		mtk_seninf_input_write(input, SENINF_TG1_TM_SIZE,
-				       (priv->source_format.height + 8) << 16 |
-				       priv->source_format.width);
+				       (format->height + 8) << 16 |
+				       format->width);
 		break;
 	}
 
@@ -914,7 +919,8 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv)
 	dev_dbg(priv->dev, "%s: OK\n", __func__);
 }
 
-static void mtk_seninf_start(struct mtk_seninf *priv)
+static void mtk_seninf_start(struct mtk_seninf *priv,
+			     struct v4l2_subdev_state *state)
 {
 	const struct mtk_seninf_conf *conf = priv->conf;
 	struct mtk_seninf_input *input = priv->active_input;
@@ -924,7 +930,7 @@ static void mtk_seninf_start(struct mtk_seninf *priv)
 
 	if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_CSI2) {
 		mtk_seninf_input_setup_csi2_rx(input);
-		mtk_seninf_input_setup_csi2(input);
+		mtk_seninf_input_setup_csi2(input, state);
 	} else if (conf->csi2_rx_type == MTK_SENINF_CSI2_RX_NCSI2) {
 		mtk_seninf_input_setup_ncsi2(input);
 	}
@@ -936,7 +942,7 @@ static void mtk_seninf_start(struct mtk_seninf *priv)
 	 * mtk_seninf_top_mux_setup().
 	 */
 	mux = &priv->muxes[input->source_pad - conf->nb_inputs];
-	mtk_seninf_mux_setup(mux, input);
+	mtk_seninf_mux_setup(mux, input, state);
 	mtk_seninf_top_mux_setup(priv, input->seninf_id, mux);
 }
 
@@ -1036,6 +1042,7 @@ static int seninf_initialize_controls(struct mtk_seninf *priv)
 static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
+	struct v4l2_subdev_state *state;
 	struct v4l2_subdev *source;
 	int ret;
 
@@ -1054,11 +1061,15 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 		return 0;
 	}
 
+	state = v4l2_subdev_lock_active_state(&priv->subdev);
+	if (!state)
+		return -EPIPE;
+
 	ret = pm_runtime_get_sync(priv->dev);
 	if (ret < 0) {
 		dev_err(priv->dev, "Failed to pm_runtime_get_sync: %d\n", ret);
 		pm_runtime_put_noidle(priv->dev);
-		return ret;
+		goto unlock;
 	}
 
 	/*
@@ -1066,12 +1077,13 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 	 * test pattern generator.
 	 */
 	if (!priv->active_input || priv->is_testmode) {
-		seninf_enable_test_pattern(priv);
-		return 0;
+		seninf_enable_test_pattern(priv, state);
+		ret = 0;
+		goto unlock;
 	}
 
 	/* Start the SENINF first and then the source. */
-	mtk_seninf_start(priv);
+	mtk_seninf_start(priv, state);
 
 	source = priv->active_input->source_sd;
 	ret = v4l2_subdev_call(source, video, s_stream, 1);
@@ -1080,10 +1092,11 @@ static int seninf_s_stream(struct v4l2_subdev *sd, int on)
 			source->entity.name, ret);
 		mtk_seninf_stop(priv);
 		pm_runtime_put(priv->dev);
-		return ret;
 	}
 
-	return 0;
+unlock:
+	v4l2_subdev_unlock_state(state);
+	return ret;
 };
 
 static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
@@ -1097,36 +1110,14 @@ static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
 	.quantization = V4L2_QUANTIZATION_DEFAULT,
 };
 
-static struct v4l2_mbus_framefmt *
-seninf_get_pad_format(struct mtk_seninf *priv,
-		      struct v4l2_subdev_state *sd_state,
-		      unsigned int pad, u32 which)
-{
-
-	switch (which) {
-	case V4L2_SUBDEV_FORMAT_TRY:
-		return v4l2_subdev_get_try_format(&priv->subdev, sd_state, pad);
-	case V4L2_SUBDEV_FORMAT_ACTIVE:
-		if (mtk_seninf_pad_is_sink(priv, pad))
-			return &priv->inputs[pad].format;
-		else
-			return &priv->source_format;
-	default:
-		return NULL;
-	}
-}
-
 static int seninf_init_cfg(struct v4l2_subdev *sd,
-			   struct v4l2_subdev_state *sd_state)
+			   struct v4l2_subdev_state *state)
 {
-	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
-	u32 which = sd_state ? V4L2_SUBDEV_FORMAT_TRY
-		  : V4L2_SUBDEV_FORMAT_ACTIVE;
 	struct v4l2_mbus_framefmt *format;
-	unsigned int i;
+	unsigned int pad;
 
-	for (i = 0; i < sd->entity.num_pads; i++) {
-		format = seninf_get_pad_format(priv, sd_state, i, which);
+	for (pad = 0; pad < sd->entity.num_pads; pad++) {
+		format = v4l2_state_get_stream_format(state, pad, 0);
 		*format = mtk_seninf_default_fmt;
 	}
 
@@ -1134,7 +1125,7 @@ static int seninf_init_cfg(struct v4l2_subdev *sd,
 }
 
 static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
-				 struct v4l2_subdev_state *sd_state,
+				 struct v4l2_subdev_state *state,
 				 struct v4l2_subdev_mbus_code_enum *code)
 {
 	const struct mtk_seninf_format_info *fmtinfo;
@@ -1153,56 +1144,66 @@ static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int seninf_get_fmt(struct v4l2_subdev *sd,
-			  struct v4l2_subdev_state *sd_state,
-			  struct v4l2_subdev_format *fmt)
-{
-	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
-
-	fmt->format = *seninf_get_pad_format(priv, sd_state, fmt->pad,
-					     fmt->which);
-
-	return 0;
-}
-
 static int seninf_set_fmt(struct v4l2_subdev *sd,
-			  struct v4l2_subdev_state *sd_state,
+			  struct v4l2_subdev_state *state,
 			  struct v4l2_subdev_format *fmt)
 {
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
 	const struct mtk_seninf_format_info *fmtinfo;
 	struct v4l2_mbus_framefmt *format;
+	unsigned int source_pad;
+	int ret = 0;
 
+	/*
+	 * TODO (?): We should disallow setting formats on the source pad
+	 * completely, as the SENINF can't perform any processing. This would
+	 * however break usage of the test pattern generator, as there would be
+	 * no way to configure formats at all when no active input is selected.
+	 */
+
+	/*
+	 * Default to the first format if the requested media bus code isn't
+	 * supported.
+	 */
 	fmtinfo = mtk_seninf_format_info(fmt->format.code);
 	if (!fmtinfo) {
 		fmtinfo = &mtk_seninf_formats[0];
 		fmt->format.code = fmtinfo->code;
 	}
 
-	format = seninf_get_pad_format(priv, sd_state, fmt->pad, fmt->which);
+	/* Interlaced formats are not supported yet. */
+	fmt->format.field = V4L2_FIELD_NONE;
 
-	format->width = fmt->format.width;
-	format->height = fmt->format.height;
-	format->code = fmt->format.code;
+	/* Store the format. */
+	state = v4l2_subdev_validate_and_lock_state(sd, state);
 
-	fmt->format = *format;
+	format = v4l2_state_get_stream_format(state, fmt->pad, fmt->stream);
+	if (!format) {
+		ret = -EINVAL;
+		goto unlock;
+	}
 
-	/*
-	 * Propagate the format to the corresponding source pad.
-	 *
-	 * TODO (?): We should disallow setting formats on the source pad
-	 * completely, as the SENINF can't perform any processing. This would
-	 * however break usage of the test pattern generator, as there would be
-	 * no way to configure formats at all when no active input is selected.
-	 */
-	if (priv->inputs[fmt->pad].source_pad) {
-		format = seninf_get_pad_format(priv, sd_state,
-					       priv->inputs[fmt->pad].source_pad,
-					       fmt->which);
+	*format = fmt->format;
+
+	if (mtk_seninf_pad_is_source(priv, fmt->pad))
+		goto unlock;
+
+	/* Propagate the format to the corresponding source pad. */
+	source_pad = priv->inputs[fmt->pad].source_pad;
+	if (source_pad) {
+		format = v4l2_state_get_stream_format(state, source_pad,
+						      fmt->stream);
+		if (!format) {
+			ret = -EINVAL;
+			goto unlock;
+		}
+
 		*format = fmt->format;
 	}
 
-	return 0;
+unlock:
+	v4l2_subdev_unlock_state(state);
+	return ret;
 }
 
 static int seninf_get_routing(struct v4l2_subdev *sd,
@@ -1287,7 +1288,7 @@ static const struct v4l2_subdev_video_ops seninf_subdev_video_ops = {
 static const struct v4l2_subdev_pad_ops seninf_subdev_pad_ops = {
 	.init_cfg = seninf_init_cfg,
 	.enum_mbus_code = seninf_enum_mbus_code,
-	.get_fmt = seninf_get_fmt,
+	.get_fmt = v4l2_subdev_get_fmt,
 	.set_fmt = seninf_set_fmt,
 	.link_validate = v4l2_subdev_link_validate_default,
 	.get_routing = seninf_get_routing,
@@ -1631,13 +1632,16 @@ static int mtk_seninf_v4l2_register(struct mtk_seninf *priv)
 		dev_err(dev, "Failed to initialize controls: %d\n", ret);
 		goto err_unreg_v4l2;
 	}
-	seninf_init_cfg(sd, NULL);
 	v4l2_set_subdevdata(sd, priv);
+
+	ret = v4l2_subdev_init_finalize(sd);
+	if (ret)
+		goto err_free_handler;
 
 	ret = v4l2_device_register_subdev(&priv->v4l2_dev, sd);
 	if (ret) {
 		dev_err(dev, "Failed to register subdev: %d\n", ret);
-		goto err_free_handler;
+		goto err_cleanup_subdev;
 	}
 
 	/* Set up async device */
@@ -1660,6 +1664,8 @@ err_unreg_notifier:
 	v4l2_async_notifier_unregister(&priv->notifier);
 err_unreg_subdev:
 	v4l2_device_unregister_subdev(sd);
+err_cleanup_subdev:
+	v4l2_subdev_cleanup(sd);
 err_free_handler:
 	v4l2_ctrl_handler_free(&priv->ctrl_handler);
 err_unreg_v4l2:
@@ -1804,6 +1810,7 @@ static int seninf_remove(struct platform_device *pdev)
 	v4l2_async_notifier_unregister(&priv->notifier);
 	v4l2_async_notifier_cleanup(&priv->notifier);
 	v4l2_device_unregister_subdev(&priv->subdev);
+	v4l2_subdev_cleanup(&priv->subdev);
 	v4l2_ctrl_handler_free(&priv->ctrl_handler);
 	media_entity_cleanup(&priv->subdev.entity);
 	v4l2_device_unregister(&priv->v4l2_dev);
