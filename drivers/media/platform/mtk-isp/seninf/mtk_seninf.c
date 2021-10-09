@@ -1591,7 +1591,6 @@ static int seninf_probe(struct platform_device *pdev)
 		[SENINF_PHY_CSI0B] = "csi0b",
 	};
 
-	struct resource *res;
 	struct mtk_seninf *priv;
 	struct device *dev = &pdev->dev;
 	unsigned int i;
@@ -1606,8 +1605,7 @@ static int seninf_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, priv);
 	priv->dev = dev;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	priv->base = devm_ioremap_resource(dev, res);
+	priv->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(priv->base))
 		return PTR_ERR(priv->base);
 
