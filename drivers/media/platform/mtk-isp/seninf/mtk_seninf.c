@@ -38,8 +38,8 @@
 
 #define SENINF_PAD_10BIT		0
 
-#define SENINF_TEST_MODEL          	0
-#define SENINF_NORMAL_MODEL        	1
+#define SENINF_TEST_MODEL		0
+#define SENINF_NORMAL_MODEL		1
 #define SENINF_ALL_ERR_IRQ_EN		0x7f
 #define SENINF_IRQ_CLR_SEL		0x80000000
 
@@ -1363,8 +1363,8 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 }
 
 static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
-                                    struct v4l2_subdev *sd,
-                                    struct v4l2_async_subdev *asd)
+				     struct v4l2_subdev *sd,
+				     struct v4l2_async_subdev *asd)
 {
 	struct mtk_seninf *priv = container_of(notifier, struct mtk_seninf, notifier);
 	const struct mtk_seninf_conf *conf = priv->conf;
