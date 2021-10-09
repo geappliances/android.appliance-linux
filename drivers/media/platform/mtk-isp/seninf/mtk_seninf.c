@@ -33,6 +33,7 @@
 #define SENINF_MAX_NUM_PADS		(SENINF_MAX_NUM_INPUTS + \
 					 SENINF_MAX_NUM_OUTPUTS)
 
+#define SENINF_DEFAULT_BUS_FMT		MEDIA_BUS_FMT_SGRBG10_1X10
 #define SENINF_DEFAULT_WIDTH		1920
 #define SENINF_DEFAULT_HEIGHT		1080
 
@@ -935,7 +936,7 @@ static int seninf_initialize_controls(struct mtk_seninf *priv)
  */
 
 static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
-	.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+	.code = SENINF_DEFAULT_BUS_FMT,
 	.width = SENINF_DEFAULT_WIDTH,
 	.height = SENINF_DEFAULT_HEIGHT,
 	.field = V4L2_FIELD_NONE,
