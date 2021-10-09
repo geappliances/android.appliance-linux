@@ -190,6 +190,18 @@ inline struct mtk_seninf *sd_to_mtk_seninf(struct v4l2_subdev *sd)
 	return container_of(sd, struct mtk_seninf, subdev);
 }
 
+static inline bool mtk_seninf_pad_is_sink(struct mtk_seninf *priv,
+					  unsigned int pad)
+{
+	return pad < priv->conf->nb_inputs;
+}
+
+static inline bool mtk_seninf_pad_is_source(struct mtk_seninf *priv,
+					    unsigned int pad)
+{
+	return !mtk_seninf_pad_is_sink(priv, pad);
+}
+
 /* -----------------------------------------------------------------------------
  * Formats
  */
@@ -950,13 +962,12 @@ static struct v4l2_mbus_framefmt *
 seninf_get_pad_format(struct mtk_seninf *priv, struct v4l2_subdev_pad_config *cfg,
 		      unsigned int pad, u32 which)
 {
-	const struct mtk_seninf_conf *conf = priv->conf;
 
 	switch (which) {
 	case V4L2_SUBDEV_FORMAT_TRY:
 		return v4l2_subdev_get_try_format(&priv->subdev, cfg, pad);
 	case V4L2_SUBDEV_FORMAT_ACTIVE:
-		if (pad < conf->nb_inputs)
+		if (mtk_seninf_pad_is_sink(priv, pad))
 			return &priv->inputs[pad].format;
 		else
 			return &priv->source_format;
@@ -987,14 +998,13 @@ static int seninf_enum_mbus_code(struct v4l2_subdev *sd,
 {
 	const struct mtk_seninf_format_info *fmtinfo;
 	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
-	const struct mtk_seninf_conf *conf = priv->conf;
 
 	if (code->index >= ARRAY_SIZE(mtk_seninf_formats))
 		return -EINVAL;
 
 	fmtinfo = &mtk_seninf_formats[code->index];
 	if (fmtinfo->flags & MTK_SENINF_FORMAT_INPUT_ONLY &&
-	    code->pad >= conf->nb_inputs)
+	    mtk_seninf_pad_is_source(priv, code->pad))
 		return -EINVAL;
 
 	code->code = fmtinfo->code;
@@ -1278,7 +1288,7 @@ static int mtk_seninf_fwnode_parse(struct device *dev,
 
 	s_asd->port = port;
 
-	if (port >= conf->nb_inputs)
+	if (mtk_seninf_pad_is_source(priv, port))
 		return 0;
 
 	if (conf->seninf_version == SENINF_20 && port >= 1) {
@@ -1368,7 +1378,6 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
 				     struct v4l2_async_subdev *asd)
 {
 	struct mtk_seninf *priv = container_of(notifier, struct mtk_seninf, notifier);
-	const struct mtk_seninf_conf *conf = priv->conf;
 	struct mtk_seninf_async_subdev *s_asd =
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
 	struct device_link *link;
@@ -1377,7 +1386,7 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
 	dev_dbg(priv->dev, "%s bound to SENINF port %u\n", sd->entity.name,
 		s_asd->port);
 
-	if (s_asd->port < conf->nb_inputs) {
+	if (mtk_seninf_pad_is_sink(priv, s_asd->port)) {
 		struct mtk_seninf_input *input = s_asd->input;
 
 		input->subdev = sd;
