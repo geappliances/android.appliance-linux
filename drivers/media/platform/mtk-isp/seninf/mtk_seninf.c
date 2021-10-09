@@ -925,6 +925,59 @@ static int seninf_initialize_controls(struct mtk_seninf *priv)
  * V4L2 Subdev Operations
  */
 
+static int seninf_s_stream(struct v4l2_subdev *sd, int on)
+{
+	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
+	struct v4l2_subdev *source;
+	int ret;
+
+	if (!on) {
+		if (priv->active_input && !priv->is_testmode) {
+			source = priv->active_input->subdev;
+			ret = v4l2_subdev_call(source, video, s_stream, 0);
+			if (ret)
+				dev_err(priv->dev,
+					"failed to stop source %s: %d\n",
+					source->entity.name, ret);
+		}
+
+		mtk_seninf_stop(priv);
+		pm_runtime_put(priv->dev);
+		return 0;
+	}
+
+	ret = pm_runtime_get_sync(priv->dev);
+	if (ret < 0) {
+		dev_err(priv->dev, "Failed to pm_runtime_get_sync: %d\n", ret);
+		pm_runtime_put_noidle(priv->dev);
+		return ret;
+	}
+
+	/*
+	 * If no input is selected, or test mode is enabled, just enable the
+	 * test pattern generator.
+	 */
+	if (!priv->active_input || priv->is_testmode) {
+		seninf_enable_test_pattern(priv);
+		return 0;
+	}
+
+	/* Start the SENINF first and then the source. */
+	mtk_seninf_start(priv);
+
+	source = priv->active_input->subdev;
+	ret = v4l2_subdev_call(source, video, s_stream, 1);
+	if (ret) {
+		dev_err(priv->dev, "failed to start source %s: %d\n",
+			source->entity.name, ret);
+		mtk_seninf_stop(priv);
+		pm_runtime_put(priv->dev);
+		return ret;
+	}
+
+	return 0;
+};
+
 static const struct v4l2_mbus_framefmt mtk_seninf_default_fmt = {
 	.code = SENINF_DEFAULT_BUS_FMT,
 	.width = SENINF_DEFAULT_WIDTH,
@@ -1108,82 +1161,29 @@ static int seninf_set_routing(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int seninf_s_stream(struct v4l2_subdev *sd, int on)
-{
-	struct mtk_seninf *priv = sd_to_mtk_seninf(sd);
-	struct v4l2_subdev *source;
-	int ret;
-
-	if (!on) {
-		if (priv->active_input && !priv->is_testmode) {
-			source = priv->active_input->subdev;
-			ret = v4l2_subdev_call(source, video, s_stream, 0);
-			if (ret)
-				dev_err(priv->dev,
-					"failed to stop source %s: %d\n",
-					source->entity.name, ret);
-		}
-
-		mtk_seninf_stop(priv);
-		pm_runtime_put(priv->dev);
-		return 0;
-	}
-
-	ret = pm_runtime_get_sync(priv->dev);
-	if (ret < 0) {
-		dev_err(priv->dev, "Failed to pm_runtime_get_sync: %d\n", ret);
-		pm_runtime_put_noidle(priv->dev);
-		return ret;
-	}
-
-	/*
-	 * If no input is selected, or test mode is enabled, just enable the
-	 * test pattern generator.
-	 */
-	if (!priv->active_input || priv->is_testmode) {
-		seninf_enable_test_pattern(priv);
-		return 0;
-	}
-
-	/* Start the SENINF first and then the source. */
-	mtk_seninf_start(priv);
-
-	source = priv->active_input->subdev;
-	ret = v4l2_subdev_call(source, video, s_stream, 1);
-	if (ret) {
-		dev_err(priv->dev, "failed to start source %s: %d\n",
-			source->entity.name, ret);
-		mtk_seninf_stop(priv);
-		pm_runtime_put(priv->dev);
-		return ret;
-	}
-
-	return 0;
-};
-
-static const struct v4l2_subdev_pad_ops seninf_subdev_pad_ops = {
-	.link_validate = v4l2_subdev_link_validate_default,
-	.init_cfg = seninf_init_cfg,
-	.set_fmt = seninf_set_fmt,
-	.get_fmt = seninf_get_fmt,
-	.get_routing = seninf_get_routing,
-	.set_routing = seninf_set_routing,
-	.enum_mbus_code = seninf_enum_mbus_code,
+static const struct v4l2_subdev_core_ops seninf_subdev_core_ops = {
+	.subscribe_event = v4l2_ctrl_subdev_subscribe_event,
+	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
 };
 
 static const struct v4l2_subdev_video_ops seninf_subdev_video_ops = {
 	.s_stream = seninf_s_stream,
 };
 
-static const struct v4l2_subdev_core_ops seninf_subdev_core_ops = {
-	.subscribe_event    = v4l2_ctrl_subdev_subscribe_event,
-	.unsubscribe_event	= v4l2_event_subdev_unsubscribe,
+static const struct v4l2_subdev_pad_ops seninf_subdev_pad_ops = {
+	.init_cfg = seninf_init_cfg,
+	.enum_mbus_code = seninf_enum_mbus_code,
+	.get_fmt = seninf_get_fmt,
+	.set_fmt = seninf_set_fmt,
+	.link_validate = v4l2_subdev_link_validate_default,
+	.get_routing = seninf_get_routing,
+	.set_routing = seninf_set_routing,
 };
 
 static const struct v4l2_subdev_ops seninf_subdev_ops = {
-	.core	= &seninf_subdev_core_ops,
-	.video	= &seninf_subdev_video_ops,
-	.pad	= &seninf_subdev_pad_ops,
+	.core = &seninf_subdev_core_ops,
+	.video = &seninf_subdev_video_ops,
+	.pad = &seninf_subdev_pad_ops,
 };
 
 /* -----------------------------------------------------------------------------
