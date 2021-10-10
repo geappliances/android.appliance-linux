@@ -1494,10 +1494,12 @@ v4l2_state_get_stream_format(struct v4l2_subdev_state *state, unsigned int pad,
  * @pad: pad id
  * @stream: stream id
  * @other_pad: pointer used to return the opposite pad
- * @other_stream: pointer used to return the opposite stream
+ * @other_stream: pointer used to return the opposite stream (may be NULL)
  *
- * This function uses the routing table to find the pad + stream which is
- * opposite the given pad + stream.
+ * This function uses the routing table from the state to find the pad + stream
+ * which is opposite the given pad + stream.
+ *
+ * @other_stream may be NULL if the caller doesn't need the stream id.
  *
  * Returns 0 on success, or -EINVAL if no matching route is found.
  */

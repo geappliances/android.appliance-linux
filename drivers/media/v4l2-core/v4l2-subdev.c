@@ -1510,13 +1510,15 @@ int v4l2_state_find_opposite_end(const struct v4l2_subdev_state *state, u32 pad,
 		if (route->source_pad == pad &&
 		    route->source_stream == stream) {
 			*other_pad = route->sink_pad;
-			*other_stream = route->sink_stream;
+			if (other_stream)
+				*other_stream = route->sink_stream;
 			return 0;
 		}
 
 		if (route->sink_pad == pad && route->sink_stream == stream) {
 			*other_pad = route->source_pad;
-			*other_stream = route->source_stream;
+			if (other_stream)
+				*other_stream = route->source_stream;
 			return 0;
 		}
 	}
