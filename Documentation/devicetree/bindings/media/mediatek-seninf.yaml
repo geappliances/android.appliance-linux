@@ -133,7 +133,7 @@ properties:
       port@4:
         $ref: /schemas/graph.yaml#/$defs/port-base
         unevaluatedProperties: false
-        description: connection point for camsv0
+        description: connection point for cam0
 
         patternProperties:
           endpoint:
@@ -143,7 +143,7 @@ properties:
       port@5:
         $ref: /schemas/graph.yaml#/$defs/port-base
         unevaluatedProperties: false
-        description: connection point for camsv1
+        description: connection point for cam1
 
         patternProperties:
           endpoint:
@@ -153,7 +153,7 @@ properties:
       port@6:
         $ref: /schemas/graph.yaml#/$defs/port-base
         unevaluatedProperties: false
-        description: connection point for camsv2
+        description: connection point for camsv0
 
         patternProperties:
           endpoint:
@@ -161,6 +161,26 @@ properties:
             unevaluatedProperties: false
 
       port@7:
+        $ref: /schemas/graph.yaml#/$defs/port-base
+        unevaluatedProperties: false
+        description: connection point for camsv1
+
+        patternProperties:
+          endpoint:
+            $ref: video-interfaces.yaml#
+            unevaluatedProperties: false
+
+      port@8:
+        $ref: /schemas/graph.yaml#/$defs/port-base
+        unevaluatedProperties: false
+        description: connection point for camsv2
+
+        patternProperties:
+          endpoint:
+            $ref: video-interfaces.yaml#
+            unevaluatedProperties: false
+
+      port@9:
         $ref: /schemas/graph.yaml#/$defs/port-base
         unevaluatedProperties: false
         description: connection point for camsv3
@@ -179,6 +199,8 @@ properties:
       - port@5
       - port@6
       - port@7
+      - port@8
+      - port@9
 
 required:
   - compatible
@@ -242,27 +264,35 @@ examples:
 
             port@4 {
                 reg = <4>;
+            };
+
+            port@5 {
+                reg = <5>;
+            };
+
+            port@6 {
+                reg = <6>;
                 seninf_camsv0_endpoint: endpoint {
                     remote-endpoint = <&camsv0_endpoint>;
                 };
             };
 
-            port@5 {
-                reg = <5>;
+            port@7 {
+                reg = <7>;
                 seninf_camsv1_endpoint: endpoint {
                     remote-endpoint = <&camsv1_endpoint>;
                 };
             };
 
-            port@6 {
-                reg = <6>;
+            port@8 {
+                reg = <8>;
                 seninf_camsv2_endpoint: endpoint {
                     remote-endpoint = <&camsv2_endpoint>;
                 };
             };
 
-            port@7 {
-                reg = <7>;
+            port@9 {
+                reg = <9>;
                 seninf_camsv3_endpoint: endpoint {
                     remote-endpoint = <&camsv3_endpoint>;
                 };
