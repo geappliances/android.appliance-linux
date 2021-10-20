@@ -29,6 +29,7 @@
 		dither0 = &dither0;
 		dsi0 = &dsi0;
 		dpi0 = &dpi0;
+		lvds = &lvds;
 	};
 
 	cluster0_opp: opp_table0 {
@@ -948,8 +949,21 @@
 			clocks = <&mmsys CLK_MM_DPI0_DPI0>,
 				 <&mmsys CLK_MM_MM_DPI0>,
 				 <&apmixedsys CLK_APMIXED_LVDSPLL>,
-				 <&topckgen CLK_TOP_DPI0_SEL>;
-			clock-names = "dpi_sel", "engine", "pll", "pixel";
+				 <&topckgen CLK_TOP_DPI0_SEL>,
+				 <&topckgen CLK_TOP_VPLL_DPIX_EN>,
+				 <&topckgen CLK_TOP_LVDSPLL_D2>,
+				 <&topckgen CLK_TOP_LVDSPLL_D4>,
+				 <&topckgen CLK_TOP_LVDSPLL_D8>,
+				 <&topckgen CLK_TOP_LVDSPLL_D16>;
+			clock-names = "dpi_sel",
+				      "engine",
+				      "pll",
+				      "pixel",
+				      "vpll_dpix",
+				      "lvds_d2",
+				      "lvds_d4",
+				      "lvds_d8",
+				      "lvds_d16";
 			assigned-clocks = <&topckgen CLK_TOP_DPI0_SEL>;
 			assigned-clock-parents = <&topckgen CLK_TOP_LVDSPLL_D4>;
 			status = "disabled";
@@ -997,6 +1011,20 @@
 			clocks = <&mmsys CLK_MM_MM_DISP_RDMA1>;
 			iommus = <&iommu M4U_PORT_DISP_RDMA1>;
 			mediatek,larb = <&larb0>;
+		};
+
+		lvds: lvds@14019200 {
+			compatible = "mediatek,mt8365-lvds";
+			reg = <0 0x14019200 0 0x100>, /* LVDS TX */
+			      <0 0x11c00800 0 0x30>;  /* LVDS ANA */
+			power-domains = <&spm MT8365_POWER_DOMAIN_MM>;
+			clocks = <&mmsys CLK_MM_LVDSTX_CTS>,
+				 <&mmsys CLK_MM_LVDSTX_PXL>,
+				 <&topckgen CLK_TOP_LVDSTX_CLKDIG_EN>;
+			clock-names = "lvdstx_cts",
+				      "lvdstx_pxl",
+				      "lvdstx_dig";
+			status = "disabled";
 		};
 
 		color0: color@1400f000 {
