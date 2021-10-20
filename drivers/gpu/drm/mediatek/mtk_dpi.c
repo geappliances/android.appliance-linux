@@ -699,25 +699,17 @@ static int mtk_dpi_bind(struct device *dev, struct device *master, void *data)
 
 	dpi->encoder.possible_crtcs = mtk_drm_find_possible_crtc_by_comp(drm_dev, dpi->ddp_comp);
 
-		ret = drm_bridge_attach(&dpi->encoder, &dpi->bridge, NULL, 0);
-		if (ret) {
-			dev_err(dev, "Failed to attach bridge: %d\n", ret);
-			goto err_cleanup;
-		}
+	ret = drm_bridge_attach(&dpi->encoder, &dpi->bridge, NULL, 0);
+	if (ret) {
+		dev_err(dev, "Failed to attach bridge: %d\n", ret);
+		goto err_cleanup;
+	}
 
-		if (dpi->panel) {
-			ret = drm_connector_init(drm_dev, &dpi->connector,
-						 &mtk_dpi_connector_funcs,
-						 DRM_MODE_CONNECTOR_DPI);
-			if (ret) {
-				DRM_ERROR("Failed to connector init to drm\n");
-				return ret;
-			}
+	if (dpi->panel) {
+		drm_connector_helper_add(&dpi->connector, &mtk_dpi_connector_helper_funcs);
 
-			drm_connector_helper_add(&dpi->connector, &mtk_dpi_connector_helper_funcs);
-
-			drm_connector_attach_encoder(&dpi->connector, &dpi->encoder);
-		}
+		drm_connector_attach_encoder(&dpi->connector, &dpi->encoder);
+	}
 
 	dpi->bit_num = MTK_DPI_OUT_BIT_NUM_8BITS;
 	dpi->channel_swap = MTK_DPI_OUT_CHANNEL_SWAP_RGB;
