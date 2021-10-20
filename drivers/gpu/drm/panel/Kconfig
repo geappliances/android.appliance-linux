@@ -400,6 +400,12 @@ config DRM_PANEL_URT_UMO_9465MD_T
 	  Say Y here if you want to enable support for U.R.T. UMO-9465MD-T DSI panel
 	  based on HX8260-A controller
 
+config DRM_PANEL_AVD_TT70WS_CN_102_A
+	tristate "AVD TT70WS-CN-102-A panel"
+	depends on OF
+	help
+	  Say Y here if you want to enable support for AVD TT70WS-CN-102-A LVDS panel
+
 config DRM_PANEL_AVD_TT70WS_CN_134_A
 	tristate "AVD TT70WS-CN-134-A panel"
 	depends on OF
