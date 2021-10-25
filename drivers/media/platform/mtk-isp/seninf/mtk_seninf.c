@@ -807,7 +807,7 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 			 mtk_seninf_read(priv, SENINF_MUX_CTRL) & ~0x3);
 
 	if (conf->seninf_version == SENINF_50)
-		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76543010);
+		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76540010);
 
 	dev_dbg(priv->dev, "%s: OK\n", __func__);
 	return 0;
