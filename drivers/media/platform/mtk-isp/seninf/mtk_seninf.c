@@ -74,9 +74,9 @@ enum mtk_seninf_id {
 enum mtk_seninf_phy {
 	SENINF_PHY_CSI0 = 0,
 	SENINF_PHY_CSI1 = 1,
-	SENINF_PHY_CSI2 = 2,
-	SENINF_PHY_CSI0A = 3,
-	SENINF_PHY_CSI0B = 4,
+	SENINF_PHY_CSI0A = 2,
+	SENINF_PHY_CSI0B = 3,
+	SENINF_PHY_CSI2 = 4,
 };
 
 enum mtk_seninf_phy_mode {
