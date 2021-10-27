@@ -88,10 +88,30 @@ static void mtk_camsv30_write(struct mtk_cam_dev *priv, u32 reg, u32 value)
 	writel(value, priv->regs + reg);
 }
 
+static u32 mtk_camsv30_img0_read(struct mtk_cam_dev *priv, u32 reg)
+{
+	return readl(priv->regs_img0 + reg);
+}
+
+static void mtk_camsv30_img0_write(struct mtk_cam_dev *priv, u32 reg, u32 value)
+{
+	writel(value, priv->regs_img0 + reg);
+}
+
+static u32 mtk_camsv30_tg_read(struct mtk_cam_dev *priv, u32 reg)
+{
+	return readl(priv->regs_tg + reg);
+}
+
+static void mtk_camsv30_tg_write(struct mtk_cam_dev *priv, u32 reg, u32 value)
+{
+	writel(value, priv->regs_tg + reg);
+}
+
 static void mtk_camsv30_update_buffers_add(struct mtk_cam_dev *cam_dev,
 				struct mtk_cam_dev_buffer *buf)
 {
-	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_BASE_ADDR, buf->daddr);
+	mtk_camsv30_img0_write(cam_dev, CAMSV_IMGO_SV_BASE_ADDR, buf->daddr);
 
 	mtk_camsv30_write(cam_dev, CAMSV_IMGO_FBC, 0x1U);
 }
@@ -105,17 +125,17 @@ static void mtk_camsv30_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev,
 	if (pak_en)
 		clk_en |= CAMSV_PAK_DP_CLK_EN;
 	mtk_camsv30_write(cam_dev, CAMSV_CLK_EN, clk_en);
-	mtk_camsv30_write(cam_dev, CAMSV_TG_VF_CON,
-			 mtk_camsv30_read(cam_dev, CAMSV_TG_VF_CON) | CAMSV_TG_VF_CON_VFDATA_EN);
+	mtk_camsv30_tg_write(cam_dev, CAMSV_TG_VF_CON,
+			 mtk_camsv30_tg_read(cam_dev, CAMSV_TG_VF_CON) | CAMSV_TG_VF_CON_VFDATA_EN);
 }
 
 static void mtk_camsv30_cmos_vf_hw_disable(struct mtk_cam_dev *cam_dev,
 				       bool pak_en)
 {
-	mtk_camsv30_write(cam_dev, CAMSV_TG_SEN_MODE,
-	       mtk_camsv30_read(cam_dev, CAMSV_TG_SEN_MODE) & ~CAMSV_TG_SEN_MODE_CMOS_EN);
-	mtk_camsv30_write(cam_dev, CAMSV_TG_VF_CON,
-	       mtk_camsv30_read(cam_dev, CAMSV_TG_VF_CON) & ~CAMSV_TG_VF_CON_VFDATA_EN);
+	mtk_camsv30_tg_write(cam_dev, CAMSV_TG_SEN_MODE,
+	       mtk_camsv30_tg_read(cam_dev, CAMSV_TG_SEN_MODE) & ~CAMSV_TG_SEN_MODE_CMOS_EN);
+	mtk_camsv30_tg_write(cam_dev, CAMSV_TG_VF_CON,
+	       mtk_camsv30_tg_read(cam_dev, CAMSV_TG_VF_CON) & ~CAMSV_TG_VF_CON_VFDATA_EN);
 }
 
 static void mtk_camsv30_setup(struct mtk_cam_dev *cam_dev, u32 w, u32 h,
@@ -136,15 +156,15 @@ static void mtk_camsv30_setup(struct mtk_cam_dev *cam_dev, u32 w, u32 h,
 		return;
 	}
 
-	mtk_camsv30_write(cam_dev, CAMSV_TG_SEN_MODE, conf->tg_sen_mode);
+	mtk_camsv30_tg_write(cam_dev, CAMSV_TG_SEN_MODE, conf->tg_sen_mode);
 
-	mtk_camsv30_write(cam_dev,
+	mtk_camsv30_tg_write(cam_dev,
 			 CAMSV_TG_SEN_GRAB_PXL, (w * sparams.w_factor) << 16U);
 
-	mtk_camsv30_write(cam_dev, CAMSV_TG_SEN_GRAB_LIN, h << 16U);
+	mtk_camsv30_tg_write(cam_dev, CAMSV_TG_SEN_GRAB_LIN, h << 16U);
 
 	/* YUV_U2S_DIS: disable YUV sensor unsigned to signed */
-	mtk_camsv30_write(cam_dev, CAMSV_TG_PATH_CFG, 0x1000U);
+	mtk_camsv30_tg_write(cam_dev, CAMSV_TG_PATH_CFG, 0x1000U);
 
 	/* Reset cam */
 	mtk_camsv30_write(cam_dev, CAMSV_SW_CTL, CAMSV_SW_RST);
@@ -165,17 +185,17 @@ static void mtk_camsv30_setup(struct mtk_cam_dev *cam_dev, u32 w, u32 h,
 	mtk_camsv30_write(cam_dev, CAMSV_FMT_SEL, sparams.fmt_sel);
 	mtk_camsv30_write(cam_dev, CAMSV_PAK, sparams.pak);
 
-	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_XSIZE, bpl - 1U);
-	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_YSIZE, h - 1U);
+	mtk_camsv30_img0_write(cam_dev, CAMSV_IMGO_SV_XSIZE, bpl - 1U);
+	mtk_camsv30_img0_write(cam_dev, CAMSV_IMGO_SV_YSIZE, h - 1U);
 
-	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_STRIDE, sparams.imgo_stride | bpl);
+	mtk_camsv30_img0_write(cam_dev, CAMSV_IMGO_SV_STRIDE, sparams.imgo_stride | bpl);
 
-	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_CON, conf->imgo_con);
-	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_CON2, conf->imgo_con2);
+	mtk_camsv30_img0_write(cam_dev, CAMSV_IMGO_SV_CON, conf->imgo_con);
+	mtk_camsv30_img0_write(cam_dev, CAMSV_IMGO_SV_CON2, conf->imgo_con2);
 
 	/* CMOS_EN first */
-	mtk_camsv30_write(cam_dev, CAMSV_TG_SEN_MODE,
-		mtk_camsv30_read(cam_dev, CAMSV_TG_SEN_MODE) | 0x1U);
+	mtk_camsv30_tg_write(cam_dev, CAMSV_TG_SEN_MODE,
+		mtk_camsv30_tg_read(cam_dev, CAMSV_TG_SEN_MODE) | 0x1U);
 
 	/* finally, CAMSV_MODULE_EN : IMGO_EN */
 	mtk_camsv30_write(cam_dev, CAMSV_MODULE_EN,
@@ -298,6 +318,20 @@ static int mtk_camsv30_probe(struct platform_device *pdev)
 	if (IS_ERR(cam_dev->regs)) {
 		dev_err(dev, "failed to map register base\n");
 		return PTR_ERR(cam_dev->regs);
+	}
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	cam_dev->regs_img0 = devm_ioremap_resource(dev, res);
+	if (IS_ERR(cam_dev->regs_img0)) {
+		dev_err(dev, "failed to map img0 register base\n");
+		return PTR_ERR(cam_dev->regs_img0);
+	}
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
+	cam_dev->regs_tg = devm_ioremap_resource(dev, res);
+	if (IS_ERR(cam_dev->regs_tg)) {
+		dev_err(dev, "failed to map TG register base\n");
+		return PTR_ERR(cam_dev->regs_tg);
 	}
 
 	larb_node1 = of_parse_phandle(pdev->dev.of_node, "mediatek,larb", 0);
