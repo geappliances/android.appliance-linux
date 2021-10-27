@@ -16,6 +16,7 @@ description: |
 properties:
   compatible:
     const: mediatek,mt8183-mipi-dphy
+    const: mediatek,mt8365-mipi-dphy
 
   reg:
     minItems: 1
