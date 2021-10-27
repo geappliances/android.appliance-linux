@@ -8,6 +8,7 @@ title: Mediatek CAMSV Device Tree Bindings
 
 maintainers:
   - Phi-Bang Nguyen <pnguyen@baylibre.com>
+  - Florian Sylvestre <fsylvestre@baylibre.com>
 
 description: |
   The CAMSVs is a set of DMA engines connected to the SENINF CSI-2
@@ -16,6 +17,7 @@ description: |
 properties:
   compatible:
     const: mediatek,mt8183-camsv
+    const: mediatek,mt8365-camsv
 
   reg:
     minItems: 1
