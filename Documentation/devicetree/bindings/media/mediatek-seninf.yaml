@@ -21,6 +21,7 @@ description: |
 properties:
   compatible:
     const: mediatek,mt8183-seninf
+    const: mediatek,mt8365-seninf
 
   reg:
     minItems: 1
