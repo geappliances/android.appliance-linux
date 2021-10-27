@@ -69,9 +69,9 @@ static void fmt_to_sparams(u32 mbus_fmt, struct mtk_cam_sparams *sparams)
 	case MEDIA_BUS_FMT_YVYU8_1X16:
 		sparams->w_factor = 2;
 		sparams->module_en_pak = 0x8;
-		sparams->fmt_sel = 0x32012;
+		sparams->fmt_sel = 0x1000003;
 		sparams->pak = 0x0;
-		sparams->imgo_stride = 0x01810000;
+		sparams->imgo_stride = 0x01010000;
 		break;
 	default:
 		break;
@@ -92,6 +92,8 @@ static void mtk_camsv30_update_buffers_add(struct mtk_cam_dev *cam_dev,
 				struct mtk_cam_dev_buffer *buf)
 {
 	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_BASE_ADDR, buf->daddr);
+
+	mtk_camsv30_write(cam_dev, CAMSV_IMGO_FBC, 0x1U);
 }
 
 static void mtk_camsv30_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev,
@@ -99,8 +101,9 @@ static void mtk_camsv30_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev,
 {
 	u32 clk_en;
 
-	clk_en = CAMSV_TG_DP_CLK_EN | CAMSV_DMA_DP_CLK_EN |
-			CAMSV_RAW_DP_CLK_EN;
+	clk_en = CAMSV_TG_DP_CLK_EN | CAMSV_DMA_DP_CLK_EN;
+	if (pak_en)
+		clk_en |= CAMSV_PAK_DP_CLK_EN;
 	mtk_camsv30_write(cam_dev, CAMSV_CLK_EN, clk_en);
 	mtk_camsv30_write(cam_dev, CAMSV_TG_VF_CON,
 			 mtk_camsv30_read(cam_dev, CAMSV_TG_VF_CON) | CAMSV_TG_VF_CON_VFDATA_EN);
@@ -155,25 +158,20 @@ static void mtk_camsv30_setup(struct mtk_cam_dev *cam_dev, u32 w, u32 h,
 
 	mtk_camsv30_write(cam_dev, CAMSV_SW_CTL, 0x0U);
 
-	/* Enable BIN_SEL on TG1 */
-	mtk_camsv30_write(cam_dev, CAMSV_MUX_SEL, 0x00800000U);
-	/* Enable Pass1 done MUX and set it to IMGO */
-	mtk_camsv30_write(cam_dev, CAMSV_MUX_SEL2, 0x40100100U);
-	/* Select IMGO SOF from TG1 */
-	mtk_camsv30_write(cam_dev, CAMSV_SRAM_MUX_CFG, 0x00000400U);
-
-	mtk_camsv30_write(cam_dev, CAMSV_DMA_EN, 0x00000001U);
-
 	mtk_camsv30_write(cam_dev, CAMSV_INT_EN, int_en);
 
 	mtk_camsv30_write(cam_dev, CAMSV_MODULE_EN,
 	       conf->module_en | sparams.module_en_pak);
 	mtk_camsv30_write(cam_dev, CAMSV_FMT_SEL, sparams.fmt_sel);
+	mtk_camsv30_write(cam_dev, CAMSV_PAK, sparams.pak);
 
 	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_XSIZE, bpl - 1U);
 	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_YSIZE, h - 1U);
 
 	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_STRIDE, sparams.imgo_stride | bpl);
+
+	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_CON, conf->imgo_con);
+	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_CON2, conf->imgo_con2);
 
 	/* CMOS_EN first */
 	mtk_camsv30_write(cam_dev, CAMSV_TG_SEN_MODE,
@@ -205,10 +203,6 @@ static irqreturn_t isp_irq_camsv30(int irq, void *data)
 
 	/* De-queue frame */
 	if (irq_status & CAMSV_IRQ_PASS1_DON) {
-		/* clear interrupt */
-		mtk_camsv30_write(cam_dev, CAMCTL_INT_STATUS,
-				 CAMCTL_IRQ_SW_PASS1_DON);
-
 		cam_dev->sequence++;
 
 		buf = list_first_entry_or_null(&cam_dev->buf_list,
