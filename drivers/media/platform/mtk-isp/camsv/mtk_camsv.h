@@ -129,6 +129,8 @@ struct mtk_cam_video_device {
 struct mtk_cam_dev {
 	struct device *dev;
 	void __iomem *regs;
+	void __iomem *regs_img0;
+	void __iomem *regs_tg;
 	/*
 	 * FIXME: camsys_cam_cgpdn, camsys_camtg_cgpd,
 	 * camsys_camsv should be replaced by 'clk_bulk_data *clks'
