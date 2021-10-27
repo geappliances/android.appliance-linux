@@ -129,6 +129,15 @@ static const struct mtk_seninf_conf seninf_8167_conf = {
 	.nb_phy = 1,
 };
 
+static const struct mtk_seninf_conf seninf_8365_conf = {
+	.seninf_version = SENINF_50,
+	.model = "mtk-camsys-5.0",
+	.csi2_rx_type = MTK_SENINF_CSI2_RX_CSI2,
+	.nb_inputs = 4,
+	.nb_outputs = 4,
+	.nb_phy = 4,
+};
+
 struct mtk_seninf_format_info {
 	u32 code;
 	u32 flags;
@@ -1664,6 +1673,9 @@ static const struct of_device_id mtk_seninf_of_match[] = {
 	}, {
 		.compatible = "mediatek,mt8183-seninf",
 		.data = &seninf_8183_conf,
+	}, {
+		.compatible = "mediatek,mt8365-seninf",
+		.data = &seninf_8365_conf,
 	},
 	{ /* sentinel */ }
 };
