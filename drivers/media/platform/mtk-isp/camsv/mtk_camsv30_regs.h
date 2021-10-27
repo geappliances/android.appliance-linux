@@ -1,54 +1,64 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
-#ifndef __MTK_CAMCTL_REGS_H__
-#define __MTK_CAMCTL_REGS_H__
+#ifndef __MTK_CAMSV30_REGS_H__
+#define __MTK_CAMSV30_REGS_H__
 
-#define CAMCTL_MODULE_EN			0x0004
-#define CAMCTL_DMA_EN				0x000c
-#define CAMCTL_FMT_SEL				0x0010
-#define CAMCTL_INT_EN				0x0020
-#define CAMCTL_INT_STATUS			0x0024
-#define CAMCTL_SW_CTL				0x005c
-#define CAMCTL_MUX_SEL				0x0074
-#define CAMCTL_MUX_SEL2				0x0078
-#define CAMCTL_SRAM_MUX_CFG			0x007c
-#define CAMCTL_CLK_EN				0x0150
+/* CAMSV */
+#define CAMSV_MODULE_EN				0x0000
+#define CAMSV_FMT_SEL				0x0004
+#define CAMSV_INT_EN				0x0008
+#define CAMSV_INT_STATUS			0x000c
+#define CAMSV_SW_CTL				0x0010
+#define CAMSV_IMGO_FBC				0x001C
+#define CAMSV_CLK_EN				0x0020
+#define CAMSV_PAK				0x003c
 
-#define CAMTG_SEN_MODE				0x0410
-#define CAMTG_VF_CON				0x0414
-#define CAMTG_SEN_GRAB_PXL			0x0418
-#define CAMTG_SEN_GRAB_LIN			0x041c
-#define CAMTG_PATH_CFG				0x0420
+/* CAMSV_TG */
+#define CAMSV_TG_SEN_MODE			0x0010
+#define CAMSV_TG_VF_CON				0x0014
+#define CAMSV_TG_SEN_GRAB_PXL			0x0018
+#define CAMSV_TG_SEN_GRAB_LIN			0x001c
+#define CAMSV_TG_PATH_CFG			0x0020
 
-#define CAMIMGO_BASE_ADDR			0x0300
-#define CAMIMGO_XSIZE				0x0308
-#define CAMIMGO_YSIZE				0x030c
-#define CAMIMGO_STRIDE				0x0310
-#define CAMIMGO_CON				0x0314
-#define CAMIMGO_CON2				0x0318
+/* CAMSV_IMG0 */
+#define CAMSV_IMGO_SV_BASE_ADDR			0x0000
+#define CAMSV_IMGO_SV_XSIZE			0x0008
+#define CAMSV_IMGO_SV_YSIZE			0x000c
+#define CAMSV_IMGO_SV_STRIDE			0x0010
+#define CAMSV_IMGO_SV_CON			0x0014
+#define CAMSV_IMGO_SV_CON2			0x0018
 
-/* CAMCTL_CLK_EN bits */
-#define CAMCTL_RAW_DP_CLK_EN			BIT(0)
-#define CAMCTL_DIP_DP_CLK_EN			BIT(2)
-#define CAMCTL_DMA_DP_CLK_EN			BIT(15)
+#define CAMSV_TG_SEN_MODE_CMOS_EN		BIT(0)
+#define CAMSV_TG_VF_CON_VFDATA_EN		BIT(0)
 
-/* CAMCTL_SW_CTL bits */
-#define CAMCTL_IMGO_RST_TRIG			BIT(0)
-#define CAMCTL_IMGO_RST_ST			BIT(1)
-#define CAMCTL_SW_RST				BIT(2)
+/* CAMSV_CLK_EN bits */
+#define CAMSV_TG_DP_CLK_EN			BIT(0)
+#define CAMSV_PAK_DP_CLK_EN			BIT(2)
+#define CAMSV_DMA_DP_CLK_EN			BIT(15)
 
-/* CAMTG_VF_CON bits */
-#define VFDATA_EN				BIT(0)
+/* CAMSV_SW_CTL bits */
+#define CAMSV_IMGO_RST_TRIG			BIT(0)
+#define CAMSV_IMGO_RST_ST			BIT(1)
+#define CAMSV_SW_RST				BIT(2)
 
 /* IRQ BITS */
-#define CAMCTL_IRQ_TG_ERR			BIT(4)
-#define CAMCTL_IRQ_IMGO_ERR			BIT(20)
-#define CAMCTL_IRQ_SW_PASS1_DON			BIT(10)
+#define CAMSV_IRQ_VS1				BIT(0)
+#define CAMSV_IRQ_TG1				BIT(1)
+#define CAMSV_IRQ_TG2				BIT(2)
+#define CAMSV_IRQ_EXPDON1			BIT(3)
+#define CAMSV_IRQ_TG_ERR			BIT(4)
+#define CAMSV_IRQ_TG_GBERR			BIT(5)
+#define CAMSV_IRQ_DROP				BIT(6)
+#define CAMSV_IRQ_SOF1				BIT(7)
+#define CAMSV_IRQ_PASS1_DON			BIT(10)
+#define CAMSV_IRQ_IMGO_ERR			BIT(16)
+#define CAMSV_IRQ_IMGO_OVERR			BIT(17)
+#define CAMSV_IRQ_IMGO_DROP			BIT(19)
 
-#define INT_ST_MASK_CAMCTL  (CAMCTL_IRQ_SW_PASS1_DON | CAMCTL_IRQ_TG_ERR | \
-			     CAMCTL_IRQ_IMGO_ERR)
+#define INT_ST_MASK_CAMSV                                                      \
+	(CAMSV_IRQ_PASS1_DON)
 
-#define INT_ST_MASK_CAMCTL_ERR                                             \
-	(CAMCTL_IRQ_TG_ERR | CAMCTL_IRQ_IMGO_ERR)
+#define INT_ST_MASK_CAMSV_ERR                                                  \
+	(CAMSV_IRQ_TG_ERR | CAMSV_IRQ_TG_GBERR | CAMSV_IRQ_IMGO_ERR)
 
-#endif /* __MTK_CAMCTL_REGS_H__ */
+#endif /* __MTK_CAMSV30_REGS_H__ */

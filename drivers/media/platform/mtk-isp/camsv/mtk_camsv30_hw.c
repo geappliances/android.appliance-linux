@@ -13,11 +13,11 @@
 #include <linux/platform_device.h>
 
 #include "mtk_camsv.h"
-#include "mtk_camctl_regs.h"
+#include "mtk_camsv30_regs.h"
 
-#define MTK_CAMCTL_AUTOSUSPEND_DELAY_MS 100
+#define MTK_CAMSV30_AUTOSUSPEND_DELAY_MS 100
 
-static const struct mtk_cam_conf camctl_conf = {
+static const struct mtk_cam_conf camsv30_conf = {
 	.tg_sen_mode = 0x00010002U, /* TIME_STP_EN = 1. DBL_DATA_BUS = 1 */
 	.module_en = 0x40000001U, /* enable double buffer and TG */
 	.dma_special_fun = 0x61000000U, /* enable RDMA insterlace */
@@ -78,49 +78,49 @@ static void fmt_to_sparams(u32 mbus_fmt, struct mtk_cam_sparams *sparams)
 	}
 }
 
-static u32 mtk_camctl_read(struct mtk_cam_dev *priv, u32 reg)
+static u32 mtk_camsv30_read(struct mtk_cam_dev *priv, u32 reg)
 {
 	return readl(priv->regs + reg);
 }
 
-static void mtk_camctl_write(struct mtk_cam_dev *priv, u32 reg, u32 value)
+static void mtk_camsv30_write(struct mtk_cam_dev *priv, u32 reg, u32 value)
 {
 	writel(value, priv->regs + reg);
 }
 
-static void mtk_camctl_update_buffers_add(struct mtk_cam_dev *cam_dev,
+static void mtk_camsv30_update_buffers_add(struct mtk_cam_dev *cam_dev,
 				struct mtk_cam_dev_buffer *buf)
 {
-	mtk_camctl_write(cam_dev, CAMIMGO_BASE_ADDR, buf->daddr);
+	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_BASE_ADDR, buf->daddr);
 }
 
-static void mtk_camctl_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev,
+static void mtk_camsv30_cmos_vf_hw_enable(struct mtk_cam_dev *cam_dev,
 					 bool pak_en)
 {
 	u32 clk_en;
 
-	clk_en = CAMCTL_DMA_DP_CLK_EN | CAMCTL_DIP_DP_CLK_EN |
-			CAMCTL_RAW_DP_CLK_EN;
-	mtk_camctl_write(cam_dev, CAMCTL_CLK_EN, clk_en);
-	mtk_camctl_write(cam_dev, CAMTG_VF_CON,
-			 mtk_camctl_read(cam_dev, CAMTG_VF_CON) | VFDATA_EN);
+	clk_en = CAMSV_TG_DP_CLK_EN | CAMSV_DMA_DP_CLK_EN |
+			CAMSV_RAW_DP_CLK_EN;
+	mtk_camsv30_write(cam_dev, CAMSV_CLK_EN, clk_en);
+	mtk_camsv30_write(cam_dev, CAMSV_TG_VF_CON,
+			 mtk_camsv30_read(cam_dev, CAMSV_TG_VF_CON) | CAMSV_TG_VF_CON_VFDATA_EN);
 }
 
-static void mtk_camctl_cmos_vf_hw_disable(struct mtk_cam_dev *cam_dev,
+static void mtk_camsv30_cmos_vf_hw_disable(struct mtk_cam_dev *cam_dev,
 				       bool pak_en)
 {
-	mtk_camctl_write(cam_dev, CAMTG_SEN_MODE,
-	       mtk_camctl_read(cam_dev, CAMTG_SEN_MODE) & ~VFDATA_EN);
-	mtk_camctl_write(cam_dev, CAMTG_VF_CON,
-	       mtk_camctl_read(cam_dev, CAMTG_VF_CON) & ~VFDATA_EN);
+	mtk_camsv30_write(cam_dev, CAMSV_TG_SEN_MODE,
+	       mtk_camsv30_read(cam_dev, CAMSV_TG_SEN_MODE) & ~CAMSV_TG_SEN_MODE_CMOS_EN);
+	mtk_camsv30_write(cam_dev, CAMSV_TG_VF_CON,
+	       mtk_camsv30_read(cam_dev, CAMSV_TG_VF_CON) & ~CAMSV_TG_VF_CON_VFDATA_EN);
 }
 
-static void mtk_camctl_setup(struct mtk_cam_dev *cam_dev, u32 w, u32 h,
+static void mtk_camsv30_setup(struct mtk_cam_dev *cam_dev, u32 w, u32 h,
 			     u32 bpl, u32 mbus_fmt)
 {
 	const struct mtk_cam_conf *conf = cam_dev->conf;
 	int poll_num = 1000;
-	u32 int_en = INT_ST_MASK_CAMCTL;
+	u32 int_en = INT_ST_MASK_CAMSV;
 	struct mtk_cam_sparams sparams;
 
 	fmt_to_sparams(mbus_fmt, &sparams);
@@ -133,61 +133,61 @@ static void mtk_camctl_setup(struct mtk_cam_dev *cam_dev, u32 w, u32 h,
 		return;
 	}
 
-	mtk_camctl_write(cam_dev, CAMTG_SEN_MODE, conf->tg_sen_mode);
+	mtk_camsv30_write(cam_dev, CAMSV_TG_SEN_MODE, conf->tg_sen_mode);
 
-	mtk_camctl_write(cam_dev,
-			 CAMTG_SEN_GRAB_PXL, (w * sparams.w_factor) << 16U);
+	mtk_camsv30_write(cam_dev,
+			 CAMSV_TG_SEN_GRAB_PXL, (w * sparams.w_factor) << 16U);
 
-	mtk_camctl_write(cam_dev, CAMTG_SEN_GRAB_LIN, h << 16U);
+	mtk_camsv30_write(cam_dev, CAMSV_TG_SEN_GRAB_LIN, h << 16U);
 
 	/* YUV_U2S_DIS: disable YUV sensor unsigned to signed */
-	mtk_camctl_write(cam_dev, CAMTG_PATH_CFG, 0x1000U);
+	mtk_camsv30_write(cam_dev, CAMSV_TG_PATH_CFG, 0x1000U);
 
 	/* Reset cam */
-	mtk_camctl_write(cam_dev, CAMCTL_SW_CTL, CAMCTL_SW_RST);
-	mtk_camctl_write(cam_dev, CAMCTL_SW_CTL, 0x0U);
-	mtk_camctl_write(cam_dev, CAMCTL_SW_CTL, CAMCTL_IMGO_RST_TRIG);
+	mtk_camsv30_write(cam_dev, CAMSV_SW_CTL, CAMSV_SW_RST);
+	mtk_camsv30_write(cam_dev, CAMSV_SW_CTL, 0x0U);
+	mtk_camsv30_write(cam_dev, CAMSV_SW_CTL, CAMSV_IMGO_RST_TRIG);
 
-	while (mtk_camctl_read(cam_dev, CAMCTL_SW_CTL) !=
-		       (CAMCTL_IMGO_RST_TRIG | CAMCTL_IMGO_RST_ST) &&
+	while (mtk_camsv30_read(cam_dev, CAMSV_SW_CTL) !=
+		       (CAMSV_IMGO_RST_TRIG | CAMSV_IMGO_RST_ST) &&
 	       poll_num++ < 1000)
 		;
 
-	mtk_camctl_write(cam_dev, CAMCTL_SW_CTL, 0x0U);
+	mtk_camsv30_write(cam_dev, CAMSV_SW_CTL, 0x0U);
 
 	/* Enable BIN_SEL on TG1 */
-	mtk_camctl_write(cam_dev, CAMCTL_MUX_SEL, 0x00800000U);
+	mtk_camsv30_write(cam_dev, CAMSV_MUX_SEL, 0x00800000U);
 	/* Enable Pass1 done MUX and set it to IMGO */
-	mtk_camctl_write(cam_dev, CAMCTL_MUX_SEL2, 0x40100100U);
+	mtk_camsv30_write(cam_dev, CAMSV_MUX_SEL2, 0x40100100U);
 	/* Select IMGO SOF from TG1 */
-	mtk_camctl_write(cam_dev, CAMCTL_SRAM_MUX_CFG, 0x00000400U);
+	mtk_camsv30_write(cam_dev, CAMSV_SRAM_MUX_CFG, 0x00000400U);
 
-	mtk_camctl_write(cam_dev, CAMCTL_DMA_EN, 0x00000001U);
+	mtk_camsv30_write(cam_dev, CAMSV_DMA_EN, 0x00000001U);
 
-	mtk_camctl_write(cam_dev, CAMCTL_INT_EN, int_en);
+	mtk_camsv30_write(cam_dev, CAMSV_INT_EN, int_en);
 
-	mtk_camctl_write(cam_dev, CAMCTL_MODULE_EN,
+	mtk_camsv30_write(cam_dev, CAMSV_MODULE_EN,
 	       conf->module_en | sparams.module_en_pak);
-	mtk_camctl_write(cam_dev, CAMCTL_FMT_SEL, sparams.fmt_sel);
+	mtk_camsv30_write(cam_dev, CAMSV_FMT_SEL, sparams.fmt_sel);
 
-	mtk_camctl_write(cam_dev, CAMIMGO_XSIZE, bpl - 1U);
-	mtk_camctl_write(cam_dev, CAMIMGO_YSIZE, h - 1U);
+	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_XSIZE, bpl - 1U);
+	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_YSIZE, h - 1U);
 
-	mtk_camctl_write(cam_dev, CAMIMGO_STRIDE, sparams.imgo_stride | bpl);
+	mtk_camsv30_write(cam_dev, CAMSV_IMGO_SV_STRIDE, sparams.imgo_stride | bpl);
 
 	/* CMOS_EN first */
-	mtk_camctl_write(cam_dev, CAMTG_SEN_MODE,
-		mtk_camctl_read(cam_dev, CAMTG_SEN_MODE) | 0x1U);
+	mtk_camsv30_write(cam_dev, CAMSV_TG_SEN_MODE,
+		mtk_camsv30_read(cam_dev, CAMSV_TG_SEN_MODE) | 0x1U);
 
-	/* finally, CAMCTL_MODULE_EN : IMGO_EN */
-	mtk_camctl_write(cam_dev, CAMCTL_MODULE_EN,
-		mtk_camctl_read(cam_dev, CAMCTL_MODULE_EN) | 0x00000010U);
+	/* finally, CAMSV_MODULE_EN : IMGO_EN */
+	mtk_camsv30_write(cam_dev, CAMSV_MODULE_EN,
+		mtk_camsv30_read(cam_dev, CAMSV_MODULE_EN) | 0x00000010U);
 
 	pm_runtime_put_autosuspend(cam_dev->dev);
 	spin_unlock(&cam_dev->irqlock);
 }
 
-static irqreturn_t isp_irq_camctl(int irq, void *data)
+static irqreturn_t isp_irq_camsv30(int irq, void *data)
 {
 	struct mtk_cam_dev *cam_dev = (struct mtk_cam_dev *)data;
 	struct mtk_cam_dev_buffer *buf;
@@ -196,17 +196,17 @@ static irqreturn_t isp_irq_camctl(int irq, void *data)
 
 	spin_lock_irqsave(&cam_dev->irqlock, flags);
 
-	irq_status = mtk_camctl_read(cam_dev, CAMCTL_INT_STATUS);
+	irq_status = mtk_camsv30_read(cam_dev, CAMSV_INT_STATUS);
 
-	if (irq_status & INT_ST_MASK_CAMCTL_ERR) {
+	if (irq_status & INT_ST_MASK_CAMSV_ERR) {
 		dev_err(cam_dev->dev, "irq error 0x%x\n",
-			(unsigned int)(irq_status & INT_ST_MASK_CAMCTL_ERR));
+			(unsigned int)(irq_status & INT_ST_MASK_CAMSV_ERR));
 	}
 
 	/* De-queue frame */
-	if (irq_status & CAMCTL_IRQ_SW_PASS1_DON) {
+	if (irq_status & CAMSV_IRQ_PASS1_DON) {
 		/* clear interrupt */
-		mtk_camctl_write(cam_dev, CAMCTL_INT_STATUS,
+		mtk_camsv30_write(cam_dev, CAMCTL_INT_STATUS,
 				 CAMCTL_IRQ_SW_PASS1_DON);
 
 		cam_dev->sequence++;
@@ -228,7 +228,7 @@ static irqreturn_t isp_irq_camctl(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static int mtk_camctl_runtime_suspend(struct device *dev)
+static int mtk_camsv30_runtime_suspend(struct device *dev)
 {
 	struct mtk_cam_dev *cam_dev = dev_get_drvdata(dev);
 
@@ -240,7 +240,7 @@ static int mtk_camctl_runtime_suspend(struct device *dev)
 	return 0;
 }
 
-static int mtk_camctl_runtime_resume(struct device *dev)
+static int mtk_camsv30_runtime_resume(struct device *dev)
 {
 	struct mtk_cam_dev *cam_dev = dev_get_drvdata(dev);
 	int ret;
@@ -262,19 +262,19 @@ static int mtk_camctl_runtime_resume(struct device *dev)
 	return 0;
 }
 
-static struct mtk_cam_hw_functions mtk_camctl_hw_functions = {
-	.mtk_cam_setup = mtk_camctl_setup,
-	.mtk_cam_update_buffers_add = mtk_camctl_update_buffers_add,
-	.mtk_cam_cmos_vf_hw_enable = mtk_camctl_cmos_vf_hw_enable,
-	.mtk_cam_cmos_vf_hw_disable = mtk_camctl_cmos_vf_hw_disable,
+static struct mtk_cam_hw_functions mtk_camsv30_hw_functions = {
+	.mtk_cam_setup = mtk_camsv30_setup,
+	.mtk_cam_update_buffers_add = mtk_camsv30_update_buffers_add,
+	.mtk_cam_cmos_vf_hw_enable = mtk_camsv30_cmos_vf_hw_enable,
+	.mtk_cam_cmos_vf_hw_disable = mtk_camsv30_cmos_vf_hw_disable,
 };
 
-static int mtk_camctl_probe(struct platform_device *pdev)
+static int mtk_camsv30_probe(struct platform_device *pdev)
 {
 	static const char * const clk_names[] = {
-		"img_larb1_smi",
-		"img_cam_smi",
-		"img_cam_cam"
+		"camsys_cam_cgpdn",
+		"camsys_camtg_cgpdn",
+		"camsys_camsv"
 	};
 
 	struct mtk_cam_dev *cam_dev;
@@ -341,20 +341,20 @@ static int mtk_camctl_probe(struct platform_device *pdev)
 
 	cam_dev->irq = platform_get_irq(pdev, 0);
 	ret = devm_request_irq(dev, cam_dev->irq,
-			isp_irq_camctl, 0,
+			isp_irq_camsv30, 0,
 			dev_name(dev), cam_dev);
 	if (ret != 0) {
 		dev_err(dev, "failed to request irq=%d\n", cam_dev->irq);
 		return -ENODEV;
 	}
 
-	cam_dev->hw_functions = &mtk_camctl_hw_functions;
+	cam_dev->hw_functions = &mtk_camsv30_hw_functions;
 
 	/* initialise protection mutex */
 	spin_lock_init(&cam_dev->irqlock);
 
 	/* initialise runtime power management */
-	pm_runtime_set_autosuspend_delay(dev, MTK_CAMCTL_AUTOSUSPEND_DELAY_MS);
+	pm_runtime_set_autosuspend_delay(dev, MTK_CAMSV30_AUTOSUSPEND_DELAY_MS);
 	pm_runtime_use_autosuspend(dev);
 	pm_runtime_set_suspended(dev);
 	pm_runtime_enable(dev);
@@ -364,7 +364,7 @@ static int mtk_camctl_probe(struct platform_device *pdev)
 	return mtk_cam_dev_init(cam_dev);
 }
 
-static int mtk_camctl_remove(struct platform_device *pdev)
+static int mtk_camsv30_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct mtk_cam_dev *cam_dev = dev_get_drvdata(dev);
@@ -376,34 +376,34 @@ static int mtk_camctl_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct dev_pm_ops mtk_cam_pm_ops = {
+static const struct dev_pm_ops mtk_camsv30_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
 				pm_runtime_force_resume)
-	SET_RUNTIME_PM_OPS(mtk_camctl_runtime_suspend,
-			   mtk_camctl_runtime_resume, NULL)
+	SET_RUNTIME_PM_OPS(mtk_camsv30_runtime_suspend,
+			   mtk_camsv30_runtime_resume, NULL)
 };
 
-static const struct of_device_id mtk_cam_of_ids[] = {
+static const struct of_device_id mtk_camsv30_of_ids[] = {
 	{
-		.compatible = "mediatek,mt8167-cam",
-		.data = &camctl_conf,
+		.compatible = "mediatek,mt8365-camsv",
+		.data = &camsv30_conf,
 	},
 	{}
 };
-MODULE_DEVICE_TABLE(of, mtk_cam_of_ids);
+MODULE_DEVICE_TABLE(of, mtk_camsv30_of_ids);
 
-static struct platform_driver mtk_cam_driver = {
-	.probe = mtk_camctl_probe,
-	.remove = mtk_camctl_remove,
+static struct platform_driver mtk_camsv30_driver = {
+	.probe = mtk_camsv30_probe,
+	.remove = mtk_camsv30_remove,
 	.driver = {
-		.name = "mtk-cam-isp20",
-		.of_match_table = of_match_ptr(mtk_cam_of_ids),
-		.pm = &mtk_cam_pm_ops,
+		.name = "mtk-camsv-isp30",
+		.of_match_table = of_match_ptr(mtk_camsv30_of_ids),
+		.pm = &mtk_camsv30_pm_ops,
 	}
 };
 
-module_platform_driver(mtk_cam_driver);
+module_platform_driver(mtk_camsv30_driver);
 
-MODULE_DESCRIPTION("Mediatek CAM ISP2.0 driver");
+MODULE_DESCRIPTION("Mediatek CAMSV ISP3.0 driver");
 MODULE_AUTHOR("Florian Sylvestre <fsylvestre@baylibre.com>");
 MODULE_LICENSE("GPL v2");
