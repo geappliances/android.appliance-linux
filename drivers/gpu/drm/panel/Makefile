@@ -44,3 +44,4 @@ obj-$(CONFIG_DRM_PANEL_TRULY_NT35597_WQXGA) += panel-truly-nt35597.o
 obj-$(CONFIG_DRM_PANEL_TRULY_R63350A) += panel-truly-r63350a.o
 obj-$(CONFIG_DRM_PANEL_URT_UMO_9465MD_T) += panel-urt-umo-9465md-t.o
 obj-$(CONFIG_DRM_PANEL_AVD_TT70WS_CN_134_A) += panel-avd-tt70ws-cn-134-a.o
+obj-$(CONFIG_DRM_PANEL_AVD_TT70WS_CN_102_A) += panel-avd-tt70ws-cn-102-a.o

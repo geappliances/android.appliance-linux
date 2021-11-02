@@ -228,6 +228,12 @@ static const enum mtk_ddp_comp_id mt8365_mtk_ddp_ext[] = {
 //	DDP_COMPONENT_OVL_2L,
 	DDP_COMPONENT_RDMA1,
 	DDP_COMPONENT_DPI0,
+	DDP_COMPONENT_LVDS,
+};
+
+static const enum mtk_ddp_comp_id mt8365_mtk_ddp_third[] = {
+	DDP_COMPONENT_RDMA1,
+	DDP_COMPONENT_DPI0,
 };
 
 static const struct mtk_mmsys_driver_data mt2701_mmsys_driver_data = {
@@ -278,6 +284,8 @@ static const struct mtk_mmsys_driver_data mt8365_mmsys_driver_data = {
 	.main_len = ARRAY_SIZE(mt8365_mtk_ddp_main),
 	.ext_path = mt8365_mtk_ddp_ext,
 	.ext_len = ARRAY_SIZE(mt8365_mtk_ddp_ext),
+	.third_path = mt8365_mtk_ddp_third,
+	.third_len = ARRAY_SIZE(mt8365_mtk_ddp_third),
 	.reg_data = &mt8365_mmsys_reg_data,
 };
 
@@ -530,6 +538,8 @@ static const struct of_device_id mtk_ddp_comp_dt_ids[] = {
 	  .data = (void *)MTK_DISP_OVL },
 	{ .compatible = "mediatek,mt8365-disp-ovl-2l",
 	  .data = (void *)MTK_DISP_OVL_2L },
+	{ .compatible = "mediatek,mt8365-lvds",
+	  .data = (void *)MTK_LVDS },
 	{ .compatible = "mediatek,mt2701-disp-rdma",
 	  .data = (void *)MTK_DISP_RDMA },
 	{ .compatible = "mediatek,mt8167-disp-rdma",
@@ -692,6 +702,7 @@ static int mtk_drm_probe(struct platform_device *pdev)
 		if (comp_type == MTK_DISP_COLOR ||
 		    comp_type == MTK_DISP_OVL ||
 		    comp_type == MTK_DISP_OVL_2L ||
+		    comp_type == MTK_LVDS ||
 		    comp_type == MTK_DISP_RDMA ||
 		    comp_type == MTK_DSI ||
 		    comp_type == MTK_DPI) {
@@ -823,6 +834,7 @@ static struct platform_driver * const mtk_drm_drivers[] = {
 	&mtk_ddp_driver,
 	&mtk_disp_color_driver,
 	&mtk_disp_ovl_driver,
+	&mtk_lvds_driver,
 	&mtk_disp_rdma_driver,
 	&mtk_dpi_driver,
 	&mtk_drm_platform_driver,

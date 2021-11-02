@@ -20,8 +20,10 @@
 #include <video/videomode.h>
 
 #include <drm/drm_atomic_helper.h>
+#include <drm/drm_probe_helper.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_of.h>
+#include <drm/drm_panel.h>
 
 #include "mtk_dpi_regs.h"
 #include "mtk_drm_ddp_comp.h"
@@ -63,7 +65,9 @@ enum mtk_dpi_out_color_format {
 struct mtk_dpi {
 	struct mtk_ddp_comp ddp_comp;
 	struct drm_encoder encoder;
+	struct drm_connector connector;
 	struct drm_bridge *bridge;
+	struct drm_panel *panel;
 	void __iomem *regs;
 	struct device *dev;
 	struct clk *engine_clk;
@@ -75,6 +79,7 @@ struct mtk_dpi {
 	struct clk *tvd_d4;
 	struct clk *tvd_d8;
 	struct clk *tvd_d16;
+	struct clk *vpll_dpix_clk;
 	int irq;
 	struct drm_display_mode mode;
 	const struct mtk_dpi_conf *conf;
@@ -92,6 +97,11 @@ struct mtk_dpi {
 static inline struct mtk_dpi *mtk_dpi_from_encoder(struct drm_encoder *e)
 {
 	return container_of(e, struct mtk_dpi, encoder);
+}
+
+static inline struct mtk_dpi *mtk_dpi_from_connector(struct drm_connector *c)
+{
+	return container_of(c, struct mtk_dpi, connector);
 }
 
 enum mtk_dpi_polarity {
@@ -440,12 +450,35 @@ static int mtk_dpi_power_on(struct mtk_dpi *dpi)
 		goto err_pixel;
 	}
 
+	ret = clk_prepare_enable(dpi->vpll_dpix_clk);
+	if (ret) {
+		dev_err(dpi->dev,
+			"Failed to enable vpll_dpix clock: %d\n", ret);
+		goto err_vpll_dpix;
+	}
+	ret = clk_prepare_enable(dpi->dpi_sel);
+	if (ret) {
+		dev_err(dpi->dev, "Failed to enable dpi_sel clock: %d\n", ret);
+		goto err_dpi_sel;
+	}
+	ret = clk_prepare_enable(dpi->tvd_clk);
+	if (ret) {
+		dev_err(dpi->dev, "Failed to enable tvd clock: %d\n", ret);
+		goto err_tvd_clk;
+	}
+
 	if (dpi->pinctrl && dpi->pins_dpi)
 		pinctrl_select_state(dpi->pinctrl, dpi->pins_dpi);
 
 	mtk_dpi_enable(dpi);
 	return 0;
 
+err_tvd_clk:
+	clk_disable_unprepare(dpi->dpi_sel);
+err_dpi_sel:
+	clk_disable_unprepare(dpi->vpll_dpix_clk);
+err_vpll_dpix:
+	clk_disable_unprepare(dpi->pixel_clk);
 err_pixel:
 	clk_disable_unprepare(dpi->engine_clk);
 err_engine:
@@ -611,6 +644,11 @@ static void mtk_dpi_encoder_disable(struct drm_encoder *encoder)
 {
 	struct mtk_dpi *dpi = mtk_dpi_from_encoder(encoder);
 
+	if (dpi->panel) {
+		drm_panel_unprepare(dpi->panel);
+		drm_panel_disable(dpi->panel);
+	}
+
 	mtk_dpi_power_off(dpi);
 }
 
@@ -620,6 +658,11 @@ static void mtk_dpi_encoder_enable(struct drm_encoder *encoder)
 
 	mtk_dpi_power_on(dpi);
 	mtk_dpi_set_display_mode(dpi, &dpi->mode);
+
+	if (dpi->panel) {
+		drm_panel_prepare(dpi->panel);
+		drm_panel_enable(dpi->panel);
+	}
 }
 
 static int mtk_dpi_atomic_check(struct drm_encoder *encoder,
@@ -635,6 +678,26 @@ static const struct drm_encoder_helper_funcs mtk_dpi_encoder_helper_funcs = {
 	.disable = mtk_dpi_encoder_disable,
 	.enable = mtk_dpi_encoder_enable,
 	.atomic_check = mtk_dpi_atomic_check,
+};
+
+static int mtk_dpi_connector_get_modes(struct drm_connector *connector)
+{
+	struct mtk_dpi *dpi = mtk_dpi_from_connector(connector);
+
+	return drm_panel_get_modes(dpi->panel);
+}
+
+static const struct drm_connector_helper_funcs
+	mtk_dpi_connector_helper_funcs = {
+	.get_modes = mtk_dpi_connector_get_modes,
+};
+
+static const struct drm_connector_funcs mtk_dpi_connector_funcs = {
+	.fill_modes = drm_helper_probe_single_connector_modes,
+	.destroy = drm_connector_cleanup,
+	.reset = drm_atomic_helper_connector_reset,
+	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 };
 
 static void mtk_dpi_start(struct mtk_ddp_comp *comp)
@@ -680,10 +743,33 @@ static int mtk_dpi_bind(struct device *dev, struct device *master, void *data)
 	/* Currently DPI0 is fixed to be driven by OVL0 or OVL1 */
 	dpi->encoder.possible_crtcs = BIT(1) | BIT(0);
 
-	ret = drm_bridge_attach(&dpi->encoder, dpi->bridge, NULL);
-	if (ret) {
-		dev_err(dev, "Failed to attach bridge: %d\n", ret);
-		goto err_cleanup;
+	if (dpi->bridge) {
+		ret = drm_bridge_attach(&dpi->encoder, dpi->bridge, NULL);
+		if (ret) {
+			dev_err(dev, "Failed to attach bridge: %d\n", ret);
+			goto err_cleanup;
+		}
+	}
+
+	if (dpi->panel) {
+		ret = drm_connector_init(drm_dev, &dpi->connector,
+					 &mtk_dpi_connector_funcs,
+					 DRM_MODE_CONNECTOR_DPI);
+		if (ret) {
+			DRM_ERROR("Failed to connector init to drm\n");
+			return ret;
+		}
+
+		drm_connector_helper_add(&dpi->connector,
+					 &mtk_dpi_connector_helper_funcs);
+
+		drm_connector_attach_encoder(&dpi->connector, &dpi->encoder);
+
+		ret = drm_panel_attach(dpi->panel, &dpi->connector);
+		if (ret) {
+			dev_err(dev, "Failed to attach panel: %d\n", ret);
+			goto err_cleanup;
+		}
 	}
 
 	dpi->bit_num = MTK_DPI_OUT_BIT_NUM_8BITS;
@@ -863,6 +949,13 @@ static int mtk_dpi_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	dpi->vpll_dpix_clk = devm_clk_get_optional(dev, "vpll_dpix");
+	if (IS_ERR(dpi->vpll_dpix_clk)) {
+		ret = PTR_ERR(dpi->vpll_dpix_clk);
+		dev_err(dev, "Failed to get vpll_dpix clock: %d\n", ret);
+		return ret;
+	}
+
 	if (dpi->conf->chip == MTK_DPI_MT8167) {
 		dpi->dpi_sel = devm_clk_get(dev, "dpi_sel");
 		if (IS_ERR(dpi->dpi_sel)) {
@@ -915,11 +1008,17 @@ static int mtk_dpi_probe(struct platform_device *pdev)
 	}
 
 	ret = drm_of_find_panel_or_bridge(dev->of_node, 0, 0,
-					  NULL, &dpi->bridge);
+					  &dpi->panel, &dpi->bridge);
 	if (ret)
 		return ret;
 
-	dev_info(dev, "Found bridge node: %pOF\n", dpi->bridge->of_node);
+	if (dpi->panel)
+		dev_info(dev, "Found panel node: %pOF\n",
+			 dpi->panel->dev->of_node);
+
+	if (dpi->bridge)
+		dev_info(dev, "Found bridge node: %pOF\n",
+			 dpi->bridge->of_node);
 
 	comp_id = mtk_ddp_comp_get_id(dev->of_node, MTK_DPI);
 	if (comp_id < 0) {

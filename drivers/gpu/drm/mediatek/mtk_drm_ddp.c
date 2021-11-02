@@ -29,6 +29,7 @@
 #define DISP_REG_CONFIG_DISP_RDMA0_SOUT_EN	0x0c4
 #define DISP_REG_CONFIG_DISP_RDMA1_SOUT_EN	0x0c8
 #define DISP_REG_CONFIG_MMSYS_CG_CON0		0x100
+#define LVDS_SYS_CFG_00_LVDS_PXL_CLK		0x30000
 
 #define DISP_REG_CONFIG_DISP_OVL_MOUT_EN	0x030
 #define DISP_REG_CONFIG_OUT_SEL			0x04c
@@ -710,6 +711,14 @@ static unsigned int mtk_ddp_sout_sel(const struct mtk_mmsys_reg_data *data,
 	return value;
 }
 
+void mtk_ddp_lvds_sys_cfg_lvds(void __iomem *config_regs,
+			       const struct mtk_mmsys_reg_data *reg_data)
+{
+	if (reg_data->lvds_sys_cfg_00)
+		writel_relaxed(LVDS_SYS_CFG_00_LVDS_PXL_CLK,
+			       config_regs + reg_data->lvds_sys_cfg_00);
+}
+
 void mtk_ddp_add_comp_to_path(void __iomem *config_regs,
 			      const struct mtk_mmsys_reg_data *reg_data,
 			      enum mtk_ddp_comp_id cur,
@@ -835,6 +844,8 @@ void mtk_disp_mutex_add_comp(struct mtk_disp_mutex *mutex,
 	case DDP_COMPONENT_DPI1:
 		sof_id = DDP_MUTEX_SOF_DPI1;
 		break;
+	case DDP_COMPONENT_LVDS:
+		return;
 	default:
 		if (ddp->data->mutex_mod[id] < 32) {
 			offset = DISP_REG_MUTEX_MOD(ddp->data->mutex_mod_reg,

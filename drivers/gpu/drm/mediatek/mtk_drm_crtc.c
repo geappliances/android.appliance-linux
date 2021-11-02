@@ -273,6 +273,7 @@ static int mtk_crtc_ddp_hw_init(struct mtk_drm_crtc *mtk_crtc)
 
 	for (i = 0; i < mtk_crtc->ddp_comp_nr; i++) {
 		struct mtk_ddp_comp *comp = mtk_crtc->ddp_comp[i];
+		enum mtk_ddp_comp_id curr = mtk_crtc->ddp_comp[i]->id;
 		enum mtk_ddp_comp_id prev;
 
 		if (i > 0)
@@ -285,6 +286,10 @@ static int mtk_crtc_ddp_hw_init(struct mtk_drm_crtc *mtk_crtc)
 
 		mtk_ddp_comp_config(comp, width, height, vrefresh, bpc);
 		mtk_ddp_comp_start(comp);
+
+		if (curr == DDP_COMPONENT_LVDS)
+			mtk_ddp_lvds_sys_cfg_lvds(mtk_crtc->config_regs,
+					     mtk_crtc->mmsys_reg_data);
 	}
 
 	/* Initially configure all planes */
