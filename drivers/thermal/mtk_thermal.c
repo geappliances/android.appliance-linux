@@ -527,7 +527,7 @@ static const struct mtk_thermal_data mt8365_thermal_data = {
 	.sensor_mux_values = mt8365_mux_values,
 	.version = MTK_THERMAL_V1,
 	.apmixed_buffer_ctl_reg = APMIXED_SYS_TS_CON0,
-	.apmixed_buffer_ctl_mask = ~GENMASK(29, 28),
+	.apmixed_buffer_ctl_mask = ~(u32)GENMASK(29, 28),
 	.apmixed_buffer_ctl_set = 0,
 };
 
