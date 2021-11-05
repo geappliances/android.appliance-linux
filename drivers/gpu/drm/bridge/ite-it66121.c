@@ -214,6 +214,7 @@ struct it66121_ctx {
 	struct mutex lock; /* Protects fields below and device registers */
 	struct edid *edid;
 	struct hdmi_avi_infoframe hdmi_avi_infoframe;
+	u32 max_clock;
 };
 
 static const struct regmap_range_cfg it66121_regmap_banks[] = {
@@ -581,6 +582,8 @@ it66121_connector_mode_valid(struct drm_connector *connector,
 			connector);
 
 	max_clock = ctx->dual_edge ? 74250 : 148500;
+	if (ctx->max_clock)
+		max_clock = ctx->max_clock;
 
 	if (mode->clock > max_clock)
 		return MODE_CLOCK_HIGH;
@@ -910,6 +913,10 @@ static int it66121_probe(struct i2c_client *client,
 	}
 
 	ctx->dual_edge = of_property_read_bool(dev->of_node, "pclk-dual-edge");
+
+	ret = of_property_read_u32(dev->of_node, "max-clock", &ctx->max_clock);
+	if (ret)
+		ctx->max_clock = 0;
 
 	ret = ite66121_power_on(ctx);
 	if (ret)
