@@ -22,8 +22,6 @@
 
 #define MTK_PINCTRL_NOT_SUPPORT	(0xffff)
 
-#define MTK_PINCTRL_MODE_SET_CLR_BROKEN   BIT(0)
-
 struct mtk_desc_function {
 	const char *name;
 	unsigned char muxval;
@@ -259,7 +257,6 @@ struct mtk_pinctrl_devdata {
 	unsigned int mode_mask;
 	unsigned int mode_per_reg;
 	unsigned int mode_shf;
-	unsigned long quirks;
 };
 
 struct mtk_pinctrl {
