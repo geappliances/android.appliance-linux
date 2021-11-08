@@ -11,9 +11,35 @@ WLAN_CHIP_ID=MT7668
 EXT_MODULES="$EXT_MODULES mt7668-wifi-mod"
 
 RESTRICTED_MODULES_FILES="
+  wlan_drv_gen4_MT7663_prealloc.ko
+  wlan_drv_gen4_MT7663.ko
   wlan_drv_gen4_MT7668_prealloc.ko
   wlan_drv_gen4_MT7668.ko
 "
+
+function rebuild_for_mt7663() {
+  local EXT_MOD=mt7663-wifi-mod
+  export WLAN_CHIP_ID=MT7663
+
+  # The path that we pass in via the variable M needs to be a relative path
+  # relative to the kernel source directory. The source files will then be
+  # looked for in ${KERNEL_DIR}/${EXT_MOD_REL} and the object files (i.e. .o
+  # and .ko) files will be stored in ${OUT_DIR}/${EXT_MOD_REL}. If we
+  # instead set M to an absolute path, then object (i.e. .o and .ko) files
+  # are stored in the module source directory which is not what we want.
+  EXT_MOD_REL=$(rel_path ${ROOT_DIR}/${EXT_MOD} ${KERNEL_DIR})
+  # The output directory must exist before we invoke make. Otherwise, the
+  # build system behaves horribly wrong.
+  mkdir -p ${OUT_DIR}/${EXT_MOD_REL}
+  set -x
+  make -C ${EXT_MOD} M=${EXT_MOD_REL} KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}  \
+                      O=${OUT_DIR} "${TOOL_ARGS[@]}" "${MAKE_ARGS[@]}"
+  make -C ${EXT_MOD} M=${EXT_MOD_REL} KERNEL_SRC=${ROOT_DIR}/${KERNEL_DIR}  \
+                      O=${OUT_DIR} "${TOOL_ARGS[@]}" ${MODULE_STRIP_FLAG}    \
+                      INSTALL_MOD_PATH=${MODULES_STAGING_DIR}                \
+                      "${MAKE_ARGS[@]}" modules_install
+  set +x
+}
 
 function install_restricted_modules() {
   mkdir "${COMMON_OUT_DIR}/kernel-restricted"
@@ -31,4 +57,4 @@ function install_restricted_modules() {
   product_modules_install "kernel-restricted" "kernel-restricted"
 }
 
-EXTRA_CMDS="install_restricted_modules; $EXTRA_CMDS"
+EXTRA_CMDS="rebuild_for_mt7663 && install_restricted_modules; $EXTRA_CMDS"
