@@ -74,9 +74,9 @@ enum mtk_seninf_id {
 enum mtk_seninf_phy {
 	SENINF_PHY_CSI0 = 0,
 	SENINF_PHY_CSI1 = 1,
-	SENINF_PHY_CSI2 = 2,
-	SENINF_PHY_CSI0A = 3,
-	SENINF_PHY_CSI0B = 4,
+	SENINF_PHY_CSI0A = 2,
+	SENINF_PHY_CSI0B = 3,
+	SENINF_PHY_CSI2 = 4,
 };
 
 enum mtk_seninf_phy_mode {
@@ -127,6 +127,15 @@ static const struct mtk_seninf_conf seninf_8167_conf = {
 	.nb_inputs = 4,
 	.nb_outputs = 1,
 	.nb_phy = 1,
+};
+
+static const struct mtk_seninf_conf seninf_8365_conf = {
+	.seninf_version = SENINF_50,
+	.model = "mtk-camsys-5.0",
+	.csi2_rx_type = MTK_SENINF_CSI2_RX_CSI2,
+	.nb_inputs = 4,
+	.nb_outputs = 4,
+	.nb_phy = 4,
 };
 
 struct mtk_seninf_format_info {
@@ -798,7 +807,7 @@ static int seninf_enable_test_pattern(struct mtk_seninf *priv)
 			 mtk_seninf_read(priv, SENINF_MUX_CTRL) & ~0x3);
 
 	if (conf->seninf_version == SENINF_50)
-		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76543010);
+		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76540010);
 
 	dev_dbg(priv->dev, "%s: OK\n", __func__);
 	return 0;
@@ -1664,6 +1673,9 @@ static const struct of_device_id mtk_seninf_of_match[] = {
 	}, {
 		.compatible = "mediatek,mt8183-seninf",
 		.data = &seninf_8183_conf,
+	}, {
+		.compatible = "mediatek,mt8365-seninf",
+		.data = &seninf_8365_conf,
 	},
 	{ /* sentinel */ }
 };

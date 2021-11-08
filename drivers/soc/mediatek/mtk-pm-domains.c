@@ -43,6 +43,7 @@ struct scpsys_domain {
 	struct clk_bulk_data *subsys_clks;
 	struct regmap *infracfg;
 	struct regmap *smi;
+	struct regmap *infracfg_nao;
 	struct regulator *supply;
 };
 
@@ -115,23 +116,38 @@ static int scpsys_sram_disable(struct scpsys_domain *pd)
 					MTK_POLL_TIMEOUT);
 }
 
-static int _scpsys_bus_protect_enable(const struct scpsys_bus_prot_data *bpd, struct regmap *regmap)
+static int _scpsys_bus_protect_enable(const struct scpsys_bus_prot_data *bpd,
+				      struct regmap *regmap, struct regmap *infracfg_nao)
 {
 	int i, ret;
 
 	for (i = 0; i < SPM_MAX_BUS_PROT_DATA; i++) {
-		u32 val, mask = bpd[i].bus_prot_mask;
+		u32 mask = bpd[i].bus_prot_mask;
+		u32 val = mask, sta_mask = mask;
+		struct regmap *ack_regmap = regmap;
 
 		if (!mask)
 			break;
 
+		if (bpd[i].wayen) {
+			if (!infracfg_nao)
+				return -ENODEV;
+
+			val = 0;
+			sta_mask = bpd[i].bus_prot_sta_mask;
+			ack_regmap = infracfg_nao;
+		}
+
 		if (bpd[i].bus_prot_reg_update)
-			regmap_set_bits(regmap, bpd[i].bus_prot_set, mask);
+			regmap_update_bits(regmap, bpd[i].bus_prot_set, mask, val);
 		else
 			regmap_write(regmap, bpd[i].bus_prot_set, mask);
 
-		ret = regmap_read_poll_timeout(regmap, bpd[i].bus_prot_sta,
-					       val, (val & mask) == mask,
+		if (bpd[i].ignore_clr_ack)
+			continue;
+
+		ret = regmap_read_poll_timeout(ack_regmap, bpd[i].bus_prot_sta,
+					       val, (val & sta_mask) == sta_mask,
 					       MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
 		if (ret)
 			return ret;
@@ -144,34 +160,49 @@ static int scpsys_bus_protect_enable(struct scpsys_domain *pd)
 {
 	int ret;
 
-	ret = _scpsys_bus_protect_enable(pd->data->bp_infracfg, pd->infracfg);
+	ret = _scpsys_bus_protect_enable(pd->data->bp_infracfg,
+			pd->infracfg, pd->infracfg_nao);
 	if (ret)
 		return ret;
 
-	return _scpsys_bus_protect_enable(pd->data->bp_smi, pd->smi);
+	return _scpsys_bus_protect_enable(pd->data->bp_smi, pd->smi, NULL);
 }
 
+#define mask_cond(wayen, val, mask) \
+	((wayen && ((val & mask) == mask)) || (!wayen && !(val & mask)))
+
 static int _scpsys_bus_protect_disable(const struct scpsys_bus_prot_data *bpd,
-				       struct regmap *regmap)
+				       struct regmap *regmap, struct regmap *infracfg_nao)
 {
 	int i, ret;
 
 	for (i = SPM_MAX_BUS_PROT_DATA - 1; i >= 0; i--) {
-		u32 val, mask = bpd[i].bus_prot_mask;
+		u32 val = 0, mask = bpd[i].bus_prot_mask;
+		u32 sta_mask = mask;
+		struct regmap *ack_regmap = regmap;
 
 		if (!mask)
 			continue;
 
+		if (bpd[i].wayen) {
+			if (!infracfg_nao)
+				return -ENODEV;
+
+			val = mask;
+			sta_mask = bpd[i].bus_prot_sta_mask;
+			ack_regmap = infracfg_nao;
+		}
+
 		if (bpd[i].bus_prot_reg_update)
-			regmap_clear_bits(regmap, bpd[i].bus_prot_clr, mask);
+			regmap_update_bits(regmap, bpd[i].bus_prot_clr, mask, val);
 		else
 			regmap_write(regmap, bpd[i].bus_prot_clr, mask);
 
 		if (bpd[i].ignore_clr_ack)
 			continue;
 
-		ret = regmap_read_poll_timeout(regmap, bpd[i].bus_prot_sta,
-					       val, !(val & mask),
+		ret = regmap_read_poll_timeout(ack_regmap, bpd[i].bus_prot_sta,
+					       val, mask_cond(bpd[i].wayen, val, sta_mask),
 					       MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
 		if (ret)
 			return ret;
@@ -184,11 +215,12 @@ static int scpsys_bus_protect_disable(struct scpsys_domain *pd)
 {
 	int ret;
 
-	ret = _scpsys_bus_protect_disable(pd->data->bp_smi, pd->smi);
+	ret = _scpsys_bus_protect_disable(pd->data->bp_smi, pd->smi, NULL);
 	if (ret)
 		return ret;
 
-	return _scpsys_bus_protect_disable(pd->data->bp_infracfg, pd->infracfg);
+	return _scpsys_bus_protect_disable(pd->data->bp_infracfg,
+			pd->infracfg, pd->infracfg_nao);
 }
 
 static int scpsys_regulator_enable(struct regulator *supply)
@@ -230,17 +262,36 @@ static int scpsys_power_on(struct generic_pm_domain *genpd)
 	regmap_clear_bits(scpsys->base, pd->data->ctl_offs, PWR_ISO_BIT);
 	regmap_set_bits(scpsys->base, pd->data->ctl_offs, PWR_RST_B_BIT);
 
-	ret = clk_bulk_enable(pd->num_subsys_clks, pd->subsys_clks);
-	if (ret)
-		goto err_pwr_ack;
+	if (MTK_SCPD_CAPS(pd, MTK_SCPD_STRICT_BUSP)) {
+		/*
+		 * In few Mediatek platforms(e.g. MT6779), the bus protect
+		 * policy is stricter, which leads to bus protect release must
+		 * be prior to bus access.
+		 */
+		ret = scpsys_sram_enable(pd);
+		if (ret < 0)
+			goto err_pwr_ack;
 
-	ret = scpsys_sram_enable(pd);
-	if (ret < 0)
-		goto err_disable_subsys_clks;
+		ret = scpsys_bus_protect_disable(pd);
+		if (ret < 0)
+			goto err_pwr_ack;
 
-	ret = scpsys_bus_protect_disable(pd);
-	if (ret < 0)
-		goto err_disable_sram;
+		ret = clk_bulk_enable(pd->num_subsys_clks, pd->subsys_clks);
+		if (ret < 0)
+			goto err_pwr_ack;
+	} else {
+		ret = clk_bulk_enable(pd->num_subsys_clks, pd->subsys_clks);
+		if (ret)
+			goto err_pwr_ack;
+
+		ret = scpsys_sram_enable(pd);
+		if (ret < 0)
+			goto err_disable_subsys_clks;
+
+		ret = scpsys_bus_protect_disable(pd);
+		if (ret < 0)
+			goto err_disable_sram;
+	}
 
 	return 0;
 
@@ -356,6 +407,10 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 	pd->smi = syscon_regmap_lookup_by_phandle_optional(node, "mediatek,smi");
 	if (IS_ERR(pd->smi))
 		return ERR_CAST(pd->smi);
+
+	pd->infracfg_nao = syscon_regmap_lookup_by_phandle_optional(node, "mediatek,infracfg_nao");
+	if (IS_ERR(pd->infracfg_nao))
+		return ERR_CAST(pd->infracfg_nao);
 
 	num_clks = of_clk_get_parent_count(node);
 	if (num_clks > 0) {
