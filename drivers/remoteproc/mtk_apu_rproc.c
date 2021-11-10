@@ -44,11 +44,7 @@
 #define  CORE_DEFAULT0_QOS_SWAP_1		(0x01 << 28)
 #define  CORE_DEFAULT0_QOS_SWAP_2		(0x02 << 28)
 #define  CORE_DEFAULT0_QOS_SWAP_3		(0x03 << 28)
-#define  CORE_DEFAULT0_ARUSER_USE_IOMMU		(0x10 << 23)
-#define  CORE_DEFAULT0_AWUSER_USE_IOMMU		(0x10 << 18)
 #define CORE_DEFAULT1				(0x00000140)
-#define  CORE_DEFAULT0_ARUSER_IDMA_USE_IOMMU	(0x10 << 0)
-#define  CORE_DEFAULT0_AWUSER_IDMA_USE_IOMMU	(0x10 << 5)
 #define CORE_DEFAULT2				(0x00000144)
 #define CORE_DEFAULT2_DBG_EN			BIT(3)
 #define CORE_DEFAULT2_NIDEN			BIT(2)
@@ -56,15 +52,53 @@
 #define CORE_DEFAULT2_SPIDEN			BIT(0)
 #define CORE_XTENSA_ALTRESETVEC			(0x000001F8)
 
+struct mtk_vpu_conf {
+	u32 core_default0;
+	u32 core_default1;
+	u32 num_clks;
+	const char * const *clk_names;
+};
+
+static const char * const mt8183_clk_names[] = {
+	"ipu",
+	"axi",
+	"jtag"
+};
+
+static const struct mtk_vpu_conf mt8183_conf = {
+	.core_default0 = (0x10 << 23) | (0x10 << 18),
+	.core_default1 = (0x10 << 0) | (0x10 << 5),
+	.num_clks = ARRAY_SIZE(mt8183_clk_names),
+	.clk_names = mt8183_clk_names
+};
+
+static const char * const mt8365_clk_names[] = {
+	"if_ck",
+	"edma",
+	"ahb",
+	"axi",
+	"ipu",
+	"jtag",
+	"smi_cam",
+	"ifr_apu_axi",
+};
+
+static const struct mtk_vpu_conf mt8365_conf = {
+	.core_default0 = BIT(26) | BIT(20),
+	.core_default1 = BIT(3) | BIT(7),
+	.num_clks = ARRAY_SIZE(mt8365_clk_names),
+	.clk_names = mt8365_clk_names
+};
+
 struct mtk_vpu_rproc {
 	struct device *dev;
 	struct rproc *rproc;
 
 	void __iomem *base;
 	int irq;
-	struct clk *axi;
-	struct clk *ipu;
-	struct clk *jtag;
+	unsigned int num_clks;
+	struct clk_bulk_data *clks;
+	struct mtk_vpu_conf *conf;
 
 #ifdef CONFIG_MTK_APU_JTAG
 	struct pinctrl *pinctrl;
@@ -105,12 +139,12 @@ static int mtk_vpu_rproc_start(struct rproc *rproc)
 	core_ctrl &= ~CORE_CTRL_PIF_GATED;
 	vpu_write32(vpu_rproc, CORE_CTRL, core_ctrl);
 
-	vpu_write32(vpu_rproc, CORE_DEFAULT0, CORE_DEFAULT0_AWUSER_USE_IOMMU |
-					      CORE_DEFAULT0_ARUSER_USE_IOMMU |
-					      CORE_DEFAULT0_QOS_SWAP_1);
+
+	vpu_write32(vpu_rproc, CORE_DEFAULT0,
+		    vpu_rproc->conf->core_default0 |
+		    CORE_DEFAULT0_QOS_SWAP_1);
 	vpu_write32(vpu_rproc, CORE_DEFAULT1,
-		    CORE_DEFAULT0_AWUSER_IDMA_USE_IOMMU |
-		    CORE_DEFAULT0_ARUSER_IDMA_USE_IOMMU);
+		    vpu_rproc->conf->core_default1);
 
 	core_ctrl &= ~CORE_CTRL_RUN_STALL;
 	vpu_write32(vpu_rproc, CORE_CTRL, core_ctrl);
@@ -336,6 +370,7 @@ static int mtk_vpu_rproc_probe(struct platform_device *pdev)
 	struct rproc *rproc;
 	struct resource *res;
 	int ret;
+	int i;
 
 	rproc = rproc_alloc(dev, "apu", &mtk_vpu_rproc_ops, NULL,
 			    sizeof(*vpu_rproc));
@@ -383,49 +418,39 @@ static int mtk_vpu_rproc_probe(struct platform_device *pdev)
 		goto free_rproc;
 	}
 
-	vpu_rproc->ipu = devm_clk_get(dev, "ipu");
-	if (IS_ERR(vpu_rproc->ipu)) {
-		dev_err(dev, "Failed to get ipu clock\n");
-		ret = PTR_ERR(vpu_rproc->ipu);
+	vpu_rproc->conf = (struct mtk_vpu_conf *)device_get_match_data(dev);
+	if (!vpu_rproc->conf) {
+		ret = -ENODEV;
 		goto free_rproc;
 	}
 
-	ret = clk_prepare_enable(vpu_rproc->ipu);
-	if (ret) {
-		dev_err(dev, "Failed to enable ipu clock\n");
+	vpu_rproc->num_clks = vpu_rproc->conf->num_clks;
+	vpu_rproc->clks = devm_kcalloc(dev, vpu_rproc->num_clks,
+				     sizeof(*vpu_rproc->clks), GFP_KERNEL);
+	if (!vpu_rproc->clks) {
+		ret = -ENOMEM;
 		goto free_rproc;
 	}
 
-	vpu_rproc->axi = devm_clk_get(dev, "axi");
-	if (IS_ERR(vpu_rproc->axi)) {
-		dev_err(dev, "Failed to get axi clock\n");
-		ret = PTR_ERR(vpu_rproc->axi);
-		goto clk_disable_ipu;
-	}
+	for (i = 0; i < vpu_rproc->num_clks; ++i)
+		vpu_rproc->clks[i].id = vpu_rproc->conf->clk_names[i];
 
-	ret = clk_prepare_enable(vpu_rproc->axi);
+	ret = devm_clk_bulk_get(dev, vpu_rproc->num_clks, vpu_rproc->clks);
 	if (ret) {
-		dev_err(dev, "Failed to enable axi clock\n");
-		goto clk_disable_ipu;
+		dev_err(dev, "failed to get clocks\n");
+		goto free_rproc;
 	}
 
-	vpu_rproc->jtag = devm_clk_get(vpu_rproc->dev, "jtag");
-	if (IS_ERR(vpu_rproc->jtag)) {
-		dev_err(vpu_rproc->dev, "Failed to get jtag clock\n");
-		ret = PTR_ERR(vpu_rproc->jtag);
-		goto clk_disable_axi;
-	}
-
-	ret = clk_prepare_enable(vpu_rproc->jtag);
+	ret = clk_bulk_prepare_enable(vpu_rproc->num_clks, vpu_rproc->clks);
 	if (ret) {
-		dev_err(vpu_rproc->dev, "Failed to enable jtag clock\n");
-		goto clk_disable_axi;
+		dev_err(vpu_rproc->dev, "failed to enable clocks: %d\n", ret);
+		goto free_rproc;
 	}
 
 	ret = of_reserved_mem_device_init(dev);
 	if (ret) {
 		dev_err(dev, "device does not have specific CMA pool\n");
-		goto clk_disable_jtag;
+		goto clk_disable;
 	}
 
 	ret = rproc_add(rproc);
@@ -444,12 +469,8 @@ static int mtk_vpu_rproc_probe(struct platform_device *pdev)
 
 free_mem:
 	of_reserved_mem_device_release(dev);
-clk_disable_jtag:
-	clk_disable_unprepare(vpu_rproc->jtag);
-clk_disable_axi:
-	clk_disable_unprepare(vpu_rproc->axi);
-clk_disable_ipu:
-	clk_disable_unprepare(vpu_rproc->ipu);
+clk_disable:
+	clk_bulk_disable_unprepare(vpu_rproc->num_clks, vpu_rproc->clks);
 free_rproc:
 	rproc_free(rproc);
 
@@ -469,16 +490,15 @@ static int mtk_vpu_rproc_remove(struct platform_device *pdev)
 #endif
 	rproc_del(rproc);
 	of_reserved_mem_device_release(dev);
-	clk_disable_unprepare(vpu_rproc->jtag);
-	clk_disable_unprepare(vpu_rproc->axi);
-	clk_disable_unprepare(vpu_rproc->ipu);
+	clk_bulk_disable_unprepare(vpu_rproc->num_clks, vpu_rproc->clks);
 	rproc_free(rproc);
 
 	return 0;
 }
 
 static const struct of_device_id mtk_vpu_rproc_of_match[] __maybe_unused = {
-	{ .compatible = "mediatek,mt8183-apu", },
+	{ .compatible = "mediatek,mt8183-rproc-apu", .data = &mt8183_conf },
+	{ .compatible = "mediatek,mt8365-rproc-apu", .data = &mt8365_conf },
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, mtk_vpu_rproc_of_match);
