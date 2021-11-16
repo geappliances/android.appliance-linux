@@ -98,6 +98,13 @@
 			no-map;
 			reg = <0 0x43200000 0 0x00c00000>;
 		};
+
+		vpu_ram: vpu_ram@0x60000000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x60000000 0 0x04000000>;
+			no-map;
+			linux,cma-default;
+		};
 	};
 
 	dc5v: dc5v-regulator {
@@ -137,6 +144,12 @@
 		regulator-max-microvolt = <5000000>;
 		gpio = <&pio 7 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
+	};
+
+	apu@0 {
+		compatible = "mediatek,apu-drm";
+		remoteproc = <&vpu0>;
+		iova = <0 0x60000000 0 0x10000000>;
 	};
 
 	lt9611_1v8: lt9611-vdd18-regulator {
@@ -735,5 +748,10 @@
 	mediatek,dmic-iir-on = <1>;
 	mediatek,dmic-irr-mode = <5>;
 	mediatek,dmic-two-wire-mode = <1>;
+	status = "okay";
+};
+
+&vpu0 {
+	memory-region = <&vpu_ram>;
 	status = "okay";
 };
