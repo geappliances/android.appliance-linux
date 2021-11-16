@@ -57,6 +57,13 @@
 			no-map;
 			reg = <0 0x43200000 0 0x00c00000>;
 		};
+
+		vpu_ram: vpu_ram@0x60000000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x60000000 0 0x04000000>;
+			no-map;
+			linux,cma-default;
+		};
 	};
 
 	ntc@0 {
@@ -76,6 +83,11 @@
 		enable-active-high;
 	};
 
+	apu@0 {
+		compatible = "mediatek,apu-drm";
+		remoteproc = <&vpu0>;
+		iova = <0 0x60000000 0 0x10000000>;
+	};
 };
 
 &mt6357_vrf12_reg {
@@ -625,4 +637,9 @@
 
 &dsi0 {
 	status = "disabled";
+};
+
+&vpu0 {
+	memory-region = <&vpu_ram>;
+	status = "okay";
 };
