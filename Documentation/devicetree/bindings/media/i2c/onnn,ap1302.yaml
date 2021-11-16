@@ -40,6 +40,11 @@ properties:
       Reference to the GPIO connected to the STANDBY pin (active high).
     maxItems: 1
 
+  power-supply:
+    description:
+      Power supply for AP1302.
+    maxItems: 1
+
   port:
     $ref: /schemas/graph.yaml#/$defs/port-base
     unevaluatedProperties: false
@@ -184,6 +189,8 @@ examples:
 
             reset-gpios = <&pio 102 GPIO_ACTIVE_LOW>;
             standby-gpios = <&pio 40 GPIO_ACTIVE_HIGH>;
+
+            power-supply = <&cam0_pdn>;
 
             port {
                 isp2_out: endpoint {
