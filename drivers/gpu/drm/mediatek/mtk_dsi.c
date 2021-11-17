@@ -205,6 +205,8 @@ struct mtk_dsi {
 	u32 irq_data;
 	wait_queue_head_t irq_wait_queue;
 	const struct mtk_dsi_driver_data *driver_data;
+
+	u8 poweron_in_hs_mode;
 };
 
 static inline struct mtk_dsi *bridge_to_dsi(struct drm_bridge *b)
@@ -654,7 +656,7 @@ static int mtk_dsi_poweron(struct mtk_dsi *dsi)
 
 	mtk_dsi_clk_ulp_mode_leave(dsi);
 	mtk_dsi_lane0_ulp_mode_leave(dsi);
-	mtk_dsi_clk_hs_mode(dsi, 1);
+	mtk_dsi_clk_hs_mode(dsi, dsi->poweron_in_hs_mode);
 
 	return 0;
 err_disable_engine_clk:
@@ -1049,6 +1051,10 @@ static int mtk_dsi_probe(struct platform_device *pdev)
 	}
 
 	dsi->driver_data = of_device_get_match_data(dev);
+
+	dsi->poweron_in_hs_mode = 1;
+	of_property_read_u8(dev->of_node, "poweron-in-hs-mode",
+				  &dsi->poweron_in_hs_mode);
 
 	dsi->engine_clk = devm_clk_get(dev, "engine");
 	if (IS_ERR(dsi->engine_clk)) {
