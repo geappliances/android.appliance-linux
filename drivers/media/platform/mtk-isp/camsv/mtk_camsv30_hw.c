@@ -88,11 +88,6 @@ static void mtk_camsv30_write(struct mtk_cam_dev *priv, u32 reg, u32 value)
 	writel(value, priv->regs + reg);
 }
 
-static u32 mtk_camsv30_img0_read(struct mtk_cam_dev *priv, u32 reg)
-{
-	return readl(priv->regs_img0 + reg);
-}
-
 static void mtk_camsv30_img0_write(struct mtk_cam_dev *priv, u32 reg, u32 value)
 {
 	writel(value, priv->regs_img0 + reg);
