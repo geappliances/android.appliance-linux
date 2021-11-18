@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2021 Baylibre, SAS
+ * Author: Guillaume La Roque <glaroque@baylibre.com>
+ */
+
+#include "mt8365-evk-android-ap1302-ar0430-dual.dtsi"
