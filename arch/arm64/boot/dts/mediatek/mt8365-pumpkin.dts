@@ -18,6 +18,7 @@
 
 	aliases {
 		serial0 = &uart0;
+		serial1 = &uart1;
 		mmc0 = &mmc0;
 		mmc1 = &mmc1;
 		mmc2 = &mmc2;
@@ -95,6 +96,12 @@
 };
 
 &uart0 {
+	status = "okay";
+};
+
+&uart1 {
+	pinctrl-0 = <&uart1_pins>;
+	pinctrl-names = "default";
 	status = "okay";
 };
 
@@ -318,6 +325,13 @@
 		pin_int {
 			pinmux = <MT8365_PIN_5_GPIO5__FUNC_GPIO5>;
 			input-enable;
+		};
+	};
+
+	uart1_pins: uart1-pins {
+		pins {
+			pinmux = <MT8365_PIN_37_URXD1__FUNC_URXD1>,
+				 <MT8365_PIN_38_UTXD1__FUNC_UTXD1>;
 		};
 	};
 
