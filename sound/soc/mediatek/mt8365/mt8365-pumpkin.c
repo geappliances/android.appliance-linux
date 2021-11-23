@@ -351,7 +351,6 @@ static int mt8365_pumpkin_dev_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = &mt8365_pumpkin_card;
 	struct device *dev = &pdev->dev;
-	struct device_node *np = dev->of_node;
 	struct device_node *platform_node;
 	struct mt8365_pumpkin_priv *priv;
 	int i, ret;
