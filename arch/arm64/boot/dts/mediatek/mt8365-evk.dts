@@ -304,7 +304,6 @@
 		interrupts = <68 IRQ_TYPE_LEVEL_LOW>;
 		reg = <0x4c>;
 		pclk-dual-edge;
-		max-clock = <70000>;
 
 		port {
 			it66121_in: endpoint {
