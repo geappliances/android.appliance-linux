@@ -13,8 +13,8 @@
 #include <drm/drm_panel.h>
 
 // Default Video Mode configuration
-#define DCLK (52000)
-#define HDISPLAY (500)
+#define DCLK (53560)
+#define HDISPLAY (1024)
 #define VDISPLAY (600)
 #define HSYNC_FRONT_PORCH (160)
 #define HSYNC_BACK_PORCH (160)
