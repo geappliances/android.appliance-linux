@@ -308,7 +308,6 @@
 		interrupts = <68 IRQ_TYPE_LEVEL_LOW>;
 		reg = <0x4c>;
 		pclk-dual-edge;
-		max-clock = <70000>;
 
 		port {
 			it66121_in: endpoint {
@@ -746,6 +745,7 @@
 				 <MT8365_PIN_13_GPIO13__FUNC_DPI_VSYNC>,
 				 <MT8365_PIN_14_GPIO14__FUNC_DPI_CK>,
 				 <MT8365_PIN_15_GPIO15__FUNC_DPI_HSYNC>;
+			drive-strength = <MTK_DRIVE_2mA>;
 		};
 	};
 

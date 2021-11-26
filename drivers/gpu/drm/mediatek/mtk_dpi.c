@@ -92,6 +92,7 @@ struct mtk_dpi {
 	struct pinctrl_state *pins_dpi;
 	int refcount;
 	bool dual_edge;
+	bool lvds_enable;
 };
 
 static inline struct mtk_dpi *mtk_dpi_from_encoder(struct drm_encoder *e)
@@ -408,6 +409,12 @@ static void mtk_dpi_config_color_format(struct mtk_dpi *dpi,
 	}
 }
 
+static void mtk_dpi_lvds_enable(struct mtk_dpi *dpi)
+{
+	mtk_dpi_mask(dpi, DPI_OUTPUT_SETTING, EDGE_SEL, EDGE_SEL);
+	mtk_dpi_mask(dpi, DPI_DUMMY, true, DPI_DUMMY_MASK);
+}
+
 static void mtk_dpi_power_off(struct mtk_dpi *dpi)
 {
 	if (WARN_ON(dpi->refcount == 0))
@@ -610,6 +617,8 @@ static int mtk_dpi_set_display_mode(struct mtk_dpi *dpi,
 	mtk_dpi_config_disable_edge(dpi);
 	if (dpi->dual_edge)
 		mtk_dpi_enable_dual_edge(dpi);
+	if (dpi->lvds_enable)
+		mtk_dpi_lvds_enable(dpi);
 	mtk_dpi_sw_reset(dpi, false);
 
 	return 0;
@@ -899,6 +908,8 @@ static int mtk_dpi_probe(struct platform_device *pdev)
 	dpi->dev = dev;
 	dpi->conf = (struct mtk_dpi_conf *)of_device_get_match_data(dev);
 	dpi->dual_edge = of_property_read_bool(dev->of_node, "dpi_dual_edge");
+	dpi->lvds_enable = of_property_read_bool(dev->of_node,
+						 "dpi_lvds_enable");
 
 	dpi->pinctrl = devm_pinctrl_get(&pdev->dev);
 	if (IS_ERR(dpi->pinctrl)) {
