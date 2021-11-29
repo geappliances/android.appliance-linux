@@ -48,6 +48,7 @@ arch/arm64/boot/dts/mediatek/mt8365-evk-android.dtb
 arch/arm64/boot/dts/mediatek/mt8365-evk-android-ap1302-ar0430-single-csi0.dtb
 arch/arm64/boot/dts/mediatek/mt8365-evk-android-ap1302-ar0430-single-csi1.dtb
 arch/arm64/boot/dts/mediatek/mt8365-evk-android-ap1302-ar0430-dual.dtb
+arch/arm64/boot/dts/mediatek/mt8365-evk-android-dsi.dtb
 arch/arm64/boot/dts/mediatek/mt8365-pumpkin.dtb
 arch/arm64/boot/dts/mediatek/mt8365-pumpkin-android.dtb
 arch/arm64/boot/dts/mediatek/mt8365-sb35.dtb
