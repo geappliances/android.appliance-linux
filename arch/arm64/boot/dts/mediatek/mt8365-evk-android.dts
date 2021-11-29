@@ -1,6 +1,10 @@
 /dts-v1/;
 /plugin/;
 
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/mt8365-pinfunc.h>
+#include "dt-bindings/interrupt-controller/irq.h"
+
 &reserved_memory {
 	#address-cells = <2>;
 	#size-cells = <2>;

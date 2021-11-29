@@ -31,6 +31,7 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt8365-evk-android.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8365-evk-android-ap1302-ar0430-dual.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8365-evk-android-ap1302-ar0430-single-csi0.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8365-evk-android-ap1302-ar0430-single-csi1.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt8365-evk-android-dsi.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8365-pumpkin.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8365-pumpkin-android.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8365-sb35.dtb

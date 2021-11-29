@@ -1,0 +1,119 @@
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/mt8365-pinfunc.h>
+#include "dt-bindings/interrupt-controller/irq.h"
+
+&reserved_memory {
+	#address-cells = <2>;
+	#size-cells = <2>;
+	ramoops@0x4FF00000 {
+		compatible = "ramoops";
+		reg = <0x0 0x4FF00000 0x0 0x00100000>;
+		record-size = <0x00008000>;
+		console-size = <0x00008000>;
+		ftrace-size = <0x00000000>;
+		pmsg-size = <0x00008000>;
+	};
+};
+
+&dsi0 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	poweron-in-hs-mode = <0>;
+
+	panel@0 {
+		compatible = "startek,kd070fhfid015";
+		status = "okay";
+		reg = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&panel_pins_default>;
+		reset-gpios = <&pio 20 GPIO_ACTIVE_HIGH>;
+		dcdc-gpios = <&pio 67 GPIO_ACTIVE_HIGH>;
+		enable-gpios = <&pio 129 GPIO_ACTIVE_HIGH>;
+		iovcc-supply = <&mt6357_vsim1_reg>;
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+	};
+
+	ports {
+		port {
+			dsi_out: endpoint {
+				remote-endpoint = <&panel_in>;
+			};
+		};
+	};
+};
+
+&i2c1 {
+	clock-div = <2>;
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	touch: gt911@5d {
+		compatible = "goodix,gt9271";
+		reg = <0x5d>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&ts_pins>;
+		interrupt-parent = <&pio>;
+		interrupts = <78 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&pio 78 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&pio 79 GPIO_ACTIVE_HIGH>;
+	};
+
+	it66121hdmitx {
+		status = "disabled";
+	};
+};
+
+&dpi0 {
+	status = "disabled";
+};
+
+&mipi_tx0 {
+	status = "okay";
+};
+
+&pio {
+	ts_pins: ts_pins {
+		pins_ctp_int1 {
+			pinmux = <MT8365_PIN_78_CMHSYNC__FUNC_GPIO78>;
+			input-enable;
+			bias-disable;
+		};
+
+		ts_rst {
+			pinmux = <MT8365_PIN_78_CMHSYNC__FUNC_GPIO78>;
+			output-low;
+		};
+	};
+
+	panel_pins_default: panel_pins_default {
+		panel_dcdc {
+			pinmux = <MT8365_PIN_67_CMPCLK__FUNC_GPIO67>;
+			output-low;
+		};
+
+		panel_en {
+			pinmux = <MT8365_PIN_129_TDM_TX_BCK__FUNC_GPIO129>;
+			output-low;
+		};
+
+		panel_rst {
+			pinmux = <MT8365_PIN_20_LCM_RST__FUNC_GPIO20>;
+			output-high;
+		};
+	};	
+};
+
+&mt6357_vsim1_reg {
+	regulator-min-microvolt = <1800000>;
+	regulator-max-microvolt = <1800000>;
+};
