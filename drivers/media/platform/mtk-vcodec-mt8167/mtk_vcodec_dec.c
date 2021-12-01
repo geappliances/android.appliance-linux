@@ -87,22 +87,22 @@ static struct mtk_video_fmt mtk_video_formats[] = {
 static const struct mtk_codec_framesizes mtk_vdec_framesizes[] = {
 	{
 		.fourcc	= V4L2_PIX_FMT_H264,
-		.stepwise = {  MTK_VDEC_MIN_W, MTK_VDEC_MAX_W, 16,
-				MTK_VDEC_MIN_H, MTK_VDEC_MAX_H, 16 },
+		.stepwise = {  MTK_VDEC_MIN_W, MTK_VDEC_MAX_W, 1,
+				MTK_VDEC_MIN_H, MTK_VDEC_MAX_H, 1 },
 	},
 	{
 		.fourcc	= V4L2_PIX_FMT_HEVC,
-		.stepwise = {  MTK_VDEC_MIN_W, VCODEC_DEC_4K_CODED_WIDTH, 16,
-				MTK_VDEC_MIN_H, VCODEC_DEC_4K_CODED_HEIGHT, 16 },
+		.stepwise = {  MTK_VDEC_MIN_W, VCODEC_DEC_4K_CODED_WIDTH, 1,
+				MTK_VDEC_MIN_H, VCODEC_DEC_4K_CODED_HEIGHT, 1 },
 	},
 	{
 		.fourcc	= V4L2_PIX_FMT_VP8,
-		.stepwise = {  MTK_VDEC_MIN_W, MTK_VDEC_MAX_W, 16,
-				MTK_VDEC_MIN_H, MTK_VDEC_MAX_H, 16 },
+		.stepwise = {  MTK_VDEC_MIN_W, MTK_VDEC_MAX_W, 1,
+				MTK_VDEC_MIN_H, MTK_VDEC_MAX_H, 1 },
 	},
 	{
 		.fourcc	= V4L2_PIX_FMT_VP9,
-		.stepwise = {  1, MTK_VDEC_MAX_W, 16, 1, MTK_VDEC_MAX_H, 16 },
+		.stepwise = {  1, MTK_VDEC_MAX_W, 1, 1, MTK_VDEC_MAX_H, 1 },
 	},
 	{
 		.fourcc	= V4L2_PIX_FMT_MPEG1,
