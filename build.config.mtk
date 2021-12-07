@@ -56,6 +56,8 @@ arch/arm64/boot/dts/mediatek/mt8365-sb35-android.dtb
 arch/arm64/boot/dts/mediatek/mt8365-sb35-android-dsi.dtb
 "
 
+MAKE_GOALS+=" dtbs"
+
 SKIP_CP_KERNEL_HDR=1
 # This is needed to generate __symbols__ to apply overlays in bootloader
 DTC_FLAGS="-@"
