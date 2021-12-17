@@ -361,7 +361,8 @@ struct mtk_vcodec_ctx {
 	struct work_struct decode_work;
 	struct work_struct encode_work;
 	struct vdec_pic_info last_decoded_picinfo;
-	struct vb2_v4l2_buffer *last_src_buf;
+	struct v4l2_m2m_buffer empty_flush_buf; // for dec
+	struct vb2_v4l2_buffer *last_src_buf;   // for enc
 	bool is_stopped;
 	bool is_draining;
 	bool next_is_last;
