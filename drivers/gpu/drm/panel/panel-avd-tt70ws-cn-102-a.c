@@ -44,6 +44,8 @@ struct lvds_panel {
 	struct gpio_desc *lcd_stb_gpio;
 	struct gpio_desc *lcd_en_gpio;
 	struct gpio_desc *lcd_rst_gpio;
+
+	bool prepared;
 };
 
 static const struct drm_display_mode default_mode = {
@@ -69,10 +71,15 @@ static int lvds_panel_unprepare(struct drm_panel *panel)
 {
 	struct lvds_panel *lvds = to_lvds_panel(panel);
 
+	if (!lvds->prepared)
+		return 0;
+
 	gpiod_set_value(lvds->lcd_stb_gpio, 0);
 	mdelay(100);
 	gpiod_set_value(lvds->lcd_en_gpio, 0);
 	gpiod_set_value(lvds->lcd_rst_gpio, 0);
+
+	lvds->prepared = false;
 
 	return 0;
 }
@@ -80,6 +87,9 @@ static int lvds_panel_unprepare(struct drm_panel *panel)
 static int lvds_panel_prepare(struct drm_panel *panel)
 {
 	struct lvds_panel *lvds = to_lvds_panel(panel);
+
+	if (lvds->prepared)
+		return 0;
 
 	gpiod_set_value(lvds->lcd_stb_gpio, 0);
 	mdelay(50);
@@ -95,6 +105,8 @@ static int lvds_panel_prepare(struct drm_panel *panel)
 
 	gpiod_set_value(lvds->lcd_stb_gpio, 1);
 	mdelay(20);
+
+	lvds->prepared = true;
 
 	return 0;
 }
