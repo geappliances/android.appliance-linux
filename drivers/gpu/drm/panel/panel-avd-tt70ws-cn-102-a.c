@@ -4,6 +4,7 @@
  * Author: Amjad Ouled-Ameur <aouledameur@baylibre.com>
  */
 
+#include <linux/backlight.h>
 #include <linux/module.h>
 #include <linux/gpio/consumer.h>
 #include <linux/delay.h>
@@ -44,6 +45,11 @@ struct lvds_panel {
 	struct gpio_desc *lcd_stb_gpio;
 	struct gpio_desc *lcd_en_gpio;
 	struct gpio_desc *lcd_rst_gpio;
+
+	bool prepared;
+	bool enabled;
+
+	struct backlight_device *backlight;
 };
 
 static const struct drm_display_mode default_mode = {
@@ -65,14 +71,32 @@ static inline struct lvds_panel *to_lvds_panel(struct drm_panel *panel)
 	return container_of(panel, struct lvds_panel, panel);
 }
 
+static int lvds_panel_disable(struct drm_panel *panel)
+{
+	struct lvds_panel *lvds = to_lvds_panel(panel);
+
+	if (!lvds->enabled)
+		return 0;
+
+	backlight_disable(lvds->backlight);
+	lvds->enabled = false;
+
+	return 0;
+}
+
 static int lvds_panel_unprepare(struct drm_panel *panel)
 {
 	struct lvds_panel *lvds = to_lvds_panel(panel);
+
+	if (!lvds->prepared)
+		return 0;
 
 	gpiod_set_value(lvds->lcd_stb_gpio, 0);
 	mdelay(100);
 	gpiod_set_value(lvds->lcd_en_gpio, 0);
 	gpiod_set_value(lvds->lcd_rst_gpio, 0);
+
+	lvds->prepared = false;
 
 	return 0;
 }
@@ -80,6 +104,9 @@ static int lvds_panel_unprepare(struct drm_panel *panel)
 static int lvds_panel_prepare(struct drm_panel *panel)
 {
 	struct lvds_panel *lvds = to_lvds_panel(panel);
+
+	if (lvds->prepared)
+		return 0;
 
 	gpiod_set_value(lvds->lcd_stb_gpio, 0);
 	mdelay(50);
@@ -95,6 +122,21 @@ static int lvds_panel_prepare(struct drm_panel *panel)
 
 	gpiod_set_value(lvds->lcd_stb_gpio, 1);
 	mdelay(20);
+
+	lvds->prepared = true;
+
+	return 0;
+}
+
+static int lvds_panel_enable(struct drm_panel *panel)
+{
+	struct lvds_panel *lvds = to_lvds_panel(panel);
+
+	if (lvds->enabled)
+		return 0;
+
+	backlight_enable(lvds->backlight);
+	lvds->enabled = true;
 
 	return 0;
 }
@@ -128,8 +170,10 @@ static int lvds_panel_get_modes(struct drm_panel *panel)
 }
 
 static const struct drm_panel_funcs lvds_panel_funcs = {
+	.disable = lvds_panel_disable,
 	.unprepare = lvds_panel_unprepare,
 	.prepare = lvds_panel_prepare,
+	.enable = lvds_panel_enable,
 	.get_modes = lvds_panel_get_modes,
 };
 
@@ -184,6 +228,12 @@ static int avd_lvds_panel_probe(struct platform_device *pdev)
 	}
 
 	lvds->data_mirror = of_property_read_bool(np, "data-mirror");
+
+	lvds->backlight = devm_of_find_backlight(dev);
+	if (IS_ERR(lvds->backlight)) {
+		dev_err(dev, "failed to get backlight\n");
+		return PTR_ERR(lvds->backlight);
+	}
 
 	// VESA 8-bit format
 	lvds->bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG;
