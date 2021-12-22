@@ -2628,7 +2628,7 @@ static int ap1302_parse_of(struct ap1302_device *ap1302)
 	ap1302->width_factor = num_sensors;
 
 	/* Regulator */
-	ap1302->supply = devm_regulator_get_optional(ap1302->dev, "power");
+	ap1302->supply = regulator_get_optional(ap1302->dev, "power");
 	if (IS_ERR(ap1302->supply)) {
 		if (PTR_ERR(ap1302->supply) == -ENODEV)
 			ap1302->supply = NULL;
