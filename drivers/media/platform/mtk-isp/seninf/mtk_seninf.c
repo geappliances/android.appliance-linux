@@ -91,6 +91,7 @@ enum mtk_seninf_format_flag {
 
 enum mtk_seninf_version {
 	SENINF_20,
+        SENINF_30,
 	SENINF_50,
 };
 
@@ -725,7 +726,7 @@ static void mtk_seninf_mux_setup(struct mtk_seninf_mux *mux,
 	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
 	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_SRC_SEL,
 			      SENINF_MIPI_SENSOR);
-	if (conf->seninf_version == SENINF_50)
+	if (conf->seninf_version != SENINF_20)
 		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL_EXT,
 				      SENINF_SRC_SEL_EXT, SENINF_NORMAL_MODEL);
 
@@ -744,7 +745,7 @@ static void mtk_seninf_mux_setup(struct mtk_seninf_mux *mux,
 		break;
 	}
 
-	if (conf->seninf_version == SENINF_50)
+	if (conf->seninf_version != SENINF_20)
 		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL_EXT,
 				      SENINF_PIX_SEL_EXT, pix_sel_ext);
 	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_PIX_SEL, pix_sel);
@@ -792,6 +793,9 @@ static void mtk_seninf_top_mux_setup(struct mtk_seninf *priv,
 
 	if (conf->seninf_version == SENINF_50)
 		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76543210);
+	else if (conf->seninf_version == SENINF_30)
+		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76541010);
+
 }
 
 static void seninf_enable_test_pattern(struct mtk_seninf *priv,
@@ -821,7 +825,7 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv,
 
 	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_EN, 1);
 	mtk_seninf_input_update(input, SENINF_CTRL, SENINF_SRC_SEL, 1);
-	if (conf->seninf_version == SENINF_50)
+	if (conf->seninf_version != SENINF_20)
 		mtk_seninf_input_update(input, SENINF_CTRL_EXT,
 					SENINF_TESTMDL_IP_EN, 1);
 
@@ -852,7 +856,7 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv,
 	}
 
 	mtk_seninf_input_write(input, SENINF_TG1_TM_CLK, 0x8);
-	if (conf->seninf_version == SENINF_50)
+	if (conf->seninf_version != SENINF_20)
 		mtk_seninf_input_write(input, SENINF_TG1_TM_STP, 0x1);
 
 	/* Set top mux */
@@ -861,7 +865,7 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv,
 	mtk_seninf_write(priv, SENINF_TOP_MUX_CTRL, val);
 
 	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_MUX_EN, 1);
-	if (conf->seninf_version == SENINF_50)
+	if (conf->seninf_version != SENINF_20)
 		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL_EXT,
 				      SENINF_SRC_SEL_EXT, SENINF_TEST_MODEL);
 	mtk_seninf_mux_update(mux, SENINF_MUX_CTRL, SENINF_SRC_SEL, 1);
@@ -881,7 +885,7 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv,
 		break;
 	}
 
-	if (conf->seninf_version == SENINF_50)
+	if (conf->seninf_version != SENINF_20)
 		mtk_seninf_mux_update(mux, SENINF_MUX_CTRL_EXT,
 				      SENINF_PIX_SEL_EXT, pix_sel_ext);
 
@@ -908,7 +912,7 @@ static void seninf_enable_test_pattern(struct mtk_seninf *priv,
 			     ~(SENINF_MUX_CTRL_SENINF_IRQ_SW_RST_MASK |
 			        SENINF_MUX_CTRL_SENINF_MUX_SW_RST_MASK));
 
-	if (conf->seninf_version == SENINF_50)
+	if (conf->seninf_version != SENINF_20)
 		mtk_seninf_write(priv, SENINF_TOP_CAM_MUX_CTRL, 0x76540010);
 
 	dev_dbg(priv->dev, "%s: OK\n", __func__);
@@ -1161,7 +1165,7 @@ static int seninf_init_cfg(struct v4l2_subdev *sd,
 	 * pads connected to CAMSV 1:1 (skipping the first two source pads
 	 * connected to the CAM instances).
 	 */
-	skip_outputs = priv->conf->seninf_version == SENINF_20 ? 0 : 2;
+	skip_outputs = priv->conf->seninf_version == SENINF_50 ? 2 : 0;
 	routing.num_routes = priv->conf->nb_outputs - skip_outputs;
 
 	for (i = 0; i < routing.num_routes; i++) {
@@ -1782,10 +1786,11 @@ static const struct mtk_seninf_conf seninf_8167_conf = {
 };
 
 static const struct mtk_seninf_conf seninf_8365_conf = {
-	.seninf_version = SENINF_50,
-	.model = "mtk-camsys-5.0",
+	.seninf_version = SENINF_30,
+	.model = "mtk-camsys-3.0",
 	.csi2_rx_type = MTK_SENINF_CSI2_RX_CSI2,
 	.nb_inputs = 4,
+	.nb_muxes = 6,
 	.nb_outputs = 4,
 	.nb_phy = 4,
 };
