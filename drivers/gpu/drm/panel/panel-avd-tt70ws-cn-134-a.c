@@ -46,7 +46,7 @@ struct avd_tt_panel {
 	struct gpio_desc *vdden_gpio;
 	struct gpio_desc *iovccen_gpio;
 	struct gpio_desc *reset_gpio;
-	struct gpio_desc *stb_gpio;
+	struct gpio_desc *stbyb_gpio;
 	struct gpio_desc *bl_gpio;
 
 	struct backlight_device *backlight;
@@ -187,7 +187,7 @@ static int avd_tt_panel_unprepare(struct drm_panel *panel)
 	}
 
 	gpiod_set_value_cansleep(avd_tt->reset_gpio, 0);
-	gpiod_set_value_cansleep(avd_tt->stb_gpio, 0);
+	gpiod_set_value_cansleep(avd_tt->stbyb_gpio, 0);
 	gpiod_set_value_cansleep(avd_tt->iovccen_gpio, 0);
 	gpiod_set_value_cansleep(avd_tt->vdden_gpio, 0);
 	gpiod_set_value_cansleep(avd_tt->bl_gpio, 0);
@@ -234,7 +234,7 @@ static int avd_tt_panel_prepare(struct drm_panel *panel)
 	gpiod_set_value_cansleep(avd_tt->bl_gpio, 1);
 	gpiod_set_value_cansleep(avd_tt->iovccen_gpio, 1);
 	gpiod_set_value_cansleep(avd_tt->vdden_gpio, 1);
-	gpiod_set_value_cansleep(avd_tt->stb_gpio, 1);
+	gpiod_set_value_cansleep(avd_tt->stbyb_gpio, 1);
 	msleep(20);
 	gpiod_set_value_cansleep(avd_tt->reset_gpio, 1);
 	msleep(20);
@@ -331,7 +331,7 @@ static int avd_tt_panel_add(struct avd_tt_panel *avd_tt)
 	}
 
 
-	avd_tt->iovccen_gpio = devm_gpiod_get(dev, "iovccen",
+	avd_tt->iovccen_gpio = devm_gpiod_get_optional(dev, "iovccen",
 						 GPIOD_OUT_HIGH);
 	if (IS_ERR(avd_tt->iovccen_gpio)) {
 		dev_err(dev, "cannot get iovccen-gpios %ld\n",
@@ -339,7 +339,7 @@ static int avd_tt_panel_add(struct avd_tt_panel *avd_tt)
 		return PTR_ERR(avd_tt->iovccen_gpio);
 	}
 
-	avd_tt->vdden_gpio = devm_gpiod_get(dev, "vdden",
+	avd_tt->vdden_gpio = devm_gpiod_get_optional(dev, "vdden",
 						 GPIOD_OUT_HIGH);
 	if (IS_ERR(avd_tt->vdden_gpio)) {
 		dev_err(dev, "cannot get vdden-gpios %ld\n",
@@ -347,15 +347,15 @@ static int avd_tt_panel_add(struct avd_tt_panel *avd_tt)
 		return PTR_ERR(avd_tt->vdden_gpio);
 	}
 
-	avd_tt->stb_gpio = devm_gpiod_get(dev, "stb",
+	avd_tt->stbyb_gpio = devm_gpiod_get(dev, "stbyb",
 						 GPIOD_OUT_HIGH);
-	if (IS_ERR(avd_tt->stb_gpio)) {
-		dev_err(dev, "cannot get stb-gpios %ld\n",
-			PTR_ERR(avd_tt->stb_gpio));
-		return PTR_ERR(avd_tt->stb_gpio);
+	if (IS_ERR(avd_tt->stbyb_gpio)) {
+		dev_err(dev, "cannot get stbyb-gpios %ld\n",
+			PTR_ERR(avd_tt->stbyb_gpio));
+		return PTR_ERR(avd_tt->stbyb_gpio);
 	}
 
-	avd_tt->bl_gpio = devm_gpiod_get(dev, "bl",
+	avd_tt->bl_gpio = devm_gpiod_get_optional(dev, "bl",
 						 GPIOD_OUT_HIGH);
 	if (IS_ERR(avd_tt->bl_gpio)) {
 		dev_err(dev, "cannot get bl-gpios %ld\n",
