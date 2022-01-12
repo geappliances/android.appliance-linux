@@ -252,6 +252,10 @@ static int mtk_camsv30_runtime_suspend(struct device *dev)
 static int mtk_camsv30_runtime_resume(struct device *dev)
 {
 	struct mtk_cam_dev *cam_dev = dev_get_drvdata(dev);
+	struct mtk_cam_video_device *vdev = &cam_dev->vdev;
+	const struct v4l2_pix_format_mplane *fmt = &vdev->format;
+	struct vb2_queue *vbq = &vdev->vbq;
+	struct mtk_cam_dev_buffer *buf;
 	int ret;
 
 	if (cam_dev->larb_cam != NULL) {
@@ -266,6 +270,23 @@ static int mtk_camsv30_runtime_resume(struct device *dev)
 	if (ret) {
 		dev_err(dev, "failed to enable clock:%d\n", ret);
 		return ret;
+	}
+
+	if (vb2_is_streaming(vbq)) {
+		mutex_lock(&cam_dev->protect_mutex);
+
+		mtk_camsv30_setup(cam_dev, fmt->width, fmt->height,
+				  fmt->plane_fmt[0].bytesperline, vdev->fmtinfo->code);
+
+		buf = list_last_entry(&cam_dev->buf_list,
+				      struct mtk_cam_dev_buffer,
+				      list);
+		if (buf)
+			mtk_camsv30_update_buffers_add(cam_dev, buf);
+
+		mtk_camsv30_cmos_vf_hw_enable(cam_dev, vdev->fmtinfo->packed);
+
+		mutex_unlock(&cam_dev->protect_mutex);
 	}
 
 	return 0;
