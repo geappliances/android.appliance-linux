@@ -8,7 +8,7 @@
 
 
 &i2c2 {
-	camera@3c {
+	camera@3d {
 		status = "disabled";
 	};
 };
