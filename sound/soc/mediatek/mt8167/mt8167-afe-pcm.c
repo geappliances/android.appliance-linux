@@ -3434,6 +3434,7 @@ static int mt8167_afe_pcm_dev_probe(struct platform_device *pdev)
 	struct mtk_afe *afe;
 	struct resource *res;
 	struct device_node *np = pdev->dev.of_node;
+	(void)mt8167_afe_backup_list;
 
 	afe = devm_kzalloc(&pdev->dev, sizeof(*afe), GFP_KERNEL);
 	if (!afe)
