@@ -637,18 +637,6 @@ err0:
 	return ret;
 }
 
-static int mt_usb_remove(struct platform_device *pdev)
-{
-	struct mt_usb11_glue *glue = platform_get_drvdata(pdev);
-
-	musbfsh_put_id(&pdev->dev, glue->musbfsh->id);
-	platform_device_del(glue->musbfsh);
-	platform_device_put(glue->musbfsh);
-	kfree(glue);
-
-	return 0;
-}
-
 static struct platform_driver mt_usb11_driver = {
 	.remove = __exit_p(mt_usb_remove),
 	.probe = mt_usb11_probe,
