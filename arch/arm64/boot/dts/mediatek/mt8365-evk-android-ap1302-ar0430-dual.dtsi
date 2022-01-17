@@ -11,6 +11,29 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/pinctrl/mt8365-pinfunc.h>
 
+&{/} {
+
+	cam0_pdn: cam0-pdn-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "cam0_pdn";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		gpio = <&pio 105 0>;
+		startup-delay-us = <18000>;
+		enable-active-high;
+	};
+
+	cam1_pdn: cam1-pdn-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "cam1_pdn";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		gpio = <&pio 107 0>;
+		startup-delay-us = <18000>;
+		enable-active-high;
+	};
+};
+
 &reserved_memory {
 	#address-cells = <2>;
 	#size-cells = <2>;
@@ -59,7 +82,8 @@
 		assigned-clock-parents = <&topckgen CLK_TOP_USB20_192M_D4>;
 
 		reset-gpios = <&pio 106 GPIO_ACTIVE_LOW>;
-		standby-gpios = <&pio 105 GPIO_ACTIVE_LOW>;
+
+		power-supply = <&cam0_pdn>;
 
 		orientation = <0>;
 		rotation = <0>;
@@ -101,7 +125,8 @@
 		assigned-clock-parents = <&topckgen CLK_TOP_USB20_192M_D4>;
 
 		reset-gpios = <&pio 108 GPIO_ACTIVE_LOW>;
-		standby-gpios = <&pio 107 GPIO_ACTIVE_LOW>;
+
+		power-supply = <&cam1_pdn>;
 
 		orientation = <0>;
 		rotation = <0>;
