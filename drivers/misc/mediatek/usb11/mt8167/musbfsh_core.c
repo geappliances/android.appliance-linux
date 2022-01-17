@@ -1824,6 +1824,7 @@ static const struct dev_pm_ops musbfsh_dev_pm_ops = {
 #define MUSBFSH_DEV_PM_OPS (&musbfsh_dev_pm_ops)
 #else
 #define	MUSBFSH_DEV_PM_OPS	NULL
+#define mt_usb11_clock_prepare()
 #endif
 
 static struct platform_driver musbfsh_driver = {
