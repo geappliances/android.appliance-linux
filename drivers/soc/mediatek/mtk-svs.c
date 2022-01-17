@@ -1546,7 +1546,7 @@ static int svs_resource_setup(struct mtk_svs *svs)
 	return 0;
 }
 
-static int svs_suspend(struct device *dev)
+static int __maybe_unused svs_suspend(struct device *dev)
 {
 	struct mtk_svs *svs = dev_get_drvdata(dev);
 	const struct svs_platform *svsp = svs->platform;
@@ -1588,7 +1588,7 @@ static int svs_suspend(struct device *dev)
 	return 0;
 }
 
-static int svs_resume(struct device *dev)
+static int __maybe_unused svs_resume(struct device *dev)
 {
 	struct mtk_svs *svs = dev_get_drvdata(dev);
 	const struct svs_platform *svsp = svs->platform;
