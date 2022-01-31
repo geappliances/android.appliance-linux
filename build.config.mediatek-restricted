@@ -1,6 +1,6 @@
 [ -n "${MTK_RESTRICTED_BUILD_CONFIG_INCLUDED}" ] && return; MTK_RESTRICTED_BUILD_CONFIG_INCLUDED="y"
 
-. ${ROOT_DIR}/src/build.config.mtk
+. ${ROOT_DIR}/${KERNEL_DIR}/build.config.mtk
 
 # Build restricted kernel modules
 # These require an NDA from MediaTek in order to have access
