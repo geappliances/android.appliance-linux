@@ -42,7 +42,7 @@ function rebuild_for_mt7663() {
 }
 
 function install_restricted_modules() {
-  mkdir "${COMMON_OUT_DIR}/kernel-restricted"
+  mkdir -p "${COMMON_OUT_DIR}/kernel-restricted"
   pushd ${MODULES_STAGING_DIR}
   for MODULE in ${RESTRICTED_MODULES_FILES}; do
     find . -type f -name "${MODULE}" \
