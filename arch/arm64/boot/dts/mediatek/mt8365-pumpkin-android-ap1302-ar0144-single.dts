@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2022 Baylibre, SAS
+ * Author: Florian Sylvestre <fsylvestrebaylibre.com>
+ */
+
+#include "mt8365-pumpkin-android-ap1302-ar0144-dual.dtsi"
+
+&i2c2 {
+	camera@3c {
+		sensors {
+			sensor@1 {
+				status = "disabled";
+			};
+		};
+	};
+};
