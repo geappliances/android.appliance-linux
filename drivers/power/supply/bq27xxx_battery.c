@@ -7,6 +7,7 @@
  * Copyright (C) 2010-2011 Lars-Peter Clausen <lars@metafoo.de>
  * Copyright (C) 2011 Pali Rohár <pali@kernel.org>
  * Copyright (C) 2017 Liam Breck <kernel@networkimprov.net>
+ * Copyright (c) 2022 Baylibre SAS Riadh Ghaddab <rghaddab@baylibre.com>
  *
  * Based on a previous work by Copyright (C) 2008 Texas Instruments, Inc.
  *
@@ -39,6 +40,7 @@
  * https://www.ti.com/product/bq27z561
  * https://www.ti.com/product/bq28z610
  * https://www.ti.com/product/bq34z100-g1
+ * https://www.ti.com/product/bq34110
  */
 
 #include <linux/device.h>
@@ -79,6 +81,23 @@
 #define BQ27Z561_FLAG_FDC	BIT(4) /* Battery fully discharged */
 #define BQ27Z561_FLAG_FC	BIT(5) /* Battery fully charged */
 #define BQ27Z561_FLAG_DIS_CH	BIT(6) /* Battery is discharging */
+
+/* BQ34110 has different layout for Flags register */
+#define BQ34110_FLAG_DSG	BIT(0)
+#define BQ34110_FLAG_CHG	BIT(1)
+#define BQ34110_FLAG_TDA	BIT(2)
+#define BQ34110_FLAG_TCA	BIT(3)
+#define BQ34110_FLAG_FC		BIT(4)
+#define BQ34110_FLAG_FD		BIT(5)
+#define BQ34110_FLAG_CHGINH	BIT(6)
+#define BQ34110_FLAG_SLEEP	BIT(7)
+#define BQ34110_FLAG_BATLOW	BIT(8)
+#define BQ34110_FLAG_BATHIGH	BIT(9)
+#define BQ34110_FLAG_OTD	BIT(10)
+#define BQ34110_FLAG_OTC	BIT(11)
+#define BQ34110_FLAG_UTD	BIT(12)
+#define BQ34110_FLAG_UTC	BIT(13)
+#define BQ34110_FLAG_SOCLOW	BIT(14)
 
 /* control register params */
 #define BQ27XXX_SEALED			0x20
@@ -497,6 +516,31 @@ static u8
 		[BQ27XXX_REG_DCAP] = 0x3c,
 		[BQ27XXX_REG_AP] = 0x22,
 		BQ27XXX_DM_REG_ROWS,
+	},
+
+	bq34110_regs[BQ27XXX_REG_MAX] = {
+		[BQ27XXX_REG_CTRL] = 0x00,
+		[BQ27XXX_REG_TEMP] = 0x06,
+		[BQ27XXX_REG_INT_TEMP] = 0x28,
+		[BQ27XXX_REG_VOLT] = 0x08,
+		[BQ27XXX_REG_AI] = 0x14,
+		[BQ27XXX_REG_FLAGS] = 0x0a,
+		[BQ27XXX_REG_TTE] = 0x16,
+		[BQ27XXX_REG_TTF] = 0x18,
+		[BQ27XXX_REG_TTES] = INVALID_REG_ADDR,
+		[BQ27XXX_REG_TTECP] = INVALID_REG_ADDR,
+		[BQ27XXX_REG_NAC] = 0x0c,
+		[BQ27XXX_REG_FCC] = 0x12,
+		[BQ27XXX_REG_CYCT] = 0x2a,
+		[BQ27XXX_REG_AE] = INVALID_REG_ADDR,
+		[BQ27XXX_REG_SOC] = 0x2c,
+		[BQ27XXX_REG_DCAP] = 0x3c,
+		[BQ27XXX_REG_AP] = 0x24,
+		[BQ27XXX_DM_CTRL] = INVALID_REG_ADDR,
+		[BQ27XXX_DM_CLASS] = INVALID_REG_ADDR,
+		[BQ27XXX_DM_BLOCK] = INVALID_REG_ADDR,
+		[BQ27XXX_DM_DATA] = INVALID_REG_ADDR,
+		[BQ27XXX_DM_CKSUM] = INVALID_REG_ADDR,
 	};
 
 static enum power_supply_property bq27000_props[] = {
@@ -792,6 +836,26 @@ static enum power_supply_property bq34z100_props[] = {
 	POWER_SUPPLY_PROP_MANUFACTURER,
 };
 
+static enum power_supply_property bq34110_props[] = {
+	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_PRESENT,
+	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
+	POWER_SUPPLY_PROP_TEMP,
+	POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW,
+	POWER_SUPPLY_PROP_TIME_TO_FULL_NOW,
+	POWER_SUPPLY_PROP_TECHNOLOGY,
+	POWER_SUPPLY_PROP_CHARGE_FULL,
+	POWER_SUPPLY_PROP_CHARGE_NOW,
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_CYCLE_COUNT,
+	POWER_SUPPLY_PROP_POWER_AVG,
+	POWER_SUPPLY_PROP_HEALTH,
+	POWER_SUPPLY_PROP_MANUFACTURER,
+};
+
 struct bq27xxx_dm_reg {
 	u8 subclass_id;
 	u8 offset;
@@ -836,6 +900,7 @@ static struct bq27xxx_dm_reg bq27500_dm_regs[] = {
 #define bq27542_dm_regs 0
 #define bq27546_dm_regs 0
 #define bq27742_dm_regs 0
+#define bq34110_dm_regs 0
 
 #if 0 /* not yet tested */
 static struct bq27xxx_dm_reg bq27545_dm_regs[] = {
@@ -900,6 +965,8 @@ static struct bq27xxx_dm_reg bq27621_dm_regs[] = {
 #define BQ27XXX_O_SOC_SI	BIT(6) /* SoC is single register */
 #define BQ27XXX_O_HAS_CI	BIT(7) /* has Capacity Inaccurate flag */
 #define BQ27XXX_O_MUL_CHEM	BIT(8) /* multiple chemistries supported */
+#define BQ34110_O_BITS		BIT(6)
+#define BQ27XXX_O_UTDC		BIT(7) /* has UTC/UTD undertemperature flags */
 
 #define BQ27XXX_DATA(ref, key, opt) {		\
 	.opts = (opt),				\
@@ -948,6 +1015,7 @@ static struct {
 	[BQ28Z610]  = BQ27XXX_DATA(bq28z610,  0         , BQ27Z561_O_BITS),
 	[BQ34Z100]  = BQ27XXX_DATA(bq34z100,  0         , BQ27XXX_O_OTDC | BQ27XXX_O_SOC_SI | \
 							  BQ27XXX_O_HAS_CI | BQ27XXX_O_MUL_CHEM),
+	[BQ34110]   = BQ27XXX_DATA(bq34110,   0         , BQ34110_O_BITS | BQ27XXX_O_OTDC  | BQ27XXX_O_UTDC),
 };
 
 static DEFINE_MUTEX(bq27xxx_list_lock);
@@ -1636,8 +1704,12 @@ static int bq27xxx_battery_read_time(struct bq27xxx_device_info *di, u8 reg)
  */
 static bool bq27xxx_battery_overtemp(struct bq27xxx_device_info *di, u16 flags)
 {
-	if (di->opts & BQ27XXX_O_OTDC)
-		return flags & (BQ27XXX_FLAG_OTC | BQ27XXX_FLAG_OTD);
+	if (di->opts & BQ27XXX_O_OTDC) {
+		if (di->opts & BQ34110_O_BITS)
+			return flags & (BQ34110_FLAG_OTC | BQ34110_FLAG_OTD);
+		else
+			return flags & (BQ27XXX_FLAG_OTC | BQ27XXX_FLAG_OTD);
+	}
         if (di->opts & BQ27XXX_O_UTOT)
 		return flags & BQ27XXX_FLAG_OT;
 
@@ -1651,6 +1723,8 @@ static bool bq27xxx_battery_undertemp(struct bq27xxx_device_info *di, u16 flags)
 {
 	if (di->opts & BQ27XXX_O_UTOT)
 		return flags & BQ27XXX_FLAG_UT;
+	else if (di->opts & BQ27XXX_O_UTDC)
+		return flags & (BQ34110_FLAG_UTC | BQ34110_FLAG_UTD);
 
 	return false;
 }
@@ -1664,6 +1738,8 @@ static bool bq27xxx_battery_dead(struct bq27xxx_device_info *di, u16 flags)
 		return flags & (BQ27000_FLAG_EDV1 | BQ27000_FLAG_EDVF);
 	else if (di->opts & BQ27Z561_O_BITS)
 		return flags & BQ27Z561_FLAG_FDC;
+	else if (di->opts & BQ34110_O_BITS)
+		return flags & BQ34110_FLAG_FD;
 	else
 		return flags & (BQ27XXX_FLAG_SOC1 | BQ27XXX_FLAG_SOCF);
 }
@@ -1825,6 +1901,13 @@ static int bq27xxx_battery_status(struct bq27xxx_device_info *di,
 			status = POWER_SUPPLY_STATUS_DISCHARGING;
 		else
 			status = POWER_SUPPLY_STATUS_CHARGING;
+	} else if (di->opts & BQ34110_O_BITS) {
+		if (di->cache.flags & BQ34110_FLAG_FC)
+			status = POWER_SUPPLY_STATUS_FULL;
+		else if (di->cache.flags & BQ34110_FLAG_CHG)
+			status = POWER_SUPPLY_STATUS_CHARGING;
+		else
+			status = POWER_SUPPLY_STATUS_DISCHARGING;
 	} else {
 		if (di->cache.flags & BQ27XXX_FLAG_FC)
 			status = POWER_SUPPLY_STATUS_FULL;
@@ -1861,6 +1944,15 @@ static int bq27xxx_battery_capacity_level(struct bq27xxx_device_info *di,
 		if (di->cache.flags & BQ27Z561_FLAG_FC)
 			level = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
 		else if (di->cache.flags & BQ27Z561_FLAG_FDC)
+			level = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+		else
+			level = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+	} else if (di->opts & BQ34110_O_BITS) {
+		if (di->cache.flags & BQ34110_FLAG_FC)
+			level = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+		else if (di->cache.flags & BQ34110_FLAG_SOCLOW)
+			level = POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+		else if (di->cache.flags & BQ34110_FLAG_FD)
 			level = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 		else
 			level = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
