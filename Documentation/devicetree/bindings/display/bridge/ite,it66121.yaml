@@ -46,6 +46,9 @@ properties:
     maxItems: 1
     description: enable pclk dual edge mode.
 
+  "#sound-dai-cells":
+    const: 0
+
   port:
     type: object
 
