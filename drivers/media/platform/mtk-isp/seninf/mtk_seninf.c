@@ -1370,6 +1370,7 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
 	const struct mtk_seninf_conf *conf = priv->conf;
 	struct mtk_seninf_async_subdev *s_asd =
 		container_of(asd, struct mtk_seninf_async_subdev, asd);
+	struct device_link *link;
 	int ret;
 
 	dev_dbg(priv->dev, "%s bound to SENINF port %u\n", sd->entity.name,
@@ -1379,12 +1380,27 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
 		struct mtk_seninf_input *input = s_asd->input;
 
 		input->subdev = sd;
+
+		link = device_link_add(priv->dev, sd->dev, DL_FLAG_STATELESS);
+		if (!link) {
+			dev_err(priv->dev,
+				"Failed to create device link to output %s\n", sd->name);
+			return -EINVAL;
+		}
+
 		ret = v4l2_create_fwnode_links_to_pad(sd, &priv->pads[input->pad], 0);
-	} else
+	} else {
+		link = device_link_add(sd->dev, priv->dev, DL_FLAG_STATELESS);
+		if (!link) {
+			dev_err(priv->dev,
+				"Failed to create device link to source %s\n", sd->name);
+			return -EINVAL;
+		}
+
 		ret = v4l2_create_fwnode_links_to_pad(&priv->subdev,
 					&sd->entity.pads[0],
 					MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED);
-
+	}
 	if (ret)
 		dev_err(priv->dev, "Failed to create links between SENINF port %u and %s (%d)\n",
 			s_asd->port, sd->entity.name, ret);
@@ -1646,6 +1662,8 @@ static int seninf_pm_resume(struct device *dev)
 
 static const struct dev_pm_ops runtime_pm_ops = {
 	SET_RUNTIME_PM_OPS(seninf_pm_suspend, seninf_pm_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
 };
 
 static int seninf_remove(struct platform_device *pdev)
