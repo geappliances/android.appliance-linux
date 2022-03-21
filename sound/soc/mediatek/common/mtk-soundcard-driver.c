@@ -31,7 +31,7 @@ int set_card_codec_info(struct snd_soc_card *card)
 
 		num_codecs = of_get_child_count(dl_node);
 
-		dev_err(dev, "dai_link_name %s, num_codecs %d\n", dai_link_name, num_codecs);
+		dev_dbg(dev, "dai_link_name %s, num_codecs %d\n", dai_link_name, num_codecs);
 
 		/* Allocate the snd_soc_dai_link_component array that will be
 		 * used to dynamically add the list of codecs to the static
@@ -66,7 +66,7 @@ int set_card_codec_info(struct snd_soc_card *card)
 				return ret;
 			}
 
-			dev_err(dev, "dlc->dai_name %s\n", dlc->dai_name);
+			dev_dbg(dev, "dlc->dai_name %s\n", dlc->dai_name);
 
 			dlc++;
 		}

@@ -216,7 +216,7 @@ static struct snd_soc_card mt8516_vesper_card = {
 	.num_links = ARRAY_SIZE(mt8516_vesper_dais),
 };
 
-static int set_card_codec_info(struct snd_soc_card *card)
+static int set_card_codec_tdm_info(struct snd_soc_card *card)
 {
 	struct snd_soc_dai_link_component *dai_link_codecs, *dlc;
 	struct device_node *dl_node, *c_node;
@@ -349,9 +349,9 @@ static int mt8516_vesper_dev_probe(struct platform_device *pdev)
 	int ret, i;
 
 	card->dev = &pdev->dev;
-	ret = set_card_codec_info(card);
+	ret = set_card_codec_tdm_info(card);
 	if (ret) {
-		dev_err(&pdev->dev, "%s set_card_codec_info failed %d\n",
+		dev_err(&pdev->dev, "%s set_card_codec_tdm_info failed %d\n",
 		__func__, ret);
 		return ret;
 	}
