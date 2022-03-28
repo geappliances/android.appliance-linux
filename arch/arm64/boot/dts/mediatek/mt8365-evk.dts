@@ -144,6 +144,11 @@
 		remoteproc = <&vpu0>;
 		iova = <0 0x60000000 0 0x10000000>;
 	};
+
+	mtk_fsource: fsource {
+		compatible = "mtk-fsource";
+		vfsource-supply = <&mt6357_vefuse_reg>;
+	};
 };
 
 &mt6357codec {

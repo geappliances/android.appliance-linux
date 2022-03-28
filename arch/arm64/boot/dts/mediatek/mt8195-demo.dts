@@ -7,7 +7,10 @@
 #include "mt8195.dtsi"
 #include "mt6359.dtsi"
 #include <dt-bindings/gpio/gpio.h>
-
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/pinctrl/mt8195-pinfunc.h>
+#include <dt-bindings/usb/pd.h>
 
 / {
 	model = "MediaTek MT8195 demo board";
@@ -58,6 +61,24 @@
 			method = "smc";
 		};
 	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+		input-name = "gpio-keys";
+
+		volume-up {
+			wakeup-source;
+			debounce-interval = <100>;
+			gpios = <&pio 106 GPIO_ACTIVE_LOW>;
+			label = "volume_up";
+			linux,code = <KEY_VOLUMEUP>;
+		};
+	};
+
+	mtk_fsource: fsource {
+		compatible = "mtk-fsource";
+		vfsource-supply = <&mt6359_vefuse_ldo_reg>;
+	};
 };
 
 &uart0 {
@@ -107,17 +128,58 @@
 	pinctrl-0 = <&i2c2_pins>;
 	pinctrl-names = "default";
 	status = "okay";
+
+	it5205fn: it5205fn@48 {
+		compatible = "mediatek,it5205fn";
+		reg = <0x48>;
+		type3v3-supply = <&mt6359_vibr_ldo_reg>;
+		status = "okay";
+	};
 };
 
 &i2c6 {
 	clock-frequency = <400000>;
 	pinctrl-0 = <&i2c6_pins>;
 	pinctrl-names = "default";
+	#address-cells = <1>;
+	#size-cells = <0>;
 	status = "okay";
 
 	mt6360: mt6360@34 {
 		compatible = "mediatek,mt6360";
 		reg = <0x34>;
+		pinctrl-0 = <&mt6360_pins>;
+		pinctrl-names = "default";
+
+		tcpc {
+			compatible = "mediatek,mt6360-tcpc";
+			interrupts-extended = <&pio 100 IRQ_TYPE_LEVEL_LOW>;
+			interrupt-names = "PD_IRQB";
+
+			connector {
+				compatible = "usb-c-connector";
+				label = "USB-C";
+				data-role = "dual";
+				power-role = "dual";
+				try-power-role = "sink";
+				source-pdos = <PDO_FIXED(5000, 1000, PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP)>;
+				sink-pdos = <PDO_FIXED(5000, 2000, PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP)>;
+				op-sink-microwatt = <10000000>;
+			};
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+					mt6360_ssusb_ep: endpoint {
+						remote-endpoint = <&ssusb_ep>;
+					};
+				};
+
+			};
+		};
 	};
 };
 
@@ -125,6 +187,8 @@
 	pinctrl-0 = <&spi2_pins>;
 	pinctrl-names = "default";
 	mediatek,pad-select = <0>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 	status = "okay";
 
 	spidev@0 {
@@ -138,11 +202,16 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&u3_p0_vbus>;
 	vusb33-supply = <&mt6359_vusb_ldo_reg>;
-	mediatek,force-vbus;
-	dr_mode = "peripheral";
+	dr_mode = "otg";
 	mediatek,usb3-drd;
 	usb-role-switch;
 	status = "okay";
+
+	port {
+		ssusb_ep: endpoint {
+			remote-endpoint = <&mt6360_ssusb_ep>;
+		};
+	};
 };
 
 &xhci3 {
@@ -150,10 +219,15 @@
 };
 
 &xhci0 {
+	vbus-supply = <&otg_vbus_regulator>;
 	status = "okay";
 };
 
-&u2port0 {
+&xhci1 {
+	status = "okay";
+};
+
+&u3port0 {
 	status = "okay";
 };
 
@@ -449,10 +523,37 @@
 				 <PINMUX_GPIO24__FUNC_WAKEN_1>;
 			bias-pull-up;
 		};
+
+		mt7921 {
+			pinmux = <PINMUX_GPIO65__FUNC_GPIO65>,
+				 <PINMUX_GPIO67__FUNC_GPIO67>;
+			output-high;
+		};
+	};
+
+	gpio_keys: gpio-keys {
+		pins {
+			pinmux = <PINMUX_GPIO106__FUNC_GPIO106>;
+			bias-pull-up;
+			input-enable;
+		};
+	};
+
+	mt6360_pins: mt6360-pins {
+		pins {
+			pinmux = <PINMUX_GPIO100__FUNC_GPIO100>,
+				 <PINMUX_GPIO101__FUNC_GPIO101>;
+			input-enable;
+			bias-pull-up;
+		};
 	};
 };
 
 &mt6359_vgpu11_buck_reg {
+	regulator-always-on;
+};
+
+&mt6359_vsram_others_ldo_reg {
 	regulator-always-on;
 };
 
@@ -559,6 +660,7 @@
 				regulator-max-microvolt = <1193750>;
 				regulator-enable-ramp-delay = <256>;
 				regulator-allowed-modes = <0 1 2 4>;
+				regulator-always-on;
 			};
 		};
 	};
@@ -577,6 +679,10 @@
 &pcie1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie1_pins_default>;
+	status = "okay";
+};
+
+&u3phy1 {
 	status = "okay";
 };
 

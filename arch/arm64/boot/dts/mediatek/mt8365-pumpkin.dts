@@ -102,6 +102,11 @@
 		enable-active-high;
 	};
 
+	mtk_fsource: fsource {
+		compatible = "mtk-fsource";
+		vfsource-supply = <&mt6357_vefuse_reg>;
+	};
+
 	apu@0 {
 		compatible = "mediatek,apu-drm";
 		remoteproc = <&vpu0>;
