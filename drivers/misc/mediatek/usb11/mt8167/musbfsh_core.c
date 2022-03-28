@@ -1086,7 +1086,7 @@ void musbfsh_dma_completion(struct musbfsh *musbfsh, u8 epnum, u8 transmit)
  * Init support
 */
 
-static struct musbfsh *__init
+static struct musbfsh *
 allocate_instance(struct device *dev, struct musbfsh_hdrc_config *config, void __iomem *mbase)
 {
 	struct musbfsh *musbfsh;
