@@ -1,0 +1,24 @@
+. ${ROOT_DIR}/${KERNEL_DIR}/build.config.gki.aarch64
+
+DEFCONFIG=mtk_gki_defconfig
+FRAGMENT_CONFIG=${KERNEL_DIR}/arch/arm64/configs/mtk_gki.fragment
+PRE_DEFCONFIG_CMDS="KCONFIG_CONFIG=${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/${DEFCONFIG} ${ROOT_DIR}/${KERNEL_DIR}/scripts/kconfig/merge_config.sh -m -r ${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/gki_defconfig ${ROOT_DIR}/${FRAGMENT_CONFIG}"
+POST_DEFCONFIG_CMDS="rm ${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/${DEFCONFIG}"
+
+# needed for DT overlay support
+DTC_FLAGS="-@"
+
+MAKE_GOALS="${MAKE_GOALS}
+dtbs
+"
+
+FILES="${FILES}
+arch/arm64/boot/Image
+arch/arm64/boot/dts/mediatek/mt8167*.dtb
+arch/arm64/boot/dts/mediatek/mt8183*.dtb
+arch/arm64/boot/dts/mediatek/mt8365*.dtb
+vmlinux
+"
+
+GKI_MODULES_LIST=android/gki_aarch64_mtk
+MODULES_ORDER="${GKI_MODULES_LIST}"
