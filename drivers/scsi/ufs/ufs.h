@@ -456,7 +456,6 @@ enum ufs_dev_pwr_mode {
 	UFS_ACTIVE_PWR_MODE	= 1,
 	UFS_SLEEP_PWR_MODE	= 2,
 	UFS_POWERDOWN_PWR_MODE	= 3,
-	UFS_DEEPSLEEP_PWR_MODE	= 4,
 };
 
 #define UFS_WB_BUF_REMAIN_PERCENT(val) ((val) / 10)
@@ -578,17 +577,20 @@ struct ufs_vreg_info {
 };
 
 struct ufs_dev_info {
-	bool	f_power_on_wp_en;
+	bool f_power_on_wp_en;
 	/* Keeps information if any of the LU is power on write protected */
-	bool	is_lu_power_on_wp;
+	bool is_lu_power_on_wp;
 	/* Maximum number of general LU supported by the UFS device */
-	u8	max_lu_supported;
-	u16	wmanufacturerid;
+	u8 max_lu_supported;
+	u8 wb_dedicated_lu;
+	u16 wmanufacturerid;
 	/*UFS device Product Name */
 	u8 *model;
 	u16 wspecversion;
 	u32 clk_gating_wait_us;
+	u32 d_ext_ufs_feature_sup;
 	u8 b_wb_buffer_type;
+	u32 d_wb_alloc_units;
 	bool b_rpm_dev_flush_capable;
 	u8 b_presrv_uspc_en;
 	/* UFS HPB related flag */

@@ -30,7 +30,6 @@ static const char *ufschd_ufs_dev_pwr_mode_to_string(
 	case UFS_ACTIVE_PWR_MODE:	return "ACTIVE";
 	case UFS_SLEEP_PWR_MODE:	return "SLEEP";
 	case UFS_POWERDOWN_PWR_MODE:	return "POWERDOWN";
-	case UFS_DEEPSLEEP_PWR_MODE:	return "DEEPSLEEP";
 	default:			return "UNKNOWN";
 	}
 }
@@ -41,18 +40,12 @@ static inline ssize_t ufs_sysfs_pm_lvl_store(struct device *dev,
 					     bool rpm)
 {
 	struct ufs_hba *hba = dev_get_drvdata(dev);
-	struct ufs_dev_info *dev_info = &hba->dev_info;
 	unsigned long flags, value;
 
 	if (kstrtoul(buf, 0, &value))
 		return -EINVAL;
 
 	if (value >= UFS_PM_LVL_MAX)
-		return -EINVAL;
-
-	if (ufs_pm_lvl_states[value].dev_state == UFS_DEEPSLEEP_PWR_MODE &&
-	    (!(hba->caps & UFSHCD_CAP_DEEPSLEEP) ||
-	     !(dev_info->wspecversion >= 0x310)))
 		return -EINVAL;
 
 	spin_lock_irqsave(hba->host->host_lock, flags);
@@ -191,50 +184,6 @@ static ssize_t auto_hibern8_store(struct device *dev,
 	return count;
 }
 
-static ssize_t wb_on_show(struct device *dev, struct device_attribute *attr,
-			  char *buf)
-{
-	struct ufs_hba *hba = dev_get_drvdata(dev);
-
-	return sysfs_emit(buf, "%d\n", hba->dev_info.wb_enabled);
-}
-
-static ssize_t wb_on_store(struct device *dev, struct device_attribute *attr,
-			   const char *buf, size_t count)
-{
-	struct ufs_hba *hba = dev_get_drvdata(dev);
-	unsigned int wb_enable;
-	ssize_t res;
-
-	if (!ufshcd_is_wb_allowed(hba) || ufshcd_is_clkscaling_supported(hba)) {
-		/*
-		 * If the platform supports UFSHCD_CAP_CLK_SCALING, turn WB
-		 * on/off will be done while clock scaling up/down.
-		 */
-		dev_warn(dev, "To control WB through wb_on is not allowed!\n");
-		return -EOPNOTSUPP;
-	}
-
-	if (kstrtouint(buf, 0, &wb_enable))
-		return -EINVAL;
-
-	if (wb_enable != 0 && wb_enable != 1)
-		return -EINVAL;
-
-	down(&hba->host_sem);
-	if (!ufshcd_is_user_access_allowed(hba)) {
-		res = -EBUSY;
-		goto out;
-	}
-
-	pm_runtime_get_sync(hba->dev);
-	res = ufshcd_wb_toggle(hba, wb_enable);
-	pm_runtime_put_sync(hba->dev);
-out:
-	up(&hba->host_sem);
-	return res < 0 ? res : count;
-}
-
 static DEVICE_ATTR_RW(rpm_lvl);
 static DEVICE_ATTR_RO(rpm_target_dev_state);
 static DEVICE_ATTR_RO(rpm_target_link_state);
@@ -242,7 +191,6 @@ static DEVICE_ATTR_RW(spm_lvl);
 static DEVICE_ATTR_RO(spm_target_dev_state);
 static DEVICE_ATTR_RO(spm_target_link_state);
 static DEVICE_ATTR_RW(auto_hibern8);
-static DEVICE_ATTR_RW(wb_on);
 
 static struct attribute *ufs_sysfs_ufshcd_attrs[] = {
 	&dev_attr_rpm_lvl.attr,
@@ -252,7 +200,6 @@ static struct attribute *ufs_sysfs_ufshcd_attrs[] = {
 	&dev_attr_spm_target_dev_state.attr,
 	&dev_attr_spm_target_link_state.attr,
 	&dev_attr_auto_hibern8.attr,
-	&dev_attr_wb_on.attr,
 	NULL
 };
 

@@ -28,8 +28,7 @@
 #define UFS_PWR_MODES			\
 	EM(UFS_ACTIVE_PWR_MODE)		\
 	EM(UFS_SLEEP_PWR_MODE)		\
-	EM(UFS_POWERDOWN_PWR_MODE)	\
-	EMe(UFS_DEEPSLEEP_PWR_MODE)
+	EMe(UFS_POWERDOWN_PWR_MODE)
 
 #define UFSCHD_CLK_GATING_STATES	\
 	EM(CLKS_OFF)			\
@@ -318,27 +317,6 @@ TRACE_EVENT(ufshcd_upiu,
 		__get_str(str), __get_str(dev_name),
 		__print_hex(__entry->hdr, sizeof(__entry->hdr)),
 		__print_hex(__entry->tsf, sizeof(__entry->tsf))
-	)
-);
-
-TRACE_EVENT(ufshcd_exception_event,
-
-	TP_PROTO(const char *dev_name, u16 status),
-
-	TP_ARGS(dev_name, status),
-
-	TP_STRUCT__entry(
-		__string(dev_name, dev_name)
-		__field(u16, status)
-	),
-
-	TP_fast_assign(
-		__assign_str(dev_name, dev_name);
-		__entry->status = status;
-	),
-
-	TP_printk("%s: status 0x%x",
-		__get_str(dev_name), __entry->status
 	)
 );
 
