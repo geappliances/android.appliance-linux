@@ -1429,20 +1429,22 @@ static int mtk_seninf_notifier_bound(struct v4l2_async_notifier *notifier,
 
 		input->source_sd = sd;
 
-		link = device_link_add(priv->dev, sd->dev, DL_FLAG_STATELESS);
+		link = device_link_add(priv->dev, sd->dev,
+				       DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS);
 		if (!link) {
 			dev_err(priv->dev,
-				"Failed to create device link to output %s\n", sd->name);
+				"Failed to create device link from source %s\n", sd->name);
 			return -EINVAL;
 		}
 
 		ret = v4l2_create_fwnode_links_to_pad(sd, &priv->pads[input->pad],
 					MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED);
 	} else {
-		link = device_link_add(sd->dev, priv->dev, DL_FLAG_STATELESS);
+		link = device_link_add(sd->dev, priv->dev,
+				       DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS);
 		if (!link) {
 			dev_err(priv->dev,
-				"Failed to create device link to source %s\n", sd->name);
+				"Failed to create device link to output %s\n", sd->name);
 			return -EINVAL;
 		}
 
