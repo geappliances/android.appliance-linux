@@ -302,9 +302,6 @@ static void mtk_cam_vb2_buf_queue(struct vb2_buffer *vb)
 	/* added the buffer into the tracking list */
 	list_add_tail(&buf->list, &cam->buf_list);
 
-	/* update buffer internal address */
-	(*cam->hw_functions->mtk_cam_update_buffers_add)(cam, buf);
-
 out:
 	pm_runtime_put_autosuspend(dev);
 	mutex_unlock(&cam->protect_mutex);
@@ -370,9 +367,11 @@ static int mtk_cam_vb2_start_streaming(struct vb2_queue *vq,
 				       unsigned int count)
 {
 	struct mtk_cam_dev *cam = vb2_get_drv_priv(vq);
+	struct mtk_cam_dev_buffer *buf;
 	struct mtk_cam_video_device *vdev =
 		vb2_queue_to_mtk_cam_video_device(vq);
 	struct device *dev = cam->dev;
+	const struct v4l2_pix_format_mplane *fmt = &vdev->format;
 	int ret;
 
 	/* Enable CMOS and VF */
@@ -403,9 +402,35 @@ static int mtk_cam_vb2_start_streaming(struct vb2_queue *vq,
 	ret = v4l2_subdev_call(&cam->subdev, video, s_stream, 1);
 	if (ret)
 		goto fail_no_stream;
-	mutex_unlock(&cam->op_lock);
 
+	/* Create dummy buffer */
+	cam->dummy_size = fmt->plane_fmt[0].sizeimage;
+	cam->dummy.fhaddr = dma_alloc_coherent(cam->dev,
+					       cam->dummy_size,
+					       &cam->dummy.daddr, GFP_KERNEL);
+	if (!cam->dummy.fhaddr) {
+		dev_err(cam->dev, "can't allocate dummy buffer\n");
+		ret = -ENOMEM;
+		goto fail_no_buffer;
+	}
+
+	/* update first buffer address */
+	if (list_empty(&cam->buf_list)) {
+		(*cam->hw_functions->mtk_cam_update_buffers_add)(cam, &cam->dummy);
+		cam->is_dummy_used = true;
+	} else {
+		buf = list_first_entry_or_null(&cam->buf_list,
+					       struct mtk_cam_dev_buffer,
+					       list);
+		(*cam->hw_functions->mtk_cam_update_buffers_add)(cam, buf);
+		cam->is_dummy_used = false;
+	}
+
+	mutex_unlock(&cam->op_lock);
 	return 0;
+
+fail_no_buffer:
+	v4l2_subdev_call(&cam->subdev, video, s_stream, 0);
 
 fail_no_stream:
 	cam->stream_count--;
@@ -436,6 +461,16 @@ static void mtk_cam_vb2_stop_streaming(struct vb2_queue *vq)
 	if (cam->stream_count) {
 		mutex_unlock(&cam->op_lock);
 		return;
+	}
+
+	/* Destroy dummy buffer */
+	if (cam->dummy.fhaddr) {
+		dma_free_coherent(cam->dev, cam->dummy_size,
+				  cam->dummy.fhaddr,
+				  cam->dummy.daddr);
+		memset(&cam->dummy, 0, sizeof(cam->dummy));
+		cam->dummy_size = 0;
+		cam->is_dummy_used = false;
 	}
 
 	mutex_unlock(&cam->op_lock);

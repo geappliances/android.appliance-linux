@@ -164,6 +164,10 @@ struct mtk_cam_dev {
 	struct list_head buf_list;
 
 	struct mtk_cam_hw_functions *hw_functions;
+
+	struct mtk_cam_dev_buffer dummy;
+	unsigned int dummy_size;
+	bool is_dummy_used;
 };
 
 struct mtk_cam_conf {

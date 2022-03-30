@@ -220,15 +220,30 @@ static irqreturn_t isp_irq_camsv30(int irq, void *data)
 	if (irq_status & CAMSV_IRQ_PASS1_DON) {
 		cam_dev->sequence++;
 
-		buf = list_first_entry_or_null(&cam_dev->buf_list,
-					       struct mtk_cam_dev_buffer,
-					       list);
-		if (buf) {
-			buf->v4l2_buf.sequence = cam_dev->sequence;
-			buf->v4l2_buf.vb2_buf.timestamp = ktime_get_ns();
-			vb2_buffer_done(&buf->v4l2_buf.vb2_buf,
-					VB2_BUF_STATE_DONE);
-			list_del(&buf->list);
+		if (!cam_dev->is_dummy_used) {
+			buf = list_first_entry_or_null(&cam_dev->buf_list,
+						       struct mtk_cam_dev_buffer,
+						       list);
+			if (buf) {
+				buf->v4l2_buf.sequence = cam_dev->sequence;
+				buf->v4l2_buf.vb2_buf.timestamp = ktime_get_ns();
+				vb2_buffer_done(&buf->v4l2_buf.vb2_buf,
+						VB2_BUF_STATE_DONE);
+				list_del(&buf->list);
+			}
+		}
+
+		if (list_empty(&cam_dev->buf_list)) {
+			(*cam_dev->hw_functions->mtk_cam_update_buffers_add)
+						(cam_dev, &cam_dev->dummy);
+			cam_dev->is_dummy_used = true;
+		} else {
+			buf = list_first_entry_or_null(&cam_dev->buf_list,
+						       struct mtk_cam_dev_buffer,
+						       list);
+			(*cam_dev->hw_functions->mtk_cam_update_buffers_add)
+						(cam_dev, buf);
+			cam_dev->is_dummy_used = false;
 		}
 	}
 
@@ -283,13 +298,18 @@ static int mtk_camsv30_runtime_resume(struct device *dev)
 		mutex_lock(&cam_dev->protect_mutex);
 
 		mtk_camsv30_setup(cam_dev, fmt->width, fmt->height,
-				  fmt->plane_fmt[0].bytesperline, vdev->fmtinfo->code);
+					fmt->plane_fmt[0].bytesperline, vdev->fmtinfo->code);
 
-		buf = list_last_entry(&cam_dev->buf_list,
-				      struct mtk_cam_dev_buffer,
-				      list);
-		if (buf)
+		buf = list_first_entry_or_null(&cam_dev->buf_list,
+					       struct mtk_cam_dev_buffer,
+					       list);
+		if (buf) {
 			mtk_camsv30_update_buffers_add(cam_dev, buf);
+			cam_dev->is_dummy_used = false;
+		} else {
+			mtk_camsv30_update_buffers_add(cam_dev, &cam_dev->dummy);
+			cam_dev->is_dummy_used = true;
+		}
 
 		mtk_camsv30_cmos_vf_hw_enable(cam_dev, vdev->fmtinfo->packed);
 
