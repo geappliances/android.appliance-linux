@@ -2699,9 +2699,7 @@ static int ap1302_resume(struct device *dev)
 }
 
 static const struct dev_pm_ops runtime_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
-				pm_runtime_force_resume)
-	SET_RUNTIME_PM_OPS(ap1302_suspend, ap1302_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(ap1302_suspend, ap1302_resume)
 };
 
 static int ap1302_probe(struct i2c_client *client, const struct i2c_device_id *id)
