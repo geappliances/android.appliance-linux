@@ -413,6 +413,18 @@ static const struct mtk_mdp_fmt *mtk_mdp_try_fmt_mplane(struct mtk_mdp_ctx *ctx,
 	org_w = pix_mp->width;
 	org_h = pix_mp->height;
 
+
+	/*
+	 * Use input stride as image width on input image if valid.
+	 */
+	if (V4L2_TYPE_IS_OUTPUT(f->type) &&
+		(pix_mp->plane_fmt[0].sizeimage != 0) &&
+		(pix_mp->plane_fmt[0].bytesperline > pix_mp->width)) {
+		mtk_mdp_dbg(1, "[%d] image width change: width=%d to bpl=%d\n", ctx->id,
+				pix_mp->width, pix_mp->plane_fmt[0].bytesperline);
+		pix_mp->width = pix_mp->plane_fmt[0].bytesperline;
+	}
+
 	mtk_mdp_bound_align_image(&pix_mp->width, min_w, max_w, align_w,
 				  &pix_mp->height, min_h, max_h, align_h);
 
