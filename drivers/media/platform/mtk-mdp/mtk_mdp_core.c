@@ -15,6 +15,7 @@
 #include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
+#include <linux/suspend.h>
 #include <linux/pm_runtime.h>
 #include <linux/workqueue.h>
 #include <soc/mediatek/smi.h>
@@ -117,6 +118,30 @@ void mtk_mdp_unregister_component(struct mtk_mdp_dev *mdp,
 				  struct mtk_mdp_comp *comp)
 {
 	list_del(&comp->node);
+}
+
+static int mtk_mdp_suspend_notifier(struct notifier_block *nb,
+				    unsigned long action, void *data)
+{
+	int wait_cnt = 0, vcuid;
+	struct mtk_mdp_dev *mdp =
+		container_of(nb, struct mtk_mdp_dev, pm_notifier);
+	struct device *dev = &mdp->pdev->dev;
+
+	dev_dbg(dev, "[MDP] %s ok action = %ld\n", __func__, action);
+	switch (action) {
+	case PM_SUSPEND_PREPARE:
+		dev_dbg(dev, "[MDP] suspend_notifier: suspend prepare... \n");
+		v4l2_m2m_suspend(mdp->m2m_dev);
+		dev_dbg(dev, "[MDP] suspend_notifier: suspend prepare... done\n");
+		return NOTIFY_OK;
+	case PM_POST_SUSPEND:
+		dev_dbg(dev, "[MDP] suspend_notifier: post suspend... done\n");
+		return NOTIFY_OK;
+	default:
+		return NOTIFY_DONE;
+	}
+	return NOTIFY_DONE;
 }
 
 static const struct of_device_id mtk_mdp_comp_of_match[] = {
@@ -262,6 +287,9 @@ static int mtk_mdp_probe(struct platform_device *pdev)
 
 	pm_runtime_enable(dev);
 
+	mdp->pm_notifier.notifier_call = mtk_mdp_suspend_notifier;
+	register_pm_notifier(&mdp->pm_notifier);
+
 	mdp->cmdq_client = cmdq_mbox_create(dev, 0, CMDQ_NO_TIMEOUT);
 
 	dev_dbg(dev, "mdp-%d registered successfully\n", mdp->id);
@@ -310,6 +338,7 @@ static int mtk_mdp_remove(struct platform_device *pdev)
 		mtk_mdp_comp_deinit(&pdev->dev, comp);
 	}
 
+	unregister_pm_notifier(&mdp->pm_notifier);
 	cmdq_mbox_destroy(mdp->cmdq_client);
 
 	dev_dbg(&pdev->dev, "%s driver unloaded\n", pdev->name);
@@ -319,8 +348,10 @@ static int mtk_mdp_remove(struct platform_device *pdev)
 static int __maybe_unused mtk_mdp_pm_suspend(struct device *dev)
 {
 	struct mtk_mdp_dev *mdp = dev_get_drvdata(dev);
-
+	dev_dbg(&mdp->pdev->dev, "[MDP] pm_suspend()...\n");
+	v4l2_m2m_suspend(mdp->m2m_dev);
 	mtk_mdp_clock_off(mdp);
+	dev_dbg(&mdp->pdev->dev, "[MDP] pm_suspend()... done\n");
 
 	return 0;
 }
@@ -329,7 +360,10 @@ static int __maybe_unused mtk_mdp_pm_resume(struct device *dev)
 {
 	struct mtk_mdp_dev *mdp = dev_get_drvdata(dev);
 
+	dev_dbg(&mdp->pdev->dev, "[MDP] pm_resume()...\n");
 	mtk_mdp_clock_on(mdp);
+	v4l2_m2m_resume(mdp->m2m_dev);
+	dev_dbg(&mdp->pdev->dev, "[MDP] pm_resume()... done\n");
 
 	return 0;
 }

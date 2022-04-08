@@ -171,6 +171,8 @@ struct mtk_mdp_dev {
 	struct workqueue_struct		*wdt_wq;
 	struct work_struct		wdt_work;
 	struct cmdq_client		*cmdq_client;
+
+	struct notifier_block pm_notifier;
 };
 
 /**
