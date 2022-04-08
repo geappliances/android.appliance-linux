@@ -18,6 +18,7 @@
 
 #include <linux/platform_device.h>
 #include <linux/videodev2.h>
+#include <linux/semaphore.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
@@ -407,8 +408,8 @@ struct mtk_vcodec_ctx {
  * @enc_irq: h264 encoder irq resource
  * @enc_lt_irq: vp8 encoder irq resource
  *
- * @dec_mutex: decoder hardware lock
- * @enc_mutex: encoder hardware lock.
+ * @dec_sem: decoder hardware lock
+ * @enc_sem: encoder hardware lock.
  *
  * @pm: power management control
  * @dec_capability: used to identify decode capability, ex: 4k
@@ -442,12 +443,14 @@ struct mtk_vcodec_dev {
 	int enc_irq;
 	int enc_lt_irq;
 
-	struct mutex dec_mutex;
-	struct mutex enc_mutex;
+	struct semaphore dec_sem;
+	struct semaphore enc_sem;
 
 	struct mtk_vcodec_pm pm;
 	unsigned int dec_capability;
 	unsigned int enc_capability;
+
+	struct notifier_block pm_notifier;
 };
 
 static inline struct mtk_vcodec_ctx *fh_to_ctx(struct v4l2_fh *fh)

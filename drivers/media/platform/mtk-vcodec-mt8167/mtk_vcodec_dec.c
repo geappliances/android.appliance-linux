@@ -16,6 +16,7 @@
 #include <media/v4l2-event.h>
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-dma-contig.h>
+#include <linux/delay.h>
 
 #include "mtk_vcodec_drv.h"
 #include "mtk_vcodec_dec.h"
@@ -628,14 +629,23 @@ void mtk_vdec_unlock(struct mtk_vcodec_ctx *ctx)
 {
 	struct mtk_vcodec_dev *dev = ctx->dev;
 
-	mutex_unlock(&dev->dec_mutex);
+	mtk_v4l2_debug(4, "ctx %p [%d] sem_cnt %d",
+		ctx, ctx->id, dev->dec_sem.count);
+
+	up(&dev->dec_sem);
 }
 
 void mtk_vdec_lock(struct mtk_vcodec_ctx *ctx)
 {
 	struct mtk_vcodec_dev *dev = ctx->dev;
+	int ret = -1;
 
-	mutex_lock(&dev->dec_mutex);
+	mtk_v4l2_debug(4, "ctx %p [%d] sem_cnt %d",
+		ctx, ctx->id, ctx->dev->dec_sem.count);
+
+	while (ret != 0)
+		ret = down_interruptible(&ctx->dev->dec_sem);
+	mtk_v4l2_debug(4, "lock done\n");
 }
 
 void mtk_vcodec_dec_release(struct mtk_vcodec_ctx *ctx)

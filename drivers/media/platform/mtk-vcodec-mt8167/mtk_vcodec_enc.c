@@ -17,6 +17,7 @@
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-dma-contig.h>
 #include <soc/mediatek/smi.h>
+#include <linux/delay.h>
 #include <linux/of.h>
 
 #include "mtk_vcodec_drv.h"
@@ -1750,18 +1751,17 @@ int mtk_vcodec_enc_queue_init(void *priv, struct vb2_queue *src_vq,
 
 int mtk_venc_unlock(struct mtk_vcodec_ctx *ctx)
 {
-	struct mtk_vcodec_dev *dev = ctx->dev;
-
-	mutex_unlock(&dev->enc_mutex);
+	mtk_v4l2_debug(4, "ctx %p [%d]", ctx, ctx->id);
+	up(&ctx->dev->enc_sem);
 	return 0;
 }
 
 int mtk_venc_lock(struct mtk_vcodec_ctx *ctx)
 {
-	struct mtk_vcodec_dev *dev = ctx->dev;
+	unsigned int suspend_block_cnt = 0;
 
-	mutex_lock(&dev->enc_mutex);
-	return 0;
+	mtk_v4l2_debug(4, "ctx %p [%d]", ctx, ctx->id);
+	return down_interruptible(&ctx->dev->enc_sem);
 }
 
 void mtk_vcodec_enc_release(struct mtk_vcodec_ctx *ctx)

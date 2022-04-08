@@ -24,6 +24,8 @@
 #include <media/videobuf2-dma-contig.h>
 #include <linux/pm_runtime.h>
 #include <linux/iommu.h>
+#include <linux/delay.h>
+#include <linux/suspend.h>
 
 #include "mtk_vcodec_drv.h"
 #include "mtk_vcodec_enc.h"
@@ -200,6 +202,67 @@ static const struct v4l2_file_operations mtk_vcodec_fops = {
 	.mmap		= v4l2_m2m_fop_mmap,
 };
 
+/**
+ * Suspend callbacks after user space processes are frozen
+ * Since user space processes are frozen, there is no need and cannot hold same
+ * mutex that protects lock owner while checking status.
+ * If video codec hardware is still active now, must not to enter suspend.
+ **/
+static int mtk_vcodec_enc_suspend(struct device *pDev)
+{
+	int val;
+	struct mtk_vcodec_dev *dev = dev_get_drvdata(pDev);
+
+	mtk_v4l2_debug(1, "suspending...");
+	v4l2_m2m_suspend(dev->m2m_dev_enc);
+
+	val = down_trylock(&dev->enc_sem);
+	if (val == 1) {
+		mtk_v4l2_debug(0, "suspend failed due to videocodec activity");
+		return -EBUSY;
+	}
+	up(&dev->enc_sem);
+
+	mtk_v4l2_debug(1, "suspending... done");
+
+	return 0;
+}
+
+static int mtk_vcodec_enc_resume(struct device *pDev)
+{
+	struct mtk_vcodec_dev *dev = dev_get_drvdata(pDev);
+
+	mtk_v4l2_debug(1, "resuming...");
+	v4l2_m2m_resume(dev->m2m_dev_enc);
+	mtk_v4l2_debug(1, "resuming... done");
+
+	return 0;
+}
+
+static int mtk_vcodec_enc_suspend_notifier(struct notifier_block *nb,
+					unsigned long action, void *data)
+{
+	int wait_cnt = 0;
+	int val = 0;
+	struct mtk_vcodec_dev *dev =
+		container_of(nb, struct mtk_vcodec_dev, pm_notifier);
+
+	mtk_v4l2_debug(1, "action = %ld", action);
+	switch (action) {
+	case PM_SUSPEND_PREPARE:
+		mtk_v4l2_debug(1, "suspend_notifier: suspend prepare...");
+		v4l2_m2m_suspend(dev->m2m_dev_enc);
+		mtk_v4l2_debug(1, "suspend_notifier: suspend prepare... done");
+		return NOTIFY_OK;
+	case PM_POST_SUSPEND:
+		mtk_v4l2_debug(1, "suspend_notifier: post suspend... done");
+		return NOTIFY_OK;
+	default:
+		return NOTIFY_DONE;
+	}
+	return NOTIFY_DONE;
+}
+
 static int mtk_vcodec_probe(struct platform_device *pdev)
 {
 	struct mtk_vcodec_dev *dev;
@@ -280,7 +343,7 @@ static int mtk_vcodec_probe(struct platform_device *pdev)
 		goto err_res;
 	}
 	disable_irq(dev->enc_irq);
-	mutex_init(&dev->enc_mutex);
+	sema_init(&dev->enc_sem, 1);
 	mutex_init(&dev->dev_mutex);
 	spin_lock_init(&dev->irqlock);
 
@@ -340,8 +403,10 @@ static int mtk_vcodec_probe(struct platform_device *pdev)
 		goto err_enc_reg;
 	}
 
-	mtk_v4l2_debug(0, "encoder registered as /dev/video%d",
-			vfd_enc->num);
+	mtk_v4l2_debug(0, "encoder registered as /dev/video%d", vfd_enc->num);
+
+	dev->pm_notifier.notifier_call = mtk_vcodec_enc_suspend_notifier;
+	register_pm_notifier(&dev->pm_notifier);
 
 	return 0;
 
@@ -372,6 +437,7 @@ static int mtk_vcodec_enc_remove(struct platform_device *pdev)
 	struct mtk_vcodec_dev *dev = platform_get_drvdata(pdev);
 
 	mtk_v4l2_debug_enter();
+	unregister_pm_notifier(&dev->pm_notifier);
 	flush_workqueue(dev->encode_workqueue);
 	destroy_workqueue(dev->encode_workqueue);
 	if (dev->m2m_dev_enc)
@@ -385,11 +451,17 @@ static int mtk_vcodec_enc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct dev_pm_ops mtk_vcodec_enc_pm_ops = {
+	.suspend = mtk_vcodec_enc_suspend,
+	.resume = mtk_vcodec_enc_resume,
+};
+
 static struct platform_driver mtk_vcodec_enc_driver = {
 	.probe	= mtk_vcodec_probe,
 	.remove	= mtk_vcodec_enc_remove,
 	.driver	= {
 		.name	= MTK_VCODEC_ENC_NAME,
+		.pm = &mtk_vcodec_enc_pm_ops,
 		.of_match_table = mtk_vcodec_enc_match,
 	},
 };
