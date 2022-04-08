@@ -14,6 +14,7 @@
 
 #include <asm/cacheflush.h>
 #include <linux/cdev.h>
+#include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/file.h>
 #include <linux/firmware.h>
@@ -27,6 +28,7 @@
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/sched.h>
+#include <linux/suspend.h>
 #include <linux/uaccess.h>
 #include <linux/compat.h>
 #include <linux/freezer.h>
@@ -473,6 +475,7 @@ struct mtk_vcu {
 	wait_queue_head_t vdec_log_get_wq;
 	atomic_t vdec_log_got;
 	struct map_cache_mva map_buffer[MAP_VENC_CACHE_MAX_NUM];
+	struct notifier_block pm_notifier;
 };
 
 #define to_vcu(vpu) container_of(vpu, struct mtk_vcu, vpu)
@@ -1199,6 +1202,102 @@ static struct mtk_vpu_ops mtk_vcu_ops = {
 	.mapping_dm_addr = vcu_mapping_dm_addr,
 };
 
+static int vcu_check_if_running(struct mtk_vcu *vcu)
+{
+	int vcu_running = 0;
+
+	mutex_lock(&vcu->vcu_mutex[0]);
+	mutex_lock(&vcu->vcu_mutex[1]);
+	if (((atomic_read(&vcu->ipi_got[0]) == 1) && (atomic_read(&vcu->ipi_done[0]) == 0)) ||
+	    ((atomic_read(&vcu->ipi_got[1]) == 1) && (atomic_read(&vcu->ipi_done[1]) == 0))) {
+		vcu_running = 1;
+	}
+	mutex_unlock(&vcu->vcu_mutex[1]);
+	mutex_unlock(&vcu->vcu_mutex[0]);
+
+	return vcu_running;
+}
+
+/**
+ * Suspend callbacks after user space processes are frozen
+ * Since user space processes are frozen, there is no need and cannot hold same
+ * mutex that protects lock owner while checking status.
+ * If hardware is still active now, must not to enter suspend.
+ **/
+static int mtk_vcu_suspend(struct device *vcu_dev)
+{
+	struct mtk_vpu_plat *vpu = dev_get_drvdata(vcu_dev);
+	struct mtk_vcu *vcu = to_vcu(vpu);
+	struct device *dev = vcu->dev;
+	int vcuid = vcu->vcuid;
+
+	dev_dbg(dev, "[VCU] %s()... \n", __func__);
+
+	if (vcu_check_if_running(vcu)) {
+		dev_err(dev, "[VCU][%d] %s fail due to unfinished activity\n",
+			vcuid, __func__);
+		return -EBUSY;
+	}
+
+	dev_dbg(dev, "[VCU] %s done\n", __func__);
+	return 0;
+}
+
+static int mtk_vcu_resume(struct device *dev)
+{
+	dev_dbg(dev, "[VCU] %s done\n", __func__);
+	return 0;
+}
+
+/**
+ * Suspend notifiers before user space processes are frozen.
+ * User space driver can still complete decoding/encoding of current frame.
+ * Since there is no critical section protection, it is possible for a new task
+ * to start after this state.
+ * This case will be handled by suspend callback mtk_vcu_suspend.
+ **/
+static int mtk_vcu_suspend_notifier(struct notifier_block *nb,
+				    unsigned long action, void *data)
+{
+	int wait_cnt = 0;
+	struct mtk_vcu *vcu = container_of(nb, struct mtk_vcu, pm_notifier);
+	struct device *dev = vcu->dev;
+	int vcuid = vcu->vcuid;
+
+	dev_dbg(dev, "[VCU] %s ok action = %ld\n", __func__, action);
+	switch (action) {
+	case PM_SUSPEND_PREPARE:
+		dev_dbg(dev, "suspend notifier: suspend prepare... \n");
+
+		while (vcu_check_if_running(vcu)) {
+			wait_cnt++;
+			dev_dbg(dev,
+				"suspend notifier: id[%d] wait_cnt[%d]... %d %d\n",
+				vcuid, wait_cnt, atomic_read(&vcu->ipi_done[0]),
+				atomic_read(&vcu->ipi_done[1]));
+			if (wait_cnt > 5) {
+				dev_dbg(dev,
+					"suspend notifier: id[%d] waiting %d %d, job not finished.\n",
+					vcuid, atomic_read(&vcu->ipi_done[0]),
+					atomic_read(&vcu->ipi_done[1]));
+				/* Current task is still not finished, don't
+				 * care, will check again in real suspend
+				 */
+				return NOTIFY_OK;
+			}
+			usleep_range(10000, 20000);
+		}
+		dev_dbg(dev, "suspend notifier: suspend prepare... done \n");
+		return NOTIFY_OK;
+	case PM_POST_SUSPEND:
+		dev_dbg(dev, "suspend notifier: post suspend... done \n");
+		return NOTIFY_OK;
+	default:
+		return NOTIFY_DONE;
+	}
+	return NOTIFY_DONE;
+}
+
 static int mtk_vcu_probe(struct platform_device *pdev)
 {
 	struct mtk_vcu *vcu;
@@ -1325,6 +1424,9 @@ static int mtk_vcu_probe(struct platform_device *pdev)
 		goto err_device;
 	}
 
+	vcu->pm_notifier.notifier_call = mtk_vcu_suspend_notifier;
+	register_pm_notifier(&vcu->pm_notifier);
+
 	dev_dbg(dev, "[VCU] initialization completed\n");
 	return 0;
 
@@ -1359,6 +1461,7 @@ static int mtk_vcu_remove(struct platform_device *pdev)
 		filp_close(vcu->file, NULL);
 		vcu->is_open = false;
 	}
+	unregister_pm_notifier(&vcu->pm_notifier);
 	devm_kfree(&pdev->dev, vcu);
 
 	device_destroy(vcu->vcu_class, vcu->vcu_devno);
@@ -1369,12 +1472,18 @@ static int mtk_vcu_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct dev_pm_ops mtk_vcu_pm_ops = {
+	.suspend = mtk_vcu_suspend,
+	.resume = mtk_vcu_resume,
+};
+
 static struct platform_driver mtk_vcu_driver = {
 	.probe	= mtk_vcu_probe,
 	.remove	= mtk_vcu_remove,
 	.driver	= {
 		.name	= "mtk_vcu",
 		.owner	= THIS_MODULE,
+		.pm = &mtk_vcu_pm_ops,
 		.of_match_table = mtk_vcu_match,
 	},
 };
