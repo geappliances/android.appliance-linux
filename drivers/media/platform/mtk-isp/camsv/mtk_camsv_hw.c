@@ -223,15 +223,30 @@ static irqreturn_t isp_irq_camsv(int irq, void *data)
 	if (irq_status & CAMSV_IRQ_SW_PASS1_DON) {
 		cam_dev->sequence++;
 
-		buf = list_first_entry_or_null(&cam_dev->buf_list,
-					       struct mtk_cam_dev_buffer,
-					       list);
-		if (buf) {
-			buf->v4l2_buf.sequence = cam_dev->sequence;
-			buf->v4l2_buf.vb2_buf.timestamp = ktime_get_ns();
-			vb2_buffer_done(&buf->v4l2_buf.vb2_buf,
-					VB2_BUF_STATE_DONE);
-			list_del(&buf->list);
+		if (!cam_dev->is_dummy_used) {
+			buf = list_first_entry_or_null(&cam_dev->buf_list,
+						       struct mtk_cam_dev_buffer,
+						       list);
+			if (buf) {
+				buf->v4l2_buf.sequence = cam_dev->sequence;
+				buf->v4l2_buf.vb2_buf.timestamp = ktime_get_ns();
+				vb2_buffer_done(&buf->v4l2_buf.vb2_buf,
+						VB2_BUF_STATE_DONE);
+				list_del(&buf->list);
+			}
+		}
+
+		if (list_empty(&cam_dev->buf_list)) {
+			(*cam_dev->hw_functions->mtk_cam_update_buffers_add)
+						(cam_dev, &cam_dev->dummy);
+			cam_dev->is_dummy_used = true;
+		} else {
+			buf = list_first_entry_or_null(&cam_dev->buf_list,
+						       struct mtk_cam_dev_buffer,
+						       list);
+			(*cam_dev->hw_functions->mtk_cam_update_buffers_add)
+						(cam_dev, buf);
+			cam_dev->is_dummy_used = false;
 		}
 	}
 
