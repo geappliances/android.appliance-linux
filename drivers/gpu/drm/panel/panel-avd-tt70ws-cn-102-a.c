@@ -112,16 +112,16 @@ static int lvds_panel_prepare(struct drm_panel *panel)
 	mdelay(50);
 	gpiod_set_value(lvds->lcd_en_gpio, 0);
 	gpiod_set_value(lvds->lcd_rst_gpio, 0);
-	mdelay(20);
+	mdelay(200);
 
 	gpiod_set_value(lvds->lcd_en_gpio, 1);
-	mdelay(20);
+	mdelay(12);
 
 	gpiod_set_value(lvds->lcd_rst_gpio, 1);
-	mdelay(10);
+	mdelay(14);
 
 	gpiod_set_value(lvds->lcd_stb_gpio, 1);
-	mdelay(20);
+	mdelay(10);
 
 	lvds->prepared = true;
 
@@ -206,7 +206,7 @@ static int avd_lvds_panel_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	lvds->lcd_rst_gpio = devm_gpiod_get(dev, "lcd_rst", GPIOD_OUT_HIGH);
+	lvds->lcd_rst_gpio = devm_gpiod_get(dev, "lcd_rst", GPIOD_OUT_LOW);
 	if (IS_ERR(lvds->lcd_rst_gpio)) {
 		ret = PTR_ERR(lvds->lcd_rst_gpio);
 		dev_err(dev, "failed to request %s GPIO: %d\n",
