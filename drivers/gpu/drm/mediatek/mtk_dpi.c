@@ -667,11 +667,6 @@ static void mtk_dpi_encoder_enable(struct drm_encoder *encoder)
 
 	mtk_dpi_power_on(dpi);
 	mtk_dpi_set_display_mode(dpi, &dpi->mode);
-
-	if (dpi->panel) {
-		drm_panel_prepare(dpi->panel);
-		drm_panel_enable(dpi->panel);
-	}
 }
 
 static int mtk_dpi_atomic_check(struct drm_encoder *encoder,
@@ -709,6 +704,18 @@ static const struct drm_connector_funcs mtk_dpi_connector_funcs = {
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 };
 
+static void mtk_dpi_config(struct mtk_ddp_comp *comp, unsigned int w,
+                           unsigned int h, unsigned int vrefresh,
+                           unsigned int bpc)
+{
+	struct mtk_dpi *dpi = container_of(comp, struct mtk_dpi, ddp_comp);
+
+	if(dpi->panel) {
+		drm_panel_prepare(dpi->panel);
+		drm_panel_enable(dpi->panel);
+	}
+}
+
 static void mtk_dpi_start(struct mtk_ddp_comp *comp)
 {
 	struct mtk_dpi *dpi = container_of(comp, struct mtk_dpi, ddp_comp);
@@ -724,6 +731,7 @@ static void mtk_dpi_stop(struct mtk_ddp_comp *comp)
 }
 
 static const struct mtk_ddp_comp_funcs mtk_dpi_funcs = {
+	.config = mtk_dpi_config,
 	.start = mtk_dpi_start,
 	.stop = mtk_dpi_stop,
 };
