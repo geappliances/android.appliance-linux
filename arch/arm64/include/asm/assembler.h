@@ -108,6 +108,13 @@
 	.endm
 
 /*
+ * Clear Branch History instruction
+ */
+	.macro clearbhb
+	hint	#22
+	.endm
+
+/*
  * Speculation barrier
  */
 	.macro	sb
@@ -803,12 +810,24 @@ USER(\label, ic	ivau, \tmp2)			// invalidate I line PoU
 
 	.macro __mitigate_spectre_bhb_loop      tmp
 #ifdef CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY
-	mov	\tmp, #32
+alternative_cb  spectre_bhb_patch_loop_iter
+	mov	\tmp, #32		// Patched to correct the immediate
+alternative_cb_end
 .Lspectre_bhb_loop\@:
 	b	. + 4
 	subs	\tmp, \tmp, #1
 	b.ne	.Lspectre_bhb_loop\@
 	sb
+#endif /* CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY */
+	.endm
+
+	.macro mitigate_spectre_bhb_loop	tmp
+#ifdef CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY
+alternative_cb	spectre_bhb_patch_loop_mitigation_enable
+	b	.L_spectre_bhb_loop_done\@	// Patched to NOP
+alternative_cb_end
+	__mitigate_spectre_bhb_loop	\tmp
+.L_spectre_bhb_loop_done\@:
 #endif /* CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY */
 	.endm
 
@@ -823,6 +842,16 @@ alternative_cb	smccc_patch_fw_mitigation_conduit
 alternative_cb_end
 	ldp	x2, x3, [sp], #16
 	ldp	x0, x1, [sp], #16
+#endif /* CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY */
+	.endm
+
+	.macro mitigate_spectre_bhb_clear_insn
+#ifdef CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY
+alternative_cb	spectre_bhb_patch_clearbhb
+	/* Patched to NOP when not supported */
+	clearbhb
+	isb
+alternative_cb_end
 #endif /* CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY */
 	.endm
 #endif	/* __ASM_ASSEMBLER_H */

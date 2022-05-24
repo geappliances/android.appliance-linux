@@ -1242,6 +1242,17 @@ copy_page_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma)
 	return ret;
 }
 
+/* Whether we should zap all COWed (private) pages too */
+static inline bool should_zap_cows(struct zap_details *details)
+{
+	/* By default, zap all pages */
+	if (!details)
+		return true;
+
+	/* Or, we zap COWed pages only if the caller wants to */
+	return !details->check_mapping;
+}
+
 static unsigned long zap_pte_range(struct mmu_gather *tlb,
 				struct vm_area_struct *vma, pmd_t *pmd,
 				unsigned long addr, unsigned long end,
@@ -1334,16 +1345,18 @@ again:
 			continue;
 		}
 
-		/* If details->check_mapping, we leave swap entries. */
-		if (unlikely(details))
-			continue;
-
-		if (!non_swap_entry(entry))
+		if (!non_swap_entry(entry)) {
+			/* Genuine swap entry, hence a private anon page */
+			if (!should_zap_cows(details))
+				continue;
 			rss[MM_SWAPENTS]--;
-		else if (is_migration_entry(entry)) {
+		} else if (is_migration_entry(entry)) {
 			struct page *page;
 
 			page = migration_entry_to_page(entry);
+			if (details && details->check_mapping &&
+			    details->check_mapping != page_rmapping(page))
+				continue;
 			rss[mm_counter(page)]--;
 		}
 		if (unlikely(!free_swap_and_cache(entry)))
@@ -3994,11 +4007,20 @@ static vm_fault_t __do_fault(struct vm_fault *vmf)
 		return ret;
 
 	if (unlikely(PageHWPoison(vmf->page))) {
-		if (ret & VM_FAULT_LOCKED)
-			unlock_page(vmf->page);
-		put_page(vmf->page);
+		struct page *page = vmf->page;
+		vm_fault_t poisonret = VM_FAULT_HWPOISON;
+		if (ret & VM_FAULT_LOCKED) {
+			if (page_mapped(page))
+				unmap_mapping_pages(page_mapping(page),
+						    page->index, 1, false);
+			/* Retry if a clean page was removed from the cache. */
+			if (invalidate_inode_page(page))
+				poisonret = VM_FAULT_NOPAGE;
+			unlock_page(page);
+		}
+		put_page(page);
 		vmf->page = NULL;
-		return VM_FAULT_HWPOISON;
+		return poisonret;
 	}
 
 	if (unlikely(!(ret & VM_FAULT_LOCKED)))
@@ -5033,11 +5055,15 @@ static vm_fault_t ___handle_speculative_fault(struct mm_struct *mm,
 		goto out_walk;
 
 	p4d = p4d_offset(pgd, address);
+	if (pgd_val(READ_ONCE(*pgd)) != pgd_val(pgdval))
+		goto out_walk;
 	p4dval = READ_ONCE(*p4d);
 	if (p4d_none(p4dval) || unlikely(p4d_bad(p4dval)))
 		goto out_walk;
 
 	vmf.pud = pud_offset(p4d, address);
+	if (p4d_val(READ_ONCE(*p4d)) != p4d_val(p4dval))
+		goto out_walk;
 	pudval = READ_ONCE(*vmf.pud);
 	if (pud_none(pudval) || unlikely(pud_bad(pudval)))
 		goto out_walk;
@@ -5047,6 +5073,8 @@ static vm_fault_t ___handle_speculative_fault(struct mm_struct *mm,
 		goto out_walk;
 
 	vmf.pmd = pmd_offset(vmf.pud, address);
+	if (pud_val(READ_ONCE(*vmf.pud)) != pud_val(pudval))
+		goto out_walk;
 	vmf.orig_pmd = READ_ONCE(*vmf.pmd);
 	/*
 	 * pmd_none could mean that a hugepage collapse is in progress
@@ -5074,6 +5102,11 @@ static vm_fault_t ___handle_speculative_fault(struct mm_struct *mm,
 	 */
 
 	vmf.pte = pte_offset_map(vmf.pmd, address);
+	if (pmd_val(READ_ONCE(*vmf.pmd)) != pmd_val(vmf.orig_pmd)) {
+		pte_unmap(vmf.pte);
+		vmf.pte = NULL;
+		goto out_walk;
+	}
 	vmf.orig_pte = READ_ONCE(*vmf.pte);
 	barrier(); /* See comment in handle_pte_fault() */
 	if (pte_none(vmf.orig_pte)) {
@@ -5813,6 +5846,8 @@ long copy_huge_page_from_user(struct page *dst_page,
 		ret_val -= (PAGE_SIZE - rc);
 		if (rc)
 			break;
+
+		flush_dcache_page(subpage);
 
 		cond_resched();
 	}
