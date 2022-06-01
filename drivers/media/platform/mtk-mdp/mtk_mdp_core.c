@@ -123,7 +123,6 @@ void mtk_mdp_unregister_component(struct mtk_mdp_dev *mdp,
 static int mtk_mdp_suspend_notifier(struct notifier_block *nb,
 				    unsigned long action, void *data)
 {
-	int wait_cnt = 0, vcuid;
 	struct mtk_mdp_dev *mdp =
 		container_of(nb, struct mtk_mdp_dev, pm_notifier);
 	struct device *dev = &mdp->pdev->dev;
