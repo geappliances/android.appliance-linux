@@ -637,7 +637,6 @@ void mtk_vdec_unlock(struct mtk_vcodec_ctx *ctx)
 
 void mtk_vdec_lock(struct mtk_vcodec_ctx *ctx)
 {
-	struct mtk_vcodec_dev *dev = ctx->dev;
 	int ret = -1;
 
 	mtk_v4l2_debug(4, "ctx %p [%d] sem_cnt %d",

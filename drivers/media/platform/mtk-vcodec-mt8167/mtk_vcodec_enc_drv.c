@@ -242,8 +242,6 @@ static int mtk_vcodec_enc_resume(struct device *pDev)
 static int mtk_vcodec_enc_suspend_notifier(struct notifier_block *nb,
 					unsigned long action, void *data)
 {
-	int wait_cnt = 0;
-	int val = 0;
 	struct mtk_vcodec_dev *dev =
 		container_of(nb, struct mtk_vcodec_dev, pm_notifier);
 

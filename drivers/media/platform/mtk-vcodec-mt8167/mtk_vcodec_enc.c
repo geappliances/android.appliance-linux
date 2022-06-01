@@ -1758,8 +1758,6 @@ int mtk_venc_unlock(struct mtk_vcodec_ctx *ctx)
 
 int mtk_venc_lock(struct mtk_vcodec_ctx *ctx)
 {
-	unsigned int suspend_block_cnt = 0;
-
 	mtk_v4l2_debug(4, "ctx %p [%d]", ctx, ctx->id);
 	return down_interruptible(&ctx->dev->enc_sem);
 }
