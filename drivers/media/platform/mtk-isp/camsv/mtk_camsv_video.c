@@ -405,7 +405,7 @@ static int mtk_cam_vb2_start_streaming(struct vb2_queue *vq,
 
 	/* Create dummy buffer */
 	cam->dummy_size = fmt->plane_fmt[0].sizeimage;
-	cam->dummy.fhaddr = dma_alloc_coherent(cam->dev,
+	cam->dummy.fhaddr = (unsigned long long)dma_alloc_coherent(cam->dev,
 					       cam->dummy_size,
 					       &cam->dummy.daddr, GFP_KERNEL);
 	if (!cam->dummy.fhaddr) {
@@ -466,7 +466,7 @@ static void mtk_cam_vb2_stop_streaming(struct vb2_queue *vq)
 	/* Destroy dummy buffer */
 	if (cam->dummy.fhaddr) {
 		dma_free_coherent(cam->dev, cam->dummy_size,
-				  cam->dummy.fhaddr,
+				  (void *)cam->dummy.fhaddr,
 				  cam->dummy.daddr);
 		memset(&cam->dummy, 0, sizeof(cam->dummy));
 		cam->dummy_size = 0;
