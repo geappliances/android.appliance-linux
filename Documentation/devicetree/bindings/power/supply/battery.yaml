@@ -76,6 +76,13 @@ properties:
       and corresponding battery internal resistance percent, which is used to
       look up the resistance percent according to current temperature to get an
       accurate batterty internal resistance in different temperatures.
+      - cell-numbers: number of cells of the battery
+      - voltage-divider: value of the voltage divider ratio circuit that is
+      used to scale down the VBAT voltage into the Fuel Gauge BAT pin.
+      Its value is calculated using this formula :
+      voltage-divider = [(R0 + R1) / R1] * 1000
+      R0: resistance of the voltage divider circuit connected to VBAT
+      R1: resistance of the voltage divider circuit connected to GND
 
   ocv-capacity-celsius:
     description: |
@@ -154,6 +161,8 @@ examples:
         operating-range-celsius = <(-30) 50>;
         ambient-celsius = <(-5) 50>;
         alert-celsius = <0 40>;
+        cell-numbers = <2>;
+        voltage-divider = <9333>;
       };
 
       charger@11 {

@@ -57,6 +57,11 @@ struct bq27xxx_reg_cache {
 	int health;
 };
 
+struct bq27xxx_calib_info {
+	int cell_nbr;
+	int voltage_divider;
+};
+
 struct bq27xxx_device_info {
 	struct device *dev;
 	int id;
@@ -73,6 +78,7 @@ struct bq27xxx_device_info {
 	struct power_supply *bat;
 	struct list_head list;
 	struct mutex lock;
+	struct bq27xxx_calib_info cal_info;
 	u8 *regs;
 };
 
