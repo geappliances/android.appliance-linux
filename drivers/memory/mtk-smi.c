@@ -189,7 +189,8 @@ static void mtk_smi_larb_config_port_gen2_general(struct device *dev)
 	u32 reg;
 	int i;
 
-	if (BIT(larb->larbid) & larb->larb_gen->larb_direct_to_common_mask)
+	if ((BIT(larb->larbid) & larb->larb_gen->larb_direct_to_common_mask) ||
+	    !larb->mmu)
 		return;
 
 	for_each_set_bit(i, (unsigned long *)larb->mmu, 32) {
