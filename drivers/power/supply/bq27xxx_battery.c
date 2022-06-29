@@ -2486,6 +2486,17 @@ int bq27xxx_battery_setup(struct bq27xxx_device_info *di)
 	di->dm_regs    = bq27xxx_chip_data[di->chip].dm_regs;
 	di->opts       = bq27xxx_chip_data[di->chip].opts;
 
+	ret = bq27xxx_battery_dt_properties(di);
+	if (ret < 0) {
+		dev_err(di->dev, "couldn't find battery properties: %d\n", ret);
+		return ret;
+	}
+	ret = bq34110_calibrate_voltage_divider(di);
+	if (ret < 0) {
+		dev_err(di->dev, "Unable to calibrate the battery: %d\n", ret);
+		return ret;
+	}
+
 	psy_desc = devm_kzalloc(di->dev, sizeof(*psy_desc), GFP_KERNEL);
 	if (!psy_desc)
 		return -ENOMEM;
@@ -2504,12 +2515,6 @@ int bq27xxx_battery_setup(struct bq27xxx_device_info *di)
 		return dev_err_probe(di->dev, PTR_ERR(di->bat),
 				     "failed to register battery\n");
 
-	ret = bq27xxx_battery_dt_properties(di);
-	if (ret < 0)
-		return ret;
-	ret = bq34110_calibrate_voltage_divider(di);
-	if (ret < 0)
-		return ret;
 	bq27xxx_battery_settings(di);
 	bq27xxx_battery_update(di);
 
