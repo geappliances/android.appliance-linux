@@ -29,7 +29,6 @@
 #define VSYNC_START (VDISPLAY + VSYNC_FRONT_PORCH)
 #define VSYNC_END (VSYNC_START + VSYNC_PULSE_WIDTH)
 #define VSYNC_TOTAL (VSYNC_END + VSYNC_BACK_PORCH)
-#define VREFRESH (60)
 #define VIDEOMODE_FLAGS (DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC)
 
 struct lvds_panel {
@@ -62,7 +61,6 @@ static const struct drm_display_mode default_mode = {
 	.vsync_start = VSYNC_START,
 	.vsync_end = VSYNC_END,
 	.vtotal = VSYNC_TOTAL,
-	.vrefresh = VREFRESH,
 	.flags = VIDEOMODE_FLAGS,
 };
 
