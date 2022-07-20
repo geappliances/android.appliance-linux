@@ -239,9 +239,7 @@ static int avd_lvds_panel_probe(struct platform_device *pdev)
 	drm_panel_init(&lvds->panel, dev, &lvds_panel_funcs,
 		       DRM_MODE_CONNECTOR_DPI);
 
-	ret = drm_panel_add(&lvds->panel);
-	if (ret)
-		return ret;
+	drm_panel_add(&lvds->panel);
 
 	dev_set_drvdata(dev, lvds);
 
