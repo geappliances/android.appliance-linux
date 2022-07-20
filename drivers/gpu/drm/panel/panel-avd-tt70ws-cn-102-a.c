@@ -139,10 +139,10 @@ static int lvds_panel_enable(struct drm_panel *panel)
 	return 0;
 }
 
-static int lvds_panel_get_modes(struct drm_panel *panel)
+static int lvds_panel_get_modes(struct drm_panel *panel,
+				struct drm_connector *connector)
 {
 	struct lvds_panel *lvds = to_lvds_panel(panel);
-	struct drm_connector *connector = lvds->panel.connector;
 	struct drm_display_mode *mode;
 
 	mode = drm_mode_duplicate(connector->dev, &default_mode);
