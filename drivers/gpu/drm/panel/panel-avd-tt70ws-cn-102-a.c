@@ -236,9 +236,8 @@ static int avd_lvds_panel_probe(struct platform_device *pdev)
 	// VESA 8-bit format
 	lvds->bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG;
 
-	drm_panel_init(&lvds->panel);
-	lvds->panel.dev = dev;
-	lvds->panel.funcs = &lvds_panel_funcs;
+	drm_panel_init(&lvds->panel, dev, &lvds_panel_funcs,
+		       DRM_MODE_CONNECTOR_DPI);
 
 	ret = drm_panel_add(&lvds->panel);
 	if (ret)
