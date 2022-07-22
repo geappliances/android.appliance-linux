@@ -407,6 +407,8 @@ void mtk_disp_mutex_add_comp(struct mtk_disp_mutex *mutex,
 	case DDP_COMPONENT_DPI1:
 		sof_id = DDP_MUTEX_SOF_DPI1;
 		break;
+	case DDP_COMPONENT_LVDS:
+		return;
 	default:
 		if (ddp->data->mutex_mod[id] < 32) {
 			offset = DISP_REG_MUTEX_MOD(ddp->data->mutex_mod_reg,

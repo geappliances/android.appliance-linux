@@ -23,6 +23,8 @@
 #define MT8365_LVDS_SYS_CFG_00_SEL_LVDS_PXL_CLK		0x1
 #define MT8365_DPI0_SEL_IN_RDMA1			0x0
 
+#define LVDS_SYS_CFG_00_LVDS_PXL_CLK                    0x30000
+
 static const struct mtk_mmsys_routes mt8365_mmsys_routing_table[] = {
 	{
 		DDP_COMPONENT_OVL0, DDP_COMPONENT_RDMA0,

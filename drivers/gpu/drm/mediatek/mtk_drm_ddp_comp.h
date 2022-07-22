@@ -21,6 +21,7 @@ struct drm_crtc_state;
 enum mtk_ddp_comp_type {
 	MTK_DISP_OVL,
 	MTK_DISP_OVL_2L,
+	MTK_LVDS,
 	MTK_DISP_RDMA,
 	MTK_DISP_WDMA,
 	MTK_DISP_COLOR,

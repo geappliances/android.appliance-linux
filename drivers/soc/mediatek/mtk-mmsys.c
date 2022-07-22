@@ -64,6 +64,15 @@ struct mtk_mmsys {
 	const struct mtk_mmsys_driver_data *data;
 };
 
+void mtk_mmsys_ddp_lvds_sys_cfg_lvds(struct device *dev)
+{
+	struct mtk_mmsys *mmsys = dev_get_drvdata(dev);
+
+	writel_relaxed(LVDS_SYS_CFG_00_LVDS_PXL_CLK, mmsys->regs +
+		       MT8365_DISP_REG_CONFIG_DISP_LVDS_SYS_CFG_00);
+}
+EXPORT_SYMBOL_GPL(mtk_mmsys_ddp_lvds_sys_cfg_lvds);
+
 void mtk_mmsys_ddp_connect(struct device *dev,
 			   enum mtk_ddp_comp_id cur,
 			   enum mtk_ddp_comp_id next)
