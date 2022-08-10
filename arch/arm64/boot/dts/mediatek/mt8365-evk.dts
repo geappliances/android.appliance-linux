@@ -62,15 +62,13 @@
 		regulator-max-microvolt = <3300000>;
 		gpio = <&pio 121 0>;
 		enable-active-high;
+		vin-supply = <&mt6357_vcn18_reg>;
 	};
 
-	mmc2_fixed_rst: regulator@1 {
-		compatible = "regulator-fixed";
-		regulator-name = "mmc2_rst";
-		regulator-min-microvolt = <1800000>;
-		regulator-max-microvolt = <1800000>;
-		gpio = <&pio 120 0>;
-		enable-active-high;
+	mt7663_pwrseq: mt7663-pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		reset-gpios = <&pio 120 GPIO_ACTIVE_LOW>;
+		post-power-on-delay-ms = <5>;
 	};
 
 	sound: sound {
@@ -312,7 +310,8 @@
 	cap-sdio-irq;
 	hs400-ds-delay = <0x12012>;
 	vmmc-supply = <&mmc2_fixed_pmu>;
-	vqmmc-supply = <&mmc2_fixed_rst>;
+	vqmmc-supply = <&mt6357_vcn18_reg>;
+	mmc-pwrseq = <&mt7663_pwrseq>;
 	assigned-clocks = <&topckgen CLK_TOP_MSDC50_2_SEL>;
 	assigned-clock-parents = <&topckgen CLK_TOP_MSDCPLL>;
 	non-removable;
