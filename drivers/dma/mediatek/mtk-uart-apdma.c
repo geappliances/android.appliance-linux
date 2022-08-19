@@ -433,6 +433,7 @@ static int mtk_uart_apdma_terminate_all(struct dma_chan *chan)
 	synchronize_irq(c->irq);
 
 	spin_lock_irqsave(&c->vc.lock, flags);
+	mtk_uart_apdma_chan_complete_handler(c);
 	vchan_get_all_descriptors(&c->vc, &head);
 	spin_unlock_irqrestore(&c->vc.lock, flags);
 	vchan_dma_desc_free_list(&c->vc, &head);
