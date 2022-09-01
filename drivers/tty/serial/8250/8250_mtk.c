@@ -56,7 +56,8 @@
 enum dma_rx_status {
 	DMA_RX_START = 0,
 	DMA_RX_RUNNING = 1,
-	DMA_RX_SHUTDOWN = 2,
+	DMA_RX_PAUSED = 2,
+	DMA_RX_SHUTDOWN = 3,
 };
 #endif
 
@@ -94,34 +95,38 @@ static void mtk8250_dma_rx_complete(void *param)
 	unsigned char *ptr;
 	unsigned long flags;
 
-	if (data->rx_status == DMA_RX_SHUTDOWN)
-		return;
 
 	spin_lock_irqsave(&up->port.lock, flags);
 
 	dmaengine_tx_status(dma->rxchan, dma->rx_cookie, &state);
 	total = dma->rx_size - state.residue;
-	cnt = total;
+	if (total > 0) {
+		cnt = total;
 
-	if ((data->rx_pos + cnt) > dma->rx_size)
-		cnt = dma->rx_size - data->rx_pos;
 
-	ptr = (unsigned char *)(data->rx_pos + dma->rx_buf);
-	copied = tty_insert_flip_string(tty_port, ptr, cnt);
-	data->rx_pos += cnt;
+                if ((data->rx_pos + cnt) > dma->rx_size)
+                        cnt = dma->rx_size - data->rx_pos;
 
-	if (total > cnt) {
-		ptr = (unsigned char *)(dma->rx_buf);
-		cnt = total - cnt;
-		copied += tty_insert_flip_string(tty_port, ptr, cnt);
-		data->rx_pos = cnt;
+                ptr = (unsigned char *)(data->rx_pos + dma->rx_buf);
+                copied = tty_insert_flip_string(tty_port, ptr, cnt);
+                data->rx_pos += cnt;
+
+                if (total > cnt) {
+                        ptr = (unsigned char *)(dma->rx_buf);
+                        cnt = total - cnt;
+                        copied += tty_insert_flip_string(tty_port, ptr, cnt);
+                        data->rx_pos = cnt;
+                }
+
+                up->port.icount.rx += copied;
+
+		tty_flip_buffer_push(tty_port);
 	}
 
-	up->port.icount.rx += copied;
-
-	tty_flip_buffer_push(tty_port);
-
-	mtk8250_rx_dma(up);
+	if (data->rx_status == DMA_RX_RUNNING) {
+		data->rx_status = DMA_RX_START;
+		mtk8250_rx_dma(up);
+	}
 
 	spin_unlock_irqrestore(&up->port.lock, flags);
 }
@@ -130,6 +135,10 @@ static void mtk8250_rx_dma(struct uart_8250_port *up)
 {
 	struct uart_8250_dma *dma = up->dma;
 	struct dma_async_tx_descriptor	*desc;
+	struct mtk8250_data *data = up->port.private_data;
+
+	if (data->rx_status != DMA_RX_START)
+		return;
 
 	desc = dmaengine_prep_slave_single(dma->rxchan, dma->rx_addr,
 					   dma->rx_size, DMA_DEV_TO_MEM,
@@ -145,6 +154,8 @@ static void mtk8250_rx_dma(struct uart_8250_port *up)
 	dma->rx_cookie = dmaengine_submit(desc);
 
 	dma_async_issue_pending(dma->rxchan);
+
+	data->rx_status = DMA_RX_RUNNING;
 }
 
 static void mtk8250_dma_enable(struct uart_8250_port *up)
@@ -152,9 +163,14 @@ static void mtk8250_dma_enable(struct uart_8250_port *up)
 	struct uart_8250_dma *dma = up->dma;
 	struct mtk8250_data *data = up->port.private_data;
 	int lcr = serial_in(up, UART_LCR);
+	unsigned long flags;
 
-	if (data->rx_status != DMA_RX_START)
+	spin_lock_irqsave(&up->port.lock, flags);
+
+	if (data->rx_status != DMA_RX_START) {
+		spin_unlock_irqrestore(&up->port.lock, flags);
 		return;
+	}
 
 	dma->rxconf.src_port_window_size	= dma->rx_size;
 	dma->rxconf.src_addr				= dma->rx_addr;
@@ -165,7 +181,7 @@ static void mtk8250_dma_enable(struct uart_8250_port *up)
 	serial_out(up, UART_FCR, UART_FCR_ENABLE_FIFO | UART_FCR_CLEAR_RCVR |
 		UART_FCR_CLEAR_XMIT);
 	serial_out(up, MTK_UART_DMA_EN,
-		   MTK_UART_DMA_EN_RX | MTK_UART_DMA_EN_TX);
+		MTK_UART_DMA_EN_RX | MTK_UART_DMA_EN_TX);
 
 	serial_out(up, UART_LCR, UART_LCR_CONF_MODE_B);
 	serial_out(up, UART_EFR, UART_EFR_ECB);
@@ -176,9 +192,103 @@ static void mtk8250_dma_enable(struct uart_8250_port *up)
 	if (dmaengine_slave_config(dma->txchan, &dma->txconf) != 0)
 		pr_err("failed to configure tx dma channel\n");
 
-	data->rx_status = DMA_RX_RUNNING;
 	data->rx_pos = 0;
 	mtk8250_rx_dma(up);
+
+	spin_unlock_irqrestore(&up->port.lock, flags);
+}
+
+/*
+ * For DMA mode the interrupt handling mode must work slightly different
+ * than in the standard implementation. It has to consider that DMA RX
+ * buffer is ised in a circular fashion.
+ */
+static bool handle_rx_dma(struct uart_8250_port *up, unsigned int iir)
+{
+	struct uart_8250_dma *dma = up->dma;
+	struct mtk8250_data *data = up->port.private_data;
+
+	if (data->rx_status == DMA_RX_SHUTDOWN)
+		return false;
+
+	if (data->rx_status == DMA_RX_PAUSED)
+		return true;
+
+	if ((iir & 0x0f) != UART_IIR_RLSI)
+		return true;
+
+	dmaengine_pause(dma->rxchan);
+	dmaengine_terminate_all(dma->rxchan);
+
+	data->rx_status = DMA_RX_PAUSED;
+
+	return true;
+}
+
+static int mtk8250_handle_irq(struct uart_port *port)
+{
+	unsigned long flags;
+	unsigned int iir;
+	unsigned int lsr;
+	struct uart_8250_port *up = up_to_u8250p(port);
+	struct mtk8250_data *data;
+	bool skip_rx = false;
+	int ret;
+
+	serial8250_rpm_get(up);
+
+	iir = serial_port_in(port, UART_IIR);
+
+	if (iir & UART_IIR_NO_INT) {
+		serial8250_rpm_put(up);
+		return 0;
+	}
+
+	if (!up->dma) {
+		ret = serial8250_handle_irq(port, iir);
+	} else {
+		data = up->port.private_data;
+
+		spin_lock_irqsave(&port->lock, flags);
+
+		lsr = serial_port_in(port, UART_LSR);
+
+		/*
+		 * If port is stopped and there are no error conditions in the
+		 * FIFO, then don't drain the FIFO, as this may lead to TTY buffer
+		 * overflow. Not servicing, RX FIFO would trigger auto HW flow
+		 * control when FIFO occupancy reaches preset threshold, thus
+		 * halting RX. This only works when auto HW flow control is
+		 * available.
+		 */
+		if (!(lsr & (UART_LSR_FIFOE | UART_LSR_BRK_ERROR_BITS)) &&
+		    (port->status & (UPSTAT_AUTOCTS | UPSTAT_AUTORTS)) &&
+			!(port->read_status_mask & UART_LSR_DR))
+			skip_rx = true;
+
+		if (lsr & (UART_LSR_DR | UART_LSR_BI) && !skip_rx) {
+			if (handle_rx_dma(up, iir)) {
+				lsr = serial8250_rx_chars(up, lsr);
+				if (data->rx_status == DMA_RX_PAUSED) {
+					data->rx_status = DMA_RX_START;
+					data->rx_pos = 0;
+					mtk8250_rx_dma(up);
+				}
+			}
+		}
+
+		serial8250_modem_status(up);
+		if (up->dma->tx_err && (lsr & UART_LSR_THRE) && (up->ier & UART_IER_THRI))
+			serial8250_tx_chars(up);
+
+		uart_unlock_and_check_sysrq(port, flags);
+
+		ret = 1;
+	}
+
+	serial8250_rpm_put(up);
+
+	return ret;
 }
 #endif
 
@@ -207,9 +317,13 @@ static void mtk8250_shutdown(struct uart_port *port)
 #ifdef CONFIG_SERIAL_8250_DMA
 	struct uart_8250_port *up = up_to_u8250p(port);
 	struct mtk8250_data *data = port->private_data;
+	unsigned long flags;
 
-	if (up->dma)
+	if (up->dma) {
+		spin_lock_irqsave(&port->lock, flags);
 		data->rx_status = DMA_RX_SHUTDOWN;
+		spin_unlock_irqrestore(&up->port.lock, flags);
+	}
 #endif
 
 	return serial8250_do_shutdown(port);
@@ -217,12 +331,14 @@ static void mtk8250_shutdown(struct uart_port *port)
 
 static void mtk8250_disable_intrs(struct uart_8250_port *up, int mask)
 {
-	serial_out(up, UART_IER, serial_in(up, UART_IER) & (~mask));
+	up->ier &= ~mask;
+	serial_out(up, UART_IER, up->ier);
 }
 
 static void mtk8250_enable_intrs(struct uart_8250_port *up, int mask)
 {
-	serial_out(up, UART_IER, serial_in(up, UART_IER) | mask);
+	up->ier |= mask;
+	serial_out(up, UART_IER, up->ier);
 }
 
 static void mtk8250_set_flow_ctrl(struct uart_8250_port *up, int mode)
@@ -546,8 +662,11 @@ static int mtk8250_probe(struct platform_device *pdev)
 	uart.port.set_termios = mtk8250_set_termios;
 	uart.port.uartclk = clk_get_rate(data->uart_clk);
 #ifdef CONFIG_SERIAL_8250_DMA
-	if (data->dma)
+	if (data->dma) {
 		uart.dma = data->dma;
+
+		uart.port.handle_irq = mtk8250_handle_irq;
+	}
 #endif
 
 	/* Disable Rate Fix function */
