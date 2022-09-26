@@ -132,8 +132,9 @@
 			reg = <0x0>;
 			clock-frequency = <1600000000>;
 			clocks = <&mcusys CLK_MCU_BUS_SEL>,
-				 <&apmixedsys CLK_APMIXED_MAINPLL>;
-			clock-names = "cpu", "intermediate";
+				 <&apmixedsys CLK_APMIXED_MAINPLL>,
+				 <&apmixedsys CLK_APMIXED_ARMPLL>;
+			clock-names = "cpu", "intermediate", "armpll";
 			cpu-idle-states = <&MCDI_CPU &MCDI_CLUSTER &DPIDLE>;
 			operating-points-v2 = <&cluster0_opp>;
 			#cooling-cells = <2>;
@@ -146,7 +147,8 @@
 			reg = <0x1>;
 			clock-frequency = <1600000000>;
 			clocks = <&mcusys CLK_MCU_BUS_SEL>,
-				 <&apmixedsys CLK_APMIXED_MAINPLL>;
+				 <&apmixedsys CLK_APMIXED_MAINPLL>,
+				 <&apmixedsys CLK_APMIXED_ARMPLL>;
 			clock-names = "cpu", "intermediate", "armpll";
 			cpu-idle-states = <&MCDI_CPU &MCDI_CLUSTER &DPIDLE>;
 			operating-points-v2 = <&cluster0_opp>;
@@ -160,7 +162,8 @@
 			reg = <0x2>;
 			clock-frequency = <1600000000>;
 			clocks = <&mcusys CLK_MCU_BUS_SEL>,
-				 <&apmixedsys CLK_APMIXED_MAINPLL>;
+				 <&apmixedsys CLK_APMIXED_MAINPLL>,
+				 <&apmixedsys CLK_APMIXED_ARMPLL>;
 			clock-names = "cpu", "intermediate", "armpll";
 			cpu-idle-states = <&MCDI_CPU &MCDI_CLUSTER &DPIDLE>;
 			operating-points-v2 = <&cluster0_opp>;
@@ -174,7 +177,8 @@
 			reg = <0x3>;
 			clock-frequency = <1600000000>;
 			clocks = <&mcusys CLK_MCU_BUS_SEL>,
-				 <&apmixedsys CLK_APMIXED_MAINPLL>;
+				 <&apmixedsys CLK_APMIXED_MAINPLL>,
+				 <&apmixedsys CLK_APMIXED_ARMPLL>;
 			clock-names = "cpu", "intermediate", "armpll";
 			cpu-idle-states = <&MCDI_CPU &MCDI_CLUSTER &DPIDLE>;
 			operating-points-v2 = <&cluster0_opp>;
