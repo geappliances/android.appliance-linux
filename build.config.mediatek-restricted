@@ -10,12 +10,10 @@ WLAN_CHIP_ID=MT7668
 
 EXT_MODULES="$EXT_MODULES mt7668-wifi-mod"
 
-RESTRICTED_MODULES_FILES="
-  wlan_drv_gen4_MT7663_prealloc.ko
-  wlan_drv_gen4_MT7663.ko
-  wlan_drv_gen4_MT7668_prealloc.ko
-  wlan_drv_gen4_MT7668.ko
-"
+RESTRICTED_MODULES_FILES=("wlan_drv_gen4_MT7663_prealloc.ko"
+                          "wlan_drv_gen4_MT7663.ko"
+                          "wlan_drv_gen4_MT7668_prealloc.ko"
+                          "wlan_drv_gen4_MT7668.ko")
 
 function rebuild_for_mt7663() {
   local EXT_MOD=mt7663-wifi-mod
@@ -42,19 +40,13 @@ function rebuild_for_mt7663() {
 }
 
 function install_restricted_modules() {
-  mkdir -p "${COMMON_OUT_DIR}/kernel-restricted"
-  pushd ${MODULES_STAGING_DIR}
-  for MODULE in ${RESTRICTED_MODULES_FILES}; do
-    find . -type f -name "${MODULE}" \
-    -exec cp --parents '{}' "${COMMON_OUT_DIR}/kernel-restricted/" \;
+  local kernel_restricted_path="vendor/mediatek/kernel-restricted-binaries"
+  local kernel_restricted_binaries="${DIST_DIR/boards-binaries/../../${kernel_restricted_path}}"
 
-    # remove module from MODULES_STAGING_DIR so that it does not
-    # get copied to DIST_DIR
-    find . -name "${MODULE}" -delete
+  for file in "${RESTRICTED_MODULES_FILES[@]}"; do
+    find "${MODULES_STAGING_DIR}" -name "${file}" -exec \
+      mv {} "${kernel_restricted_binaries}" \;
   done
-  popd
-
-  product_modules_install "kernel-restricted" "kernel-restricted"
 }
 
 EXTRA_CMDS="rebuild_for_mt7663 && install_restricted_modules; $EXTRA_CMDS"
