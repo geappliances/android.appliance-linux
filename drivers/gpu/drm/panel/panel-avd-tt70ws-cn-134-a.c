@@ -224,12 +224,16 @@ static int avd_tt_panel_prepare(struct drm_panel *panel)
 		return ret;
 	}
 
+	msleep(5);
+
 	ret = regulator_enable(avd_tt->vdd_supply);
 	if (ret < 0) {
 		dev_err(panel->dev, "failed to enable vdd_supply: %d\n",
 			ret);
 		return ret;
 	}
+
+	msleep(2);
 
 	gpiod_set_value_cansleep(avd_tt->bl_gpio, 1);
 	gpiod_set_value_cansleep(avd_tt->iovccen_gpio, 1);
