@@ -3787,8 +3787,10 @@ static void Speaker_Amp_Change(bool enable)
 		/* disable Pull-down HPL/R to AVSS28_AUD */
 		if (mIsNeedPullDown)
 			hp_pull_down(false);
+
+	}
 #if 0
-	} else {
+	else {
 		pr_debug("%s(), enable %d\n", __func__, enable);
 		/* LOL mux to open */
 		Ana_Set_Reg(AUDDEC_ANA_CON4, 0x0000, 0x3 << 2);
