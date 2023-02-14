@@ -87,6 +87,8 @@ static int Audio_ADC1_Activate(int enable);
 static int Audio_ADC2_Activate(int enable);
 static int Receiver_Speaker_Switch_Activate(int enable);
 
+static bool first_call = false;
+
 static bool AudioPreAmp1_Sel(int Mul_Sel);
 static bool GetAdcStatus(void);
 static void TurnOffDacPower(void);
@@ -3601,6 +3603,106 @@ static int Voice_Amp_Set(struct snd_kcontrol *kcontrol,
 			ucontrol->value.integer.value[0];
 	return 0;
 }
+
+void Speaker_Amp_Change_enable(void)
+{
+	if (GetDLStatus() == false)
+		TurnOnDacPower(AUDIO_ANALOG_DEVICE_OUT_SPEAKERL);
+
+	/* Disable headphone short-circuit protection */
+	Ana_Set_Reg(AUDDEC_ANA_CON0, 0x3000, 0xffff);
+	/* Disable handset short-circuit protection */
+	Ana_Set_Reg(AUDDEC_ANA_CON3, 0x0010, 0xffff);
+	/* Disable linout short-circuit protection */
+	Ana_Set_Reg(AUDDEC_ANA_CON4, 0x0010, 0xffff);
+	/* Reduce ESD resistance of AU_REFN */
+	Ana_Set_Reg(AUDDEC_ANA_CON2, 0x200, 0x200);
+	/* Set HS gain as minimum (~ -40dB) */
+	Ana_Set_Reg(ZCD_CON1, DL_GAIN_N_40DB_REG, 0xffff);
+	/* Turn on DA_600K_NCP_VA18 */
+	Ana_Set_Reg(AUDNCP_CLKDIV_CON1, 0x0001, 0xffff);
+	/* Set NCP clock as 604kHz // 26MHz/43 = 604KHz */
+	Ana_Set_Reg(AUDNCP_CLKDIV_CON2, 0x002c, 0xffff);
+	/* Toggle RG_DIVCKS_CHG */
+	Ana_Set_Reg(AUDNCP_CLKDIV_CON0, 0x0001, 0xffff);
+	/* Set NCP soft start mode as default mode: 150us */
+	Ana_Set_Reg(AUDNCP_CLKDIV_CON4, 0x0002, 0xffff);
+	/* Enable NCP */
+	Ana_Set_Reg(AUDNCP_CLKDIV_CON3, 0x0000, 0xffff);
+	udelay(250);
+	/* Enable cap-less LDOs (1.5V) */
+	Ana_Set_Reg(AUDDEC_ANA_CON12, 0x1055, 0x1055);
+	/* Enable NV regulator (-1.2V) */
+	Ana_Set_Reg(AUDDEC_ANA_CON13, 0x0001, 0xffff);
+	udelay(100);
+	/* Disable AUD_ZCD */
+	Hp_Zcd_Enable(false);
+	/* Enable IBIST */
+	Ana_Set_Reg(AUDDEC_ANA_CON10, 0x0055, 0xffff);
+	/* Set HP DR bias current optimization, 010: 6uA */
+	Ana_Set_Reg(AUDDEC_ANA_CON9, 0x92, 0xffff);
+	/* Set HP & ZCD bias current optimization */
+	/* 01: ZCD: 4uA, HP/HS/LO: 5uA */
+	Ana_Set_Reg(AUDDEC_ANA_CON10, 0x0055, 0xffff);
+	/* Set LO STB enhance circuits */
+	Ana_Set_Reg(AUDDEC_ANA_CON4, 0x0110, 0xffff);
+	/* Enable LO driver bias circuits */
+	Ana_Set_Reg(AUDDEC_ANA_CON4, 0x0112, 0xffff);
+	/* Enable LO driver core circuits */
+	Ana_Set_Reg(AUDDEC_ANA_CON4, 0x0113, 0xffff);
+	/* Set LOL gain to normal gain step by step */
+	apply_speaker_gain(
+		mCodec_data->mAudio_Ana_Volume[AUDIO_ANALOG_VOLUME_LINEOUTR]);
+	/* Enable AUD_CLK */
+	Ana_Set_Reg(AUDDEC_ANA_CON11, 0x1, 0x1);
+	/* Enable Audio DAC  */
+	Ana_Set_Reg(AUDDEC_ANA_CON0, 0x3009, 0xffff);
+	/* Enable low-noise mode of DAC */
+	Ana_Set_Reg(AUDDEC_ANA_CON6, 0x0201, 0xffff);
+	/* Switch LOL MUX to audio DAC */
+	Ana_Set_Reg(AUDDEC_ANA_CON4, 0x011b, 0xffff);
+	/* disable Pull-down HPL/R to AVSS28_AUD */
+	if (mIsNeedPullDown)
+		hp_pull_down(false);
+}
+
+void Speaker_Amp_Change_disable(void)
+{
+       /* LOL mux to open */
+       Ana_Set_Reg(AUDDEC_ANA_CON4, 0x0000, 0x3 << 2);
+       if (GetDLStatus() == false) {
+	       /* Pull-down HPL/R to AVSS28_AUD */
+	       if (mIsNeedPullDown)
+		       hp_pull_down(true);
+
+	       /* Disable Audio DAC */
+	       Ana_Set_Reg(AUDDEC_ANA_CON0, 0x0000, 0x000f);
+	       /* Disable AUD_CLK */
+	       Ana_Set_Reg(AUDDEC_ANA_CON11, 0x0, 0x1);
+	       /* decrease LOL gain to minimum gain step by step */
+	       Ana_Set_Reg(ZCD_CON1, DL_GAIN_N_40DB_REG, 0xffff);
+	       /* Disable LO driver core circuits */
+	       Ana_Set_Reg(AUDDEC_ANA_CON4, 0x0, 0x1);
+	       /* Disable LO driver bias circuits */
+	       Ana_Set_Reg(AUDDEC_ANA_CON4, 0x0000, 0x1 << 1);
+	       /* Disable HP aux CMFB loop */
+	       Ana_Set_Reg(AUDDEC_ANA_CON6, 0x0, 0xff << 8);
+	       /* Enable HP main CMFB Switch */
+	       Ana_Set_Reg(AUDDEC_ANA_CON6, 0x2 << 8, 0xff << 8);
+	       /* Pull-down HPL/R, HS, LO to AVSS28_AUD */
+	       Ana_Set_Reg(AUDDEC_ANA_CON7, 0xa8, 0xff);
+	       /* Disable IBIST */
+	       Ana_Set_Reg(AUDDEC_ANA_CON10, 0x1 << 8, 0x1 << 8);
+	       /* Disable NV regulator (-1.2V) */
+	       Ana_Set_Reg(AUDDEC_ANA_CON13, 0x0, 0x1);
+	       /* Disable cap-less LDOs (1.5V) */
+	       Ana_Set_Reg(AUDDEC_ANA_CON12, 0x0, 0x1055);
+	       /* Disable NCP */
+	       Ana_Set_Reg(AUDNCP_CLKDIV_CON3, 0x1, 0x1);
+	       TurnOffDacPower();
+       }
+}
+
 static int Voice_Amp_Activate(int enable)
 {
 	mutex_lock(&Ana_Ctrl_Mutex);
@@ -3685,7 +3787,7 @@ static void Speaker_Amp_Change(bool enable)
 		/* disable Pull-down HPL/R to AVSS28_AUD */
 		if (mIsNeedPullDown)
 			hp_pull_down(false);
-
+#if 0
 	} else {
 		pr_debug("%s(), enable %d\n", __func__, enable);
 		/* LOL mux to open */
@@ -3722,6 +3824,7 @@ static void Speaker_Amp_Change(bool enable)
 			TurnOffDacPower();
 		}
 	}
+#endif
 }
 static int Speaker_Amp_Get(struct snd_kcontrol *kcontrol,
 			   struct snd_ctl_elem_value *ucontrol)
@@ -4172,6 +4275,12 @@ static int Lineout_PGAR_Set(struct snd_kcontrol *kcontrol,
 		index = DL_GAIN_N_40DB;
 	Ana_Set_Reg(ZCD_CON1, index << 7, 0x0f80);
 	mCodec_data->mAudio_Ana_Volume[AUDIO_ANALOG_VOLUME_LINEOUTR] = index;
+	//Fix first sound loud issue after system boot up finished
+	if (first_call == false) {
+	  Speaker_Amp_Change(1);
+	  first_call = true;
+	}
+
 	return 0;
 }
 static int Handset_PGA_Get(struct snd_kcontrol *kcontrol,
