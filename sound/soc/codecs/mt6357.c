@@ -3630,6 +3630,9 @@ static void Speaker_Amp_Change(bool enable)
 		if (GetDLStatus() == false)
 			TurnOnDacPower(AUDIO_ANALOG_DEVICE_OUT_SPEAKERL);
 		pr_debug("%s(), enable %d\n", __func__, enable);
+
+		Ana_Set_Reg(AUDDEC_ANA_CON12, 0x1055, 0xffff);
+
 		/* Disable headphone short-circuit protection */
 		Ana_Set_Reg(AUDDEC_ANA_CON0, 0x3000, 0xffff);
 		/* Disable handset short-circuit protection */
