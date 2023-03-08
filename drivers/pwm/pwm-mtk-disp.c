@@ -66,6 +66,17 @@ static void mtk_disp_pwm_update_bits(struct mtk_disp_pwm *mdp, u32 offset,
 	writel(value, address);
 }
 
+static void mtk_disp_pwm_get_state(struct pwm_chip *chip, struct pwm_device *pwm,
+				   struct pwm_state *state)
+{
+	struct mtk_disp_pwm *mdp = to_mtk_disp_pwm(chip);
+	u32 reg;
+
+	reg = readl(mdp->base + DISP_PWM_EN);
+	if (reg & mdp->data->enable_mask)
+		state->enabled = true;
+}
+
 static int mtk_disp_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 			       int duty_ns, int period_ns)
 {
@@ -149,6 +160,7 @@ static void mtk_disp_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 }
 
 static const struct pwm_ops mtk_disp_pwm_ops = {
+	.get_state = mtk_disp_pwm_get_state,
 	.config = mtk_disp_pwm_config,
 	.enable = mtk_disp_pwm_enable,
 	.disable = mtk_disp_pwm_disable,
