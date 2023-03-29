@@ -14,7 +14,7 @@
 #include <drm/drm_panel.h>
 
 // Default Video Mode configuration
-#define DCLK (53560)
+#define DCLK (52000)
 #define HDISPLAY (1024)
 #define VDISPLAY (600)
 #define HSYNC_FRONT_PORCH (160)
@@ -30,7 +30,7 @@
 #define VSYNC_END (VSYNC_START + VSYNC_PULSE_WIDTH)
 #define VSYNC_TOTAL (VSYNC_END + VSYNC_BACK_PORCH)
 #define VREFRESH (60)
-#define VIDEOMODE_FLAGS (DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC)
+#define VIDEOMODE_FLAGS (DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC)
 
 struct lvds_panel {
 	struct drm_panel panel;
@@ -79,6 +79,11 @@ static int lvds_panel_disable(struct drm_panel *panel)
 		return 0;
 
 	backlight_disable(lvds->backlight);
+
+	gpiod_set_value(lvds->lcd_stb_gpio, 0);
+	mdelay(100);
+	gpiod_set_value(lvds->lcd_rst_gpio, 0);
+
 	lvds->enabled = false;
 
 	return 0;
@@ -91,10 +96,7 @@ static int lvds_panel_unprepare(struct drm_panel *panel)
 	if (!lvds->prepared)
 		return 0;
 
-	gpiod_set_value(lvds->lcd_stb_gpio, 0);
-	mdelay(100);
 	gpiod_set_value(lvds->lcd_en_gpio, 0);
-	gpiod_set_value(lvds->lcd_rst_gpio, 0);
 
 	lvds->prepared = false;
 
@@ -108,19 +110,7 @@ static int lvds_panel_prepare(struct drm_panel *panel)
 	if (lvds->prepared)
 		return 0;
 
-	gpiod_set_value(lvds->lcd_stb_gpio, 0);
-	mdelay(50);
-	gpiod_set_value(lvds->lcd_en_gpio, 0);
-	gpiod_set_value(lvds->lcd_rst_gpio, 0);
-	mdelay(200);
-
 	gpiod_set_value(lvds->lcd_en_gpio, 1);
-	mdelay(12);
-
-	gpiod_set_value(lvds->lcd_rst_gpio, 1);
-	mdelay(14);
-
-	gpiod_set_value(lvds->lcd_stb_gpio, 1);
 	mdelay(10);
 
 	lvds->prepared = true;
@@ -135,6 +125,18 @@ static int lvds_panel_enable(struct drm_panel *panel)
 	if (lvds->enabled)
 		return 0;
 
+	mdelay(20);
+
+	gpiod_set_value(lvds->lcd_rst_gpio, 1);
+	mdelay(20);
+	gpiod_set_value(lvds->lcd_rst_gpio, 0);
+	mdelay(50);
+
+	gpiod_set_value(lvds->lcd_rst_gpio, 1);
+	mdelay(10);
+	gpiod_set_value(lvds->lcd_stb_gpio, 1);
+
+	mdelay(200);
 	backlight_enable(lvds->backlight);
 	lvds->enabled = true;
 

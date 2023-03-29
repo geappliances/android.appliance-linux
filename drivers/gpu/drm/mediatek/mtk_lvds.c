@@ -62,6 +62,7 @@
 #define RG_VPLL_LVDS_TTL_EN			BIT(7)
 #define RG_VPLL_TXDIV5_EN			BIT(11)
 #define RG_VPLL_SDM_PWR_ON			BIT(13)
+#define RG_VPLL_SDM_ISO_EN			BIT(14)
 
 struct mtk_lvds {
 	struct mtk_ddp_comp ddp_comp;
@@ -110,17 +111,28 @@ static void mtk_lvds_config(struct mtk_ddp_comp *comp, unsigned int w,
 	lvds_update_bits(lvds->regs_ana, MIPI_LVDS_ANA10,
 			 RG_LVDSTX_LDO1LPF_EN, RG_LVDSTX_LDO1LPF_EN);
 
-	lvds_update_bits(lvds->regs_ana, MIPI_LVDS_ANA14,
-			 RG_VPLL_PREDIV_MASK | RG_VPLL_EN |
-			 RG_VPLL_RESERVE,
-			 RG_VPLL_PREDIV | RG_VPLL_EN | RG_VPLL_RESERVE);
+	writel(RG_VPLL_SDM_ISO_EN | RG_VPLL_SDM_PWR_ON | RG_VPLL_TXDIV5_EN |
+	       RG_VPLL_LVDS_TTL_EN | RG_VPLL_LVDS_DPIX_DIV2 |
+	       RG_VPLL_LVDS_EN | RG_VPLL_TXDIV1,
+	       lvds->regs_ana + MIPI_LVDS_ANA1C);
 
-	writel(RG_VPLL_SDM_PCW, lvds->regs_ana + MIPI_LVDS_ANA18);
+	udelay(20);
 
 	writel(RG_VPLL_SDM_PWR_ON | RG_VPLL_TXDIV5_EN |
 	       RG_VPLL_LVDS_TTL_EN | RG_VPLL_LVDS_DPIX_DIV2 |
 	       RG_VPLL_LVDS_EN | RG_VPLL_TXDIV1,
 	       lvds->regs_ana + MIPI_LVDS_ANA1C);
+
+	udelay(20);
+
+	writel(RG_VPLL_SDM_PCW, lvds->regs_ana + MIPI_LVDS_ANA18);
+
+	udelay(20);
+
+	lvds_update_bits(lvds->regs_ana, MIPI_LVDS_ANA14,
+			 RG_VPLL_PREDIV_MASK | RG_VPLL_EN |
+			 RG_VPLL_RESERVE,
+			 RG_VPLL_PREDIV | RG_VPLL_EN | RG_VPLL_RESERVE);
 }
 
 static void mtk_lvds_start(struct mtk_ddp_comp *comp)

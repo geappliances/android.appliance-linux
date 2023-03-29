@@ -284,12 +284,12 @@ static int mtk_crtc_ddp_hw_init(struct mtk_drm_crtc *mtk_crtc)
 		if (prev == DDP_COMPONENT_OVL0)
 			mtk_ddp_comp_bgclr_in_on(comp);
 
-		mtk_ddp_comp_config(comp, width, height, vrefresh, bpc);
-		mtk_ddp_comp_start(comp);
-
 		if (curr == DDP_COMPONENT_LVDS)
 			mtk_ddp_lvds_sys_cfg_lvds(mtk_crtc->config_regs,
 					     mtk_crtc->mmsys_reg_data);
+
+		mtk_ddp_comp_config(comp, width, height, vrefresh, bpc);
+		mtk_ddp_comp_start(comp);
 	}
 
 	/* Initially configure all planes */
