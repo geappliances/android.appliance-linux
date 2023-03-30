@@ -126,12 +126,6 @@ static int lvds_panel_enable(struct drm_panel *panel)
 		return 0;
 
 	mdelay(20);
-
-	gpiod_set_value(lvds->lcd_rst_gpio, 1);
-	mdelay(20);
-	gpiod_set_value(lvds->lcd_rst_gpio, 0);
-	mdelay(50);
-
 	gpiod_set_value(lvds->lcd_rst_gpio, 1);
 	mdelay(10);
 	gpiod_set_value(lvds->lcd_stb_gpio, 1);
