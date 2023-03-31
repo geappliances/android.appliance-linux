@@ -654,8 +654,8 @@ static void mtk_dpi_encoder_disable(struct drm_encoder *encoder)
 	struct mtk_dpi *dpi = mtk_dpi_from_encoder(encoder);
 
 	if (dpi->panel) {
-		drm_panel_unprepare(dpi->panel);
 		drm_panel_disable(dpi->panel);
+		drm_panel_unprepare(dpi->panel);
 	}
 
 	mtk_dpi_power_off(dpi);
@@ -667,6 +667,10 @@ static void mtk_dpi_encoder_enable(struct drm_encoder *encoder)
 
 	mtk_dpi_power_on(dpi);
 	mtk_dpi_set_display_mode(dpi, &dpi->mode);
+
+	if (dpi->panel) {
+		drm_panel_enable(dpi->panel);
+	}
 }
 
 static int mtk_dpi_atomic_check(struct drm_encoder *encoder,
@@ -710,10 +714,9 @@ static void mtk_dpi_config(struct mtk_ddp_comp *comp, unsigned int w,
 {
 	struct mtk_dpi *dpi = container_of(comp, struct mtk_dpi, ddp_comp);
 
-	if(dpi->panel) {
+	if(dpi->panel)
 		drm_panel_prepare(dpi->panel);
-		drm_panel_enable(dpi->panel);
-	}
+
 }
 
 static void mtk_dpi_start(struct mtk_ddp_comp *comp)
