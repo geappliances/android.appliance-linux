@@ -27,6 +27,8 @@
 #define PWM_HIGH_WIDTH_SHIFT	16
 #define PWM_HIGH_WIDTH_MASK	(0x1fff << PWM_HIGH_WIDTH_SHIFT)
 
+#define PWM_POLARITY_MASK       BIT(2)
+
 struct mtk_pwm_data {
 	u32 enable_mask;
 	unsigned int con0;
@@ -76,6 +78,8 @@ static void mtk_disp_pwm_get_state(struct pwm_chip *chip, struct pwm_device *pwm
 	reg = readl(mdp->base + DISP_PWM_EN);
 	if (reg & mdp->data->enable_mask)
 		state->enabled = true;
+
+	state->polarity = PWM_POLARITY_NORMAL;
 }
 
 static int mtk_disp_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
@@ -154,6 +158,9 @@ static int mtk_disp_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	mtk_disp_pwm_update_bits(mdp, mdp->data->con1,
 				 PWM_PERIOD_MASK | PWM_HIGH_WIDTH_MASK,
 				 value);
+
+	/* Ensure normal polarity */
+	mtk_disp_pwm_update_bits(mdp, mdp->data->con0, PWM_POLARITY_MASK, 0);
 
 	if (mdp->data->has_commit) {
 		mtk_disp_pwm_update_bits(mdp, mdp->data->commit,
