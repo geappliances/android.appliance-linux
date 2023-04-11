@@ -473,6 +473,37 @@ err_refcount:
 	return ret;
 }
 
+static int mtk_dpi_adjust_pll_rate(struct mtk_dpi *dpi,
+				   struct drm_display_mode *mode)
+{
+	struct videomode vm = { 0 };
+	unsigned long pll_rate;
+	unsigned long pixelclock;
+	unsigned int factor;
+
+	/* let pll_rate fix the valid range of tvdpll (1G~2GHz) */
+	factor = dpi->conf->cal_factor(mode->clock);
+	drm_display_mode_to_videomode(mode, &vm);
+	pll_rate = vm.pixelclock * factor;
+
+	dev_dbg(dpi->dev, "Want PLL %lu Hz, pixel clock %lu Hz\n",
+		pll_rate, vm.pixelclock);
+
+	clk_set_rate(dpi->tvd_clk, pll_rate);
+	pll_rate = clk_get_rate(dpi->tvd_clk);
+
+	pixelclock = pll_rate / factor;
+	if (dpi->conf->chip != MTK_DPI_MT8167)
+		clk_set_rate(dpi->pixel_clk,
+			     pixelclock * (dpi->dual_edge ? 2 : 1));
+	pixelclock = clk_get_rate(dpi->pixel_clk);
+
+	dev_dbg(dpi->dev, "Got  PLL %lu Hz, pixel clock %lu Hz\n",
+		pll_rate, pixelclock);
+
+	return 0;
+}
+
 static int mtk_dpi_set_display_mode(struct mtk_dpi *dpi,
 				    struct drm_display_mode *mode)
 {
@@ -484,28 +515,8 @@ static int mtk_dpi_set_display_mode(struct mtk_dpi *dpi,
 	struct mtk_dpi_sync_param vsync_rodd = { 0 };
 	struct mtk_dpi_sync_param vsync_reven = { 0 };
 	struct videomode vm = { 0 };
-	unsigned long pll_rate;
-	unsigned int factor;
 
-	/* let pll_rate can fix the valid range of tvdpll (1G~2GHz) */
-	factor = dpi->conf->cal_factor(mode->clock);
 	drm_display_mode_to_videomode(mode, &vm);
-	pll_rate = vm.pixelclock * factor;
-
-	dev_dbg(dpi->dev, "Want PLL %lu Hz, pixel clock %lu Hz\n",
-		pll_rate, vm.pixelclock);
-
-	clk_set_rate(dpi->tvd_clk, pll_rate);
-	pll_rate = clk_get_rate(dpi->tvd_clk);
-
-	vm.pixelclock = pll_rate / factor;
-	if (dpi->conf->chip != MTK_DPI_MT8167)
-		clk_set_rate(dpi->pixel_clk,
-				 vm.pixelclock * (dpi->dual_edge ? 2 : 1));
-	vm.pixelclock = clk_get_rate(dpi->pixel_clk);
-
-	dev_dbg(dpi->dev, "Got  PLL %lu Hz, pixel clock %lu Hz\n",
-		pll_rate, vm.pixelclock);
 
 	limit.c_bottom = 0x0010;
 	limit.c_top = 0x0FE0;
@@ -616,6 +627,7 @@ static void mtk_dpi_bridge_enable(struct drm_bridge *bridge)
 		pinctrl_select_state(dpi->pinctrl, dpi->pins_dpi);
 
 	mtk_dpi_power_on(dpi);
+	mtk_dpi_adjust_pll_rate(dpi, &dpi->mode);
 	mtk_dpi_set_display_mode(dpi, &dpi->mode);
 	mtk_dpi_enable(dpi);
 
