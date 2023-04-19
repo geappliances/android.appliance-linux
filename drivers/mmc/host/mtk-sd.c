@@ -1804,8 +1804,7 @@ static void msdc_ops_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 				return;
 			}
 		}
-		break;
-	case MMC_POWER_ON:
+		mdelay(5);
 		if (!IS_ERR(mmc->supply.vqmmc) && !host->vqmmc_enabled) {
 			ret = regulator_enable(mmc->supply.vqmmc);
 			if (ret)
