@@ -363,6 +363,7 @@ static const char * const mtk_ddp_comp_stem[MTK_DDP_COMP_TYPE_MAX] = {
 	[MTK_DISP_OVL] = "ovl",
 	[MTK_DISP_OVL_2L] = "ovl-2l",
 	[MTK_DISP_RDMA] = "rdma",
+	[MTK_LVDS] = "lvds",
 	[MTK_DISP_WDMA] = "wdma",
 	[MTK_DISP_COLOR] = "color",
 	[MTK_DISP_CCORR] = "ccorr",
@@ -405,6 +406,7 @@ static const struct mtk_ddp_comp_match mtk_ddp_matches[DDP_COMPONENT_ID_MAX] = {
 	[DDP_COMPONENT_OVL1]	= { MTK_DISP_OVL,	1, NULL },
 	[DDP_COMPONENT_OVL_2L0]	= { MTK_DISP_OVL_2L,	0, NULL },
 	[DDP_COMPONENT_OVL_2L1]	= { MTK_DISP_OVL_2L,	1, NULL },
+	[DDP_COMPONENT_LVDS]    = { MTK_LVDS,           0, NULL },
 	[DDP_COMPONENT_PWM0]	= { MTK_DISP_PWM,	0, NULL },
 	[DDP_COMPONENT_PWM1]	= { MTK_DISP_PWM,	1, NULL },
 	[DDP_COMPONENT_PWM2]	= { MTK_DISP_PWM,	2, NULL },
@@ -447,24 +449,42 @@ int mtk_ddp_comp_get_id(struct device_node *node,
 	return -EINVAL;
 }
 
+static bool mtk_drm_comp_is_enabled(struct drm_device *drm,
+				    enum mtk_ddp_comp_id ddp_comp)
+{
+	struct mtk_drm_private *priv = drm->dev_private;
+	return !!priv->comp_node[ddp_comp];
+}
+
 unsigned int mtk_drm_find_possible_crtc_by_comp(struct drm_device *drm,
 						struct mtk_ddp_comp ddp_comp)
 {
 	struct mtk_drm_private *private = drm->dev_private;
-	unsigned int ret = 0;
+	unsigned int index = 0;
 
-	if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->main_path, private->data->main_len))
-		ret = BIT(0);
-	else if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->ext_path,
-					  private->data->ext_len))
-		ret = BIT(1);
-	else if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->third_path,
+	if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->main_path,
+				     private->data->main_len))
+		return BIT(index);
+
+	if (mtk_drm_comp_is_enabled(drm,
+			private->data->main_path[private->data->main_len - 1]))
+		index++;
+
+	if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->ext_path,
+				     private->data->ext_len))
+		return BIT(index);
+
+	if (mtk_drm_comp_is_enabled(drm,
+			private->data->ext_path[private->data->ext_len - 1]))
+		index++;
+
+	if (mtk_drm_find_comp_in_ddp(ddp_comp, private->data->third_path,
 					  private->data->third_len))
-		ret = BIT(2);
-	else
-		DRM_INFO("Failed to find comp in ddp table\n");
+		return BIT(index);
 
-	return ret;
+	DRM_INFO("Failed to find comp in ddp table\n");
+
+	return -EINVAL;
 }
 
 int mtk_ddp_comp_init(struct device *dev, struct device_node *node,
@@ -495,6 +515,7 @@ int mtk_ddp_comp_init(struct device *dev, struct device_node *node,
 	    comp_id == DDP_COMPONENT_DSI1 ||
 	    comp_id == DDP_COMPONENT_DSI2 ||
 	    comp_id == DDP_COMPONENT_DSI3 ||
+		comp_id == DDP_COMPONENT_LVDS ||
 	    comp_id == DDP_COMPONENT_PWM0) {
 		comp->regs = NULL;
 		comp->clk = NULL;
@@ -548,6 +569,135 @@ int mtk_ddp_comp_init(struct device *dev, struct device_node *node,
 		comp->subsys = cmdq_reg.subsys;
 #endif
 	return 0;
+}
+
+void mtk_drm_ddp_retain_old_gem(struct mtk_ddp_comp *comp,
+				       unsigned int idx,
+				       struct mtk_plane_state *state)
+{
+	struct mtk_used_gem_objects *used_gems = &comp->used_gems;
+
+        if (used_gems && state && state->base.fb) {
+                struct drm_gem_object *gem = state->base.fb->obj[0];
+
+                if (gem != used_gems->curr_gem[idx]) {
+                        drm_gem_object_get(gem);
+                        used_gems->old_gem[idx] = used_gems->curr_gem[idx];
+                        used_gems->curr_gem[idx] = gem;
+                }
+        }
+}
+
+static void mtk_drm_ddp_queue_old_gem_layer(
+	struct mtk_used_gem_objects *used_gems, int idx)
+{
+	struct old_gem *old_gem;
+
+	if (used_gems->old_gem[idx]) {
+	      old_gem = kmalloc(sizeof(struct old_gem), GFP_ATOMIC);
+	      if (!old_gem) {
+		      printk(KERN_ERR "MTK_DEBUG, %s: kmalloc() failed!\n",
+				      __func__);
+		      return;
+	      }
+	      old_gem->gem = used_gems->old_gem[idx];
+	      used_gems->old_gem[idx] = NULL;
+	      list_add_tail(&old_gem->list, &used_gems->old_gems_list_head);
+	}
+}
+
+void mtk_drm_ddp_queue_old_gems(struct mtk_ddp_comp *comp)
+{
+	struct mtk_used_gem_objects *used_gems;
+	unsigned long flags;
+	int i;
+
+	used_gems = &comp->used_gems;
+
+	spin_lock_irqsave(&used_gems->lock, flags);
+	for(i = 0; i < comp->funcs->layer_nr(comp); i++) {
+		mtk_drm_ddp_queue_old_gem_layer(used_gems, i);
+	}
+	spin_unlock_irqrestore(&used_gems->lock, flags);
+}
+
+inline struct drm_gem_object *mtk_drm_del_get_old_gem
+	(struct mtk_used_gem_objects *used_gems)
+{
+	struct old_gem *old_gem;
+	struct drm_gem_object *old_drm_gem = NULL;
+	unsigned long flags;
+
+	spin_lock_irqsave(&used_gems->lock, flags);
+	old_gem = list_first_entry_or_null(&used_gems->old_gems_list_head,
+					   struct old_gem, list);
+	if (old_gem) {
+		old_drm_gem = old_gem->gem;
+		list_del(&old_gem->list);
+		kfree(old_gem);
+	}
+	spin_unlock_irqrestore(&used_gems->lock, flags);
+
+	return old_drm_gem;
+}
+
+void put_old_gems(struct mtk_used_gem_objects *used_gems)
+{
+	struct drm_gem_object *old_drm_gem;
+
+	while ((old_drm_gem = mtk_drm_del_get_old_gem(used_gems)))
+		drm_gem_object_put(old_drm_gem);
+}
+
+static void put_old_gems_work_callback(
+		struct work_struct *work)
+{
+	struct mtk_used_gem_objects *used_gems;
+
+	used_gems = container_of(work, struct mtk_used_gem_objects,
+			put_old_gems_work);
+
+	put_old_gems(used_gems);
+}
+
+int mtk_ddp_comp_used_gems_init(struct device *dev, struct mtk_ddp_comp *comp)
+{
+	struct mtk_used_gem_objects *used_gems = &comp->used_gems;
+
+	used_gems->curr_gem = devm_kmalloc_array(dev, comp->funcs->layer_nr(comp),
+                                        sizeof(*used_gems->curr_gem),
+					GFP_KERNEL | __GFP_ZERO);
+	if (!used_gems->curr_gem)
+		return -ENOMEM;
+
+	used_gems->old_gem = devm_kmalloc_array(dev, comp->funcs->layer_nr(comp),
+                                        sizeof(*used_gems->old_gem),
+					GFP_KERNEL | __GFP_ZERO);
+	if (!used_gems->old_gem) {
+		kfree(used_gems->curr_gem);
+		return -ENOMEM;
+	}
+
+	INIT_LIST_HEAD(&used_gems->old_gems_list_head);
+	spin_lock_init(&used_gems->lock);
+	INIT_WORK(&used_gems->put_old_gems_work, put_old_gems_work_callback);
+
+	return 0;
+}
+
+void mtk_ddp_comp_put_used_gems(struct mtk_ddp_comp *comp)
+{
+	struct mtk_used_gem_objects *used_gems = &comp->used_gems;
+	int i;
+
+	put_old_gems(used_gems);
+	
+	for(i = 0; i < comp->funcs->layer_nr(comp); i++) {
+		if (used_gems->old_gem[i])
+			drm_gem_object_put(used_gems->old_gem[i]);
+		if (used_gems->curr_gem[i])
+			drm_gem_object_put(used_gems->curr_gem[i]);
+	}
 }
 
 int mtk_ddp_comp_register(struct drm_device *drm, struct mtk_ddp_comp *comp)

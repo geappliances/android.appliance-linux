@@ -1,0 +1,2 @@
+source "drivers/misc/mediatek/gpu/gpu_rgx/Kconfig"
+source "drivers/misc/mediatek/usb11/Kconfig"

@@ -220,7 +220,7 @@ static struct snd_soc_dai_driver mt8183_memif_dai_driver[] = {
 		.capture = {
 			.stream_name = "UL1",
 			.channels_min = 1,
-			.channels_max = 2,
+			.channels_max = 4,
 			.rates = MTK_PCM_RATES,
 			.formats = MTK_PCM_FORMATS,
 		},
@@ -294,6 +294,8 @@ static const struct snd_kcontrol_new memif_ul1_ch1_mix[] = {
 				    I_ADDA_UL_CH1, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I2S0_CH1", AFE_CONN21,
 				    I_I2S0_CH1, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I2S2_CH1", AFE_CONN21,
+				    I_I2S2_CH1, 1, 0),
 };
 
 static const struct snd_kcontrol_new memif_ul1_ch2_mix[] = {
@@ -301,6 +303,18 @@ static const struct snd_kcontrol_new memif_ul1_ch2_mix[] = {
 				    I_ADDA_UL_CH2, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I2S0_CH2", AFE_CONN21,
 				    I_I2S0_CH2, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I2S2_CH2", AFE_CONN22,
+				    I_I2S2_CH2, 1, 0),
+};
+
+static const struct snd_kcontrol_new memif_ul1_ch3_mix[] = {
+	SOC_DAPM_SINGLE_AUTODISABLE("I2S2_CH3", AFE_CONN9,
+				    I_I2S2_CH3, 1, 0),
+};
+
+static const struct snd_kcontrol_new memif_ul1_ch4_mix[] = {
+	SOC_DAPM_SINGLE_AUTODISABLE("I2S2_CH4", AFE_CONN10,
+				    I_I2S2_CH4, 1, 0),
 };
 
 static const struct snd_kcontrol_new memif_ul2_ch1_mix[] = {
@@ -366,6 +380,10 @@ static const struct snd_soc_dapm_widget mt8183_memif_widgets[] = {
 			   memif_ul1_ch1_mix, ARRAY_SIZE(memif_ul1_ch1_mix)),
 	SND_SOC_DAPM_MIXER("UL1_CH2", SND_SOC_NOPM, 0, 0,
 			   memif_ul1_ch2_mix, ARRAY_SIZE(memif_ul1_ch2_mix)),
+	SND_SOC_DAPM_MIXER("UL1_CH3", SND_SOC_NOPM, 0, 0,
+			   memif_ul1_ch3_mix, ARRAY_SIZE(memif_ul1_ch3_mix)),
+	SND_SOC_DAPM_MIXER("UL1_CH4", SND_SOC_NOPM, 0, 0,
+			   memif_ul1_ch4_mix, ARRAY_SIZE(memif_ul1_ch4_mix)),
 
 	SND_SOC_DAPM_MIXER("UL2_CH1", SND_SOC_NOPM, 0, 0,
 			   memif_ul2_ch1_mix, ARRAY_SIZE(memif_ul2_ch1_mix)),
@@ -395,6 +413,10 @@ static const struct snd_soc_dapm_route mt8183_memif_routes[] = {
 	{"UL1_CH2", "ADDA_UL_CH2", "ADDA Capture"},
 	{"UL1_CH1", "I2S0_CH1", "I2S0"},
 	{"UL1_CH2", "I2S0_CH2", "I2S0"},
+	{"UL1_CH1", "I2S2_CH1", "I2S2"},
+	{"UL1_CH2", "I2S2_CH2", "I2S2"},
+	{"UL1_CH3", "I2S2_CH3", "I2S2"},
+	{"UL1_CH4", "I2S2_CH4", "I2S2"},
 
 	{"UL2", NULL, "UL2_CH1"},
 	{"UL2", NULL, "UL2_CH2"},
@@ -1089,7 +1111,6 @@ static int mt8183_afe_pcm_dev_probe(struct platform_device *pdev)
 	struct mtk_base_afe *afe;
 	struct mt8183_afe_private *afe_priv;
 	struct device *dev;
-	struct reset_control *rstc;
 	int i, irq_id, ret;
 
 	afe = devm_kzalloc(&pdev->dev, sizeof(*afe), GFP_KERNEL);
@@ -1125,19 +1146,6 @@ static int mt8183_afe_pcm_dev_probe(struct platform_device *pdev)
 	ret = regmap_attach_dev(dev, afe->regmap, &mt8183_afe_regmap_config);
 	if (ret) {
 		dev_warn(dev, "regmap_attach_dev fail, ret %d\n", ret);
-		goto err_pm_disable;
-	}
-
-	rstc = devm_reset_control_get(dev, "audiosys");
-	if (IS_ERR(rstc)) {
-		ret = PTR_ERR(rstc);
-		dev_err(dev, "could not get audiosys reset:%d\n", ret);
-		goto err_pm_disable;
-	}
-
-	ret = reset_control_reset(rstc);
-	if (ret) {
-		dev_err(dev, "failed to trigger audio reset:%d\n", ret);
 		goto err_pm_disable;
 	}
 

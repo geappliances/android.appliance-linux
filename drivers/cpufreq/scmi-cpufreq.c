@@ -188,9 +188,8 @@ static int scmi_cpufreq_init(struct cpufreq_policy *policy)
 	policy->fast_switch_possible =
 		perf_ops->fast_switch_possible(ph, cpu_dev);
 
-	power_scale_mw = perf_ops->power_scale_mw_get(ph);
 	em_dev_register_perf_domain(cpu_dev, nr_opp, &em_cb, policy->cpus,
-				    power_scale_mw);
+				    false);
 
 	return 0;
 

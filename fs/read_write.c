@@ -471,7 +471,7 @@ ssize_t kernel_read(struct file *file, void *buf, size_t count, loff_t *pos)
 		return ret;
 	return __kernel_read(file, buf, count, pos);
 }
-EXPORT_SYMBOL_NS(kernel_read, ANDROID_GKI_VFS_EXPORT_ONLY);
+EXPORT_SYMBOL(kernel_read);
 
 ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
@@ -503,6 +503,8 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	inc_syscr(current);
 	return ret;
 }
+
+EXPORT_SYMBOL(vfs_read);
 
 static ssize_t new_sync_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
 {
@@ -580,7 +582,7 @@ ssize_t kernel_write(struct file *file, const void *buf, size_t count,
 	file_end_write(file);
 	return ret;
 }
-EXPORT_SYMBOL_NS(kernel_write, ANDROID_GKI_VFS_EXPORT_ONLY);
+EXPORT_SYMBOL(kernel_write);
 
 ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
@@ -613,6 +615,7 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 	file_end_write(file);
 	return ret;
 }
+EXPORT_SYMBOL(vfs_write);
 
 /* file_ppos returns &file->f_pos or NULL if file is stream */
 static inline loff_t *file_ppos(struct file *file)

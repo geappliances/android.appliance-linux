@@ -33,7 +33,6 @@
 #include "mtk-eint.h"
 #include "pinctrl-mtk-common.h"
 
-#define MAX_GPIO_MODE_PER_REG 5
 #define GPIO_MODE_BITS        3
 #define GPIO_MODE_PREFIX "GPIO"
 
@@ -61,7 +60,7 @@ static struct regmap *mtk_get_regmap(struct mtk_pinctrl *pctl,
 static unsigned int mtk_get_port(struct mtk_pinctrl *pctl, unsigned long pin)
 {
 	/* Different SoC has different mask and port shift. */
-	return ((pin >> 4) & pctl->devdata->port_mask)
+	return ((pin >> pctl->devdata->mode_shf) & pctl->devdata->port_mask)
 			<< pctl->devdata->port_shf;
 }
 
@@ -74,7 +73,7 @@ static int mtk_pmx_gpio_set_direction(struct pinctrl_dev *pctldev,
 	struct mtk_pinctrl *pctl = pinctrl_dev_get_drvdata(pctldev);
 
 	reg_addr = mtk_get_port(pctl, offset) + pctl->devdata->dir_offset;
-	bit = BIT(offset & 0xf);
+	bit = BIT(offset & pctl->devdata->mode_mask);
 
 	if (pctl->devdata->spec_dir_set)
 		pctl->devdata->spec_dir_set(&reg_addr, offset);
@@ -96,7 +95,7 @@ static void mtk_gpio_set(struct gpio_chip *chip, unsigned offset, int value)
 	struct mtk_pinctrl *pctl = gpiochip_get_data(chip);
 
 	reg_addr = mtk_get_port(pctl, offset) + pctl->devdata->dout_offset;
-	bit = BIT(offset & 0xf);
+	bit = BIT(offset & pctl->devdata->mode_mask);
 
 	if (value)
 		reg_addr = SET_ADDR(reg_addr, pctl);
@@ -135,12 +134,12 @@ static int mtk_pconf_set_ies_smt(struct mtk_pinctrl *pctl, unsigned pin,
 			pin, pctl->devdata->port_align, value, arg);
 	}
 
-	bit = BIT(pin & 0xf);
-
 	if (arg == PIN_CONFIG_INPUT_ENABLE)
 		offset = pctl->devdata->ies_offset;
 	else
 		offset = pctl->devdata->smt_offset;
+
+	bit = BIT(offset & pctl->devdata->mode_mask);
 
 	if (value)
 		reg_addr = SET_ADDR(mtk_get_port(pctl, pin) + offset, pctl);
@@ -220,6 +219,65 @@ static int mtk_pconf_set_driving(struct mtk_pinctrl *pctl,
 	}
 
 	return -EINVAL;
+}
+
+int mtk_rsel_r1r0_set_samereg(struct regmap *regmap,
+		const struct mtk_pin_info *rsel_infos,
+		unsigned int info_num, unsigned int pin,
+		unsigned int r1r0)
+{
+	unsigned int i;
+	unsigned int reg_addr;
+	unsigned int bit_r0, bit_r1;
+	unsigned int reg_value = 0;
+	const struct mtk_pin_info *rsel_pin;
+	bool find = false;
+
+	for (i = 0; i < info_num; i++) {
+		if (pin == rsel_infos[i].pin) {
+			find = true;
+			break;
+		}
+	}
+
+	if (!find)
+		return -EINVAL;
+
+	rsel_pin = rsel_infos + i;
+	reg_addr = rsel_pin->offset;
+	bit_r0 = BIT(rsel_pin->bit);
+	bit_r1 = BIT(rsel_pin->bit + 1);
+
+	switch (r1r0) {
+	case MTK_RSEL_SET_R1R0_00:
+		regmap_read(regmap, reg_addr, &reg_value);
+		regmap_write(regmap, reg_addr, ~bit_r0 & reg_value);
+		regmap_read(regmap, reg_addr, &reg_value);
+		regmap_write(regmap, reg_addr, ~bit_r1 & reg_value);
+		break;
+	case MTK_RSEL_SET_R1R0_01:
+		regmap_read(regmap, reg_addr, &reg_value);
+		regmap_write(regmap, reg_addr, bit_r0 | reg_value);
+		regmap_read(regmap, reg_addr, &reg_value);
+		regmap_write(regmap, reg_addr, ~bit_r1 & reg_value);
+		break;
+	case MTK_RSEL_SET_R1R0_10:
+		regmap_read(regmap, reg_addr, &reg_value);
+		regmap_write(regmap, reg_addr, ~bit_r0 & reg_value);
+		regmap_read(regmap, reg_addr, &reg_value);
+		regmap_write(regmap, reg_addr, bit_r1 | reg_value);
+		break;
+	case MTK_RSEL_SET_R1R0_11:
+		regmap_read(regmap, reg_addr, &reg_value);
+		regmap_write(regmap, reg_addr, bit_r0 | reg_value);
+		regmap_read(regmap, reg_addr, &reg_value);
+		regmap_write(regmap, reg_addr, bit_r1 | reg_value);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 int mtk_pctrl_spec_pull_set_samereg(struct regmap *regmap,
@@ -311,23 +369,37 @@ static int mtk_pconf_set_pull_select(struct mtk_pinctrl *pctl,
 		return -EINVAL;
 	}
 
-	bit = BIT(pin & 0xf);
-	if (enable)
-		reg_pullen = SET_ADDR(mtk_get_port(pctl, pin) +
-			pctl->devdata->pullen_offset, pctl);
-	else
-		reg_pullen = CLR_ADDR(mtk_get_port(pctl, pin) +
-			pctl->devdata->pullen_offset, pctl);
+	if (pctl->devdata->quirks & MTK_PINCTRL_MODE_SET_CLR_BROKEN) {
+		bit = pin & pctl->devdata->mode_mask;
+		reg_pullen = mtk_get_port(pctl, pin) +
+				pctl->devdata->pullen_offset;
+		reg_pullsel = mtk_get_port(pctl, pin) +
+				pctl->devdata->pullsel_offset;
 
-	if (isup)
-		reg_pullsel = SET_ADDR(mtk_get_port(pctl, pin) +
-			pctl->devdata->pullsel_offset, pctl);
-	else
-		reg_pullsel = CLR_ADDR(mtk_get_port(pctl, pin) +
-			pctl->devdata->pullsel_offset, pctl);
+		regmap_update_bits(mtk_get_regmap(pctl, pin), reg_pullen,
+			BIT(bit), enable << bit);
+		regmap_update_bits(mtk_get_regmap(pctl, pin), reg_pullsel,
+			BIT(bit), isup << bit);
+	} else {
+		bit = BIT(pin & pctl->devdata->mode_mask);
+		if (enable)
+			reg_pullen = SET_ADDR(mtk_get_port(pctl, pin) +
+				pctl->devdata->pullen_offset, pctl);
+		else
+			reg_pullen = CLR_ADDR(mtk_get_port(pctl, pin) +
+				pctl->devdata->pullen_offset, pctl);
 
-	regmap_write(mtk_get_regmap(pctl, pin), reg_pullen, bit);
-	regmap_write(mtk_get_regmap(pctl, pin), reg_pullsel, bit);
+		if (isup)
+			reg_pullsel = SET_ADDR(mtk_get_port(pctl, pin) +
+				pctl->devdata->pullsel_offset, pctl);
+		else
+			reg_pullsel = CLR_ADDR(mtk_get_port(pctl, pin) +
+				pctl->devdata->pullsel_offset, pctl);
+
+		regmap_write(mtk_get_regmap(pctl, pin), reg_pullen, bit);
+		regmap_write(mtk_get_regmap(pctl, pin), reg_pullsel, bit);
+	}
+
 	return 0;
 }
 
@@ -683,11 +755,11 @@ static int mtk_pmx_set_mode(struct pinctrl_dev *pctldev,
 		pctl->devdata->spec_pinmux_set(mtk_get_regmap(pctl, pin),
 					pin, mode);
 
-	reg_addr = ((pin / MAX_GPIO_MODE_PER_REG) << pctl->devdata->port_shf)
+	reg_addr = ((pin / pctl->devdata->mode_per_reg) << pctl->devdata->port_shf)
 			+ pctl->devdata->pinmux_offset;
 
 	mode &= mask;
-	bit = pin % MAX_GPIO_MODE_PER_REG;
+	bit = pin % pctl->devdata->mode_per_reg;
 	mask <<= (GPIO_MODE_BITS * bit);
 	val = (mode << (GPIO_MODE_BITS * bit));
 	return regmap_update_bits(mtk_get_regmap(pctl, pin),
@@ -798,7 +870,7 @@ static int mtk_gpio_get_direction(struct gpio_chip *chip, unsigned offset)
 	struct mtk_pinctrl *pctl = gpiochip_get_data(chip);
 
 	reg_addr =  mtk_get_port(pctl, offset) + pctl->devdata->dir_offset;
-	bit = BIT(offset & 0xf);
+	bit = BIT(offset & pctl->devdata->mode_mask);
 
 	if (pctl->devdata->spec_dir_set)
 		pctl->devdata->spec_dir_set(&reg_addr, offset);
@@ -820,7 +892,7 @@ static int mtk_gpio_get(struct gpio_chip *chip, unsigned offset)
 	reg_addr = mtk_get_port(pctl, offset) +
 		pctl->devdata->din_offset;
 
-	bit = BIT(offset & 0xf);
+	bit = BIT(offset & pctl->devdata->mode_mask);
 	regmap_read(pctl->regmap1, reg_addr, &read_val);
 	return !!(read_val & bit);
 }

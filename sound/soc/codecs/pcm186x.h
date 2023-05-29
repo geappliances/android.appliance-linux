@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Texas Instruments PCM186x Universal Audio ADC
  *
@@ -210,6 +210,9 @@ enum pcm186x_type {
 #define PCM186X_MMAP_STAT_BUSY		BIT(2)
 #define PCM186X_MMAP_STAT_R_REQ		BIT(1)
 #define PCM186X_MMAP_STAT_W_REQ		BIT(0)
+
+/* PCM186X_DPGA_VAL */
+#define PCM186X_DPGA_0DB			0x28
 
 extern const struct regmap_config pcm186x_regmap;
 

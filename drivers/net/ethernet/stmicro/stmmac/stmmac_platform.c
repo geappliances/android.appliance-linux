@@ -777,6 +777,12 @@ static int __maybe_unused stmmac_runtime_resume(struct device *dev)
 
 	return stmmac_bus_clks_config(priv, true);
 }
+#endif /* CONFIG_PM_SLEEP */
+
+const struct dev_pm_ops stmmac_pltfr_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(stmmac_pltfr_suspend, stmmac_pltfr_resume)
+	SET_RUNTIME_PM_OPS(stmmac_runtime_suspend, stmmac_runtime_resume, NULL)
+	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(stmmac_pltfr_noirq_suspend, stmmac_pltfr_noirq_resume)
 
 static int __maybe_unused stmmac_pltfr_noirq_suspend(struct device *dev)
 {

@@ -237,6 +237,7 @@
 
 #define MSDC_PATCH_BIT1_CMDTA     (0x7 << 3)    /* RW */
 #define MSDC_PB1_BUSY_CHECK_SEL   (0x1 << 7)    /* RW */
+#define MSDC_PB1_SINGLE_BURST     (0x1 << 16)   /* RW */
 #define MSDC_PATCH_BIT1_STOP_DLY  (0xf << 8)    /* RW */
 
 #define MSDC_PATCH_BIT2_CFGRESP   (0x1 << 15)   /* RW */
@@ -426,6 +427,7 @@ struct msdc_host {
 	struct clk *h_clk;      /* msdc h_clk */
 	struct clk *bus_clk;	/* bus clock which used to access register */
 	struct clk *src_clk_cg; /* msdc source clock control gate */
+	struct clk *sys_cg;     /* msdc subsys clock gate */
 	u32 mclk;		/* mmc subsystem clock frequency */
 	u32 src_clk_freq;	/* source clock frequency */
 	unsigned char timing;
@@ -439,6 +441,7 @@ struct msdc_host {
 	bool hs400_mode;	/* current eMMC will run at hs400 mode */
 	bool internal_cd;	/* Use internal card-detect logic */
 	bool cqhci;		/* support eMMC hw cmdq */
+	bool disable_single_burst;
 	struct msdc_save_para save_para; /* used when gate HCLK */
 	struct msdc_tune_para def_tune_para; /* default tune setting */
 	struct msdc_tune_para saved_tune_para; /* tune result of CMD21/CMD19 */
@@ -790,10 +793,12 @@ static void msdc_gate_clock(struct msdc_host *host)
 	clk_disable_unprepare(host->src_clk);
 	clk_disable_unprepare(host->bus_clk);
 	clk_disable_unprepare(host->h_clk);
+	clk_disable_unprepare(host->sys_cg);
 }
 
 static void msdc_ungate_clock(struct msdc_host *host)
 {
+	clk_prepare_enable(host->sys_cg);
 	clk_prepare_enable(host->h_clk);
 	clk_prepare_enable(host->bus_clk);
 	clk_prepare_enable(host->src_clk);
@@ -1646,6 +1651,10 @@ static void msdc_init_hw(struct msdc_host *host)
 	writel(0xffff4089, host->base + MSDC_PATCH_BIT1);
 	sdr_set_bits(host->base + EMMC50_CFG0, EMMC50_CFG_CFCSTS_SEL);
 
+	if (host->disable_single_burst)
+		sdr_clr_bits(host->base + MSDC_PATCH_BIT1,
+			     MSDC_PB1_SINGLE_BURST);
+
 	if (host->dev_comp->stop_clk_fix) {
 		sdr_set_field(host->base + MSDC_PATCH_BIT1,
 			      MSDC_PATCH_BIT1_STOP_DLY, 3);
@@ -1706,6 +1715,10 @@ static void msdc_init_hw(struct msdc_host *host)
 			sdr_set_bits(host->base + tune_reg,
 				     MSDC_PAD_TUNE_RXDLYSEL);
 	}
+
+	if (host->disable_single_burst)
+		sdr_clr_bits(host->base + MSDC_PATCH_BIT1,
+			     MSDC_PB1_SINGLE_BURST);
 
 	/* Configure to enable SDIO mode.
 	 * it's must otherwise sdio cmd5 failed
@@ -2375,6 +2388,10 @@ static void msdc_of_property_parse(struct platform_device *pdev,
 		host->cqhci = true;
 	else
 		host->cqhci = false;
+
+	host->disable_single_burst =
+		of_property_read_bool(pdev->dev.of_node,
+				      "mediatek,disable-single-burst");
 }
 
 static int msdc_drv_probe(struct platform_device *pdev)
@@ -2435,6 +2452,10 @@ static int msdc_drv_probe(struct platform_device *pdev)
 	host->src_clk_cg = devm_clk_get(&pdev->dev, "source_cg");
 	if (IS_ERR(host->src_clk_cg))
 		host->src_clk_cg = NULL;
+
+	host->sys_cg = devm_clk_get(&pdev->dev, "sys_cg");
+	if (IS_ERR(host->sys_cg))
+		host->sys_cg = NULL;
 
 	host->reset = devm_reset_control_get_optional_exclusive(&pdev->dev,
 								"hrst");

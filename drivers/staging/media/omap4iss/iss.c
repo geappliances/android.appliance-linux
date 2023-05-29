@@ -456,6 +456,8 @@ static int iss_pipeline_enable(struct iss_pipeline *pipe,
 
 	pipe->do_propagation = false;
 
+	mutex_lock(&iss->media_dev.graph_mutex);
+
 	entity = &pipe->output->video.entity;
 	while (1) {
 		pad = &entity->pads[0];
@@ -472,6 +474,7 @@ static int iss_pipeline_enable(struct iss_pipeline *pipe,
 		ret = v4l2_subdev_call(subdev, video, s_stream, mode);
 		if (ret < 0 && ret != -ENOIOCTLCMD) {
 			iss_pipeline_disable(pipe, entity);
+			mutex_unlock(&iss->media_dev.graph_mutex);
 			return ret;
 		}
 
@@ -480,7 +483,9 @@ static int iss_pipeline_enable(struct iss_pipeline *pipe,
 			pipe->do_propagation = true;
 	}
 
+	mutex_unlock(&iss->media_dev.graph_mutex);
 	iss_print_status(pipe->output->iss);
+
 	return 0;
 }
 
@@ -543,7 +548,7 @@ static int iss_pipeline_is_last(struct media_entity *me)
 	struct iss_pipeline *pipe;
 	struct media_pad *pad;
 
-	if (!me->pipe)
+	if (!me->pads->pipe)
 		return 0;
 	pipe = to_iss_pipeline(me);
 	if (pipe->stream_state == ISS_PIPELINE_STREAM_STOPPED)

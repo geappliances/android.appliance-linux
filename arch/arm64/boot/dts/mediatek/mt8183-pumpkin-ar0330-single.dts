@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2020 Baylibre, SAS
+ * Author: Phi-Bang Nguyen <pnguyen@baylibre.com>
+ */
+
+#include "mt8183-pumpkin-ar0330-dual.dtsi"
+
+&i2c4 {
+	sensor@10 {
+		status = "disabled";
+	};
+};
+
+&camsv1 {
+	status = "disabled";
+};

@@ -7,6 +7,7 @@
  * Copyright (C) 2010-2011 Lars-Peter Clausen <lars@metafoo.de>
  * Copyright (C) 2011 Pali Rohár <pali@kernel.org>
  * Copyright (C) 2017 Liam Breck <kernel@networkimprov.net>
+ * Copyright (c) 2022 Baylibre SAS Riadh Ghaddab <rghaddab@baylibre.com>
  *
  * Based on a previous work by Copyright (C) 2008 Texas Instruments, Inc.
  *
@@ -39,6 +40,7 @@
  * https://www.ti.com/product/bq27z561
  * https://www.ti.com/product/bq28z610
  * https://www.ti.com/product/bq34z100-g1
+ * https://www.ti.com/product/bq34110
  */
 
 #include <linux/device.h>
@@ -79,6 +81,44 @@
 #define BQ27Z561_FLAG_FDC	BIT(4) /* Battery fully discharged */
 #define BQ27Z561_FLAG_FC	BIT(5) /* Battery fully charged */
 #define BQ27Z561_FLAG_DIS_CH	BIT(6) /* Battery is discharging */
+
+/* BQ34110 has different layout for Flags register */
+#define BQ34110_FLAG_DSG	BIT(0)
+#define BQ34110_FLAG_CHG	BIT(1)
+#define BQ34110_FLAG_TDA	BIT(2)
+#define BQ34110_FLAG_TCA	BIT(3)
+#define BQ34110_FLAG_FC		BIT(4)
+#define BQ34110_FLAG_FD		BIT(5)
+#define BQ34110_FLAG_CHGINH	BIT(6)
+#define BQ34110_FLAG_SLEEP	BIT(7)
+#define BQ34110_FLAG_BATLOW	BIT(8)
+#define BQ34110_FLAG_BATHIGH	BIT(9)
+#define BQ34110_FLAG_OTD	BIT(10)
+#define BQ34110_FLAG_OTC	BIT(11)
+#define BQ34110_FLAG_UTD	BIT(12)
+#define BQ34110_FLAG_UTC	BIT(13)
+#define BQ34110_FLAG_SOCLOW	BIT(14)
+
+/* BQ34110 needs some delays for read/writes of registers */
+#define BQ34110_RW_DELAY_US	1000
+#define BQ34110_POLL_DELAY_US	500000
+#define BQ34110_CAL_RETRIES	20
+
+/* some BQ34110 subcommands */
+#define BQ34110_CONTROL_STATUS	0x0000
+#define BQ34110_BCA_BIT		BIT(4)
+#define BQ34110_CCA_BIT		BIT(5)
+#define BQ34110_BOARD_OFFSET	0x0009
+#define BQ34110_CAL_TOGGLE	0x002D
+#define BQ34110_RESET		0x0041
+#define BQ34110_MAC_STATUS	0x0057
+#define BQ34110_CAL_EN_BIT	BIT(15)
+
+/* BQ34110 DF registers */
+#define BQ34110_VOLTAGE_DIVIDER		0x4010
+#define BQ34110_PIN_CONTROL_CONFIG	0x413D
+#define BQ34110_VEN_EN_MASK		0x10
+#define BQ34110_CELL_NUMBERS		0x4155
 
 /* control register params */
 #define BQ27XXX_SEALED			0x20
@@ -121,6 +161,10 @@ enum bq27xxx_reg_index {
 	BQ27XXX_DM_BLOCK,	/* Data Block */
 	BQ27XXX_DM_DATA,	/* Block Data */
 	BQ27XXX_DM_CKSUM,	/* Block Data Checksum */
+	BQ27XXX_MAC_DATA,	/* Result of MAC subcommands */
+	BQ27XXX_MAC_STATUS,	/* STATUS Of MAC subcommands */
+	BQ27XXX_MAC_CKSUM,	/* Checksum of DF R/W */
+	BQ27XXX_MAC_DLEN,	/* Data length of DF R/W */
 	BQ27XXX_REG_MAX,	/* sentinel */
 };
 
@@ -497,6 +541,35 @@ static u8
 		[BQ27XXX_REG_DCAP] = 0x3c,
 		[BQ27XXX_REG_AP] = 0x22,
 		BQ27XXX_DM_REG_ROWS,
+	},
+
+	bq34110_regs[BQ27XXX_REG_MAX] = {
+		[BQ27XXX_REG_CTRL] = 0x00,
+		[BQ27XXX_REG_TEMP] = 0x06,
+		[BQ27XXX_REG_INT_TEMP] = 0x28,
+		[BQ27XXX_REG_VOLT] = 0x08,
+		[BQ27XXX_REG_AI] = 0x14,
+		[BQ27XXX_REG_FLAGS] = 0x0a,
+		[BQ27XXX_REG_TTE] = 0x16,
+		[BQ27XXX_REG_TTF] = 0x18,
+		[BQ27XXX_REG_TTES] = INVALID_REG_ADDR,
+		[BQ27XXX_REG_TTECP] = INVALID_REG_ADDR,
+		[BQ27XXX_REG_NAC] = 0x0c,
+		[BQ27XXX_REG_FCC] = 0x12,
+		[BQ27XXX_REG_CYCT] = 0x2a,
+		[BQ27XXX_REG_AE] = INVALID_REG_ADDR,
+		[BQ27XXX_REG_SOC] = 0x2c,
+		[BQ27XXX_REG_DCAP] = 0x3c,
+		[BQ27XXX_REG_AP] = 0x24,
+		[BQ27XXX_DM_CTRL] = INVALID_REG_ADDR,
+		[BQ27XXX_DM_CLASS] = INVALID_REG_ADDR,
+		[BQ27XXX_DM_BLOCK] = INVALID_REG_ADDR,
+		[BQ27XXX_DM_DATA] = INVALID_REG_ADDR,
+		[BQ27XXX_DM_CKSUM] = INVALID_REG_ADDR,
+		[BQ27XXX_MAC_DATA] = 0x40,
+		[BQ27XXX_MAC_STATUS] = 0x3e,
+		[BQ27XXX_MAC_CKSUM] = 0x60,
+		[BQ27XXX_MAC_DLEN] = 0x61,
 	};
 
 static enum power_supply_property bq27000_props[] = {
@@ -792,6 +865,33 @@ static enum power_supply_property bq34z100_props[] = {
 	POWER_SUPPLY_PROP_MANUFACTURER,
 };
 
+static enum power_supply_property bq34110_props[] = {
+	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_PRESENT,
+	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
+	POWER_SUPPLY_PROP_TEMP,
+	POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW,
+	POWER_SUPPLY_PROP_TIME_TO_FULL_NOW,
+	POWER_SUPPLY_PROP_TECHNOLOGY,
+	POWER_SUPPLY_PROP_CHARGE_FULL,
+	POWER_SUPPLY_PROP_CHARGE_NOW,
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_CYCLE_COUNT,
+	POWER_SUPPLY_PROP_POWER_AVG,
+	POWER_SUPPLY_PROP_HEALTH,
+	POWER_SUPPLY_PROP_MANUFACTURER,
+	POWER_SUPPLY_PROP_CALIBRATE,
+};
+
+enum calibration_profiles {
+	BQ34110_CAL_BOARD_OFFSET = 0,
+	BQ34110_CAL_VOLTAGE_DIVIDER,
+};
+
+
 struct bq27xxx_dm_reg {
 	u8 subclass_id;
 	u8 offset;
@@ -836,6 +936,7 @@ static struct bq27xxx_dm_reg bq27500_dm_regs[] = {
 #define bq27542_dm_regs 0
 #define bq27546_dm_regs 0
 #define bq27742_dm_regs 0
+#define bq34110_dm_regs 0
 
 #if 0 /* not yet tested */
 static struct bq27xxx_dm_reg bq27545_dm_regs[] = {
@@ -900,6 +1001,8 @@ static struct bq27xxx_dm_reg bq27621_dm_regs[] = {
 #define BQ27XXX_O_SOC_SI	BIT(6) /* SoC is single register */
 #define BQ27XXX_O_HAS_CI	BIT(7) /* has Capacity Inaccurate flag */
 #define BQ27XXX_O_MUL_CHEM	BIT(8) /* multiple chemistries supported */
+#define BQ34110_O_BITS		BIT(6)
+#define BQ27XXX_O_UTDC		BIT(7) /* has UTC/UTD undertemperature flags */
 
 #define BQ27XXX_DATA(ref, key, opt) {		\
 	.opts = (opt),				\
@@ -948,6 +1051,7 @@ static struct {
 	[BQ28Z610]  = BQ27XXX_DATA(bq28z610,  0         , BQ27Z561_O_BITS),
 	[BQ34Z100]  = BQ27XXX_DATA(bq34z100,  0         , BQ27XXX_O_OTDC | BQ27XXX_O_SOC_SI | \
 							  BQ27XXX_O_HAS_CI | BQ27XXX_O_MUL_CHEM),
+	[BQ34110]   = BQ27XXX_DATA(bq34110,   0         , BQ34110_O_BITS | BQ27XXX_O_OTDC  | BQ27XXX_O_UTDC),
 };
 
 static DEFINE_MUTEX(bq27xxx_list_lock);
@@ -1057,6 +1161,16 @@ static inline int bq27xxx_read(struct bq27xxx_device_info *di, int reg_index,
 	return ret;
 }
 
+static inline int bq27xxx_read_with_delay(struct bq27xxx_device_info *di,
+					  int reg_index, bool single, int delay) {
+	int ret;
+
+	ret = bq27xxx_read(di, reg_index, single);
+	usleep_range(delay, delay);
+
+	return ret;
+}
+
 static inline int bq27xxx_write(struct bq27xxx_device_info *di, int reg_index,
 				u16 value, bool single)
 {
@@ -1072,6 +1186,17 @@ static inline int bq27xxx_write(struct bq27xxx_device_info *di, int reg_index,
 	if (ret < 0)
 		dev_dbg(di->dev, "failed to write register 0x%02x (index %d)\n",
 			di->regs[reg_index], reg_index);
+
+	return ret;
+}
+
+static inline int bq27xxx_write_with_delay(struct bq27xxx_device_info *di,
+					   int reg_index, u16 value, bool single,
+					   int delay) {
+	int ret;
+
+	ret = bq27xxx_write(di, reg_index, value, single);
+	usleep_range(delay, delay);
 
 	return ret;
 }
@@ -1636,8 +1761,12 @@ static int bq27xxx_battery_read_time(struct bq27xxx_device_info *di, u8 reg)
  */
 static bool bq27xxx_battery_overtemp(struct bq27xxx_device_info *di, u16 flags)
 {
-	if (di->opts & BQ27XXX_O_OTDC)
-		return flags & (BQ27XXX_FLAG_OTC | BQ27XXX_FLAG_OTD);
+	if (di->opts & BQ27XXX_O_OTDC) {
+		if (di->opts & BQ34110_O_BITS)
+			return flags & (BQ34110_FLAG_OTC | BQ34110_FLAG_OTD);
+		else
+			return flags & (BQ27XXX_FLAG_OTC | BQ27XXX_FLAG_OTD);
+	}
         if (di->opts & BQ27XXX_O_UTOT)
 		return flags & BQ27XXX_FLAG_OT;
 
@@ -1651,6 +1780,8 @@ static bool bq27xxx_battery_undertemp(struct bq27xxx_device_info *di, u16 flags)
 {
 	if (di->opts & BQ27XXX_O_UTOT)
 		return flags & BQ27XXX_FLAG_UT;
+	else if (di->opts & BQ27XXX_O_UTDC)
+		return flags & (BQ34110_FLAG_UTC | BQ34110_FLAG_UTD);
 
 	return false;
 }
@@ -1664,6 +1795,8 @@ static bool bq27xxx_battery_dead(struct bq27xxx_device_info *di, u16 flags)
 		return flags & (BQ27000_FLAG_EDV1 | BQ27000_FLAG_EDVF);
 	else if (di->opts & BQ27Z561_O_BITS)
 		return flags & BQ27Z561_FLAG_FDC;
+	else if (di->opts & BQ34110_O_BITS)
+		return flags & BQ34110_FLAG_FD;
 	else
 		return flags & (BQ27XXX_FLAG_SOC1 | BQ27XXX_FLAG_SOCF);
 }
@@ -1825,6 +1958,13 @@ static int bq27xxx_battery_status(struct bq27xxx_device_info *di,
 			status = POWER_SUPPLY_STATUS_DISCHARGING;
 		else
 			status = POWER_SUPPLY_STATUS_CHARGING;
+	} else if (di->opts & BQ34110_O_BITS) {
+		if (di->cache.flags & BQ34110_FLAG_FC)
+			status = POWER_SUPPLY_STATUS_FULL;
+		else if (di->cache.flags & BQ34110_FLAG_CHG)
+			status = POWER_SUPPLY_STATUS_CHARGING;
+		else
+			status = POWER_SUPPLY_STATUS_DISCHARGING;
 	} else {
 		if (di->cache.flags & BQ27XXX_FLAG_FC)
 			status = POWER_SUPPLY_STATUS_FULL;
@@ -1861,6 +2001,15 @@ static int bq27xxx_battery_capacity_level(struct bq27xxx_device_info *di,
 		if (di->cache.flags & BQ27Z561_FLAG_FC)
 			level = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
 		else if (di->cache.flags & BQ27Z561_FLAG_FDC)
+			level = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+		else
+			level = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+	} else if (di->opts & BQ34110_O_BITS) {
+		if (di->cache.flags & BQ34110_FLAG_FC)
+			level = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+		else if (di->cache.flags & BQ34110_FLAG_SOCLOW)
+			level = POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+		else if (di->cache.flags & BQ34110_FLAG_FD)
 			level = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 		else
 			level = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
@@ -1909,6 +2058,271 @@ static int bq27xxx_simple_value(int value,
 	val->intval = value;
 
 	return 0;
+}
+
+static int bq34110_enter_calibrate(struct bq27xxx_device_info *di)
+{
+	int ret = 0, retries = 0;
+	u16 val = 0;
+
+	do {
+		ret = bq27xxx_write_with_delay(di, BQ27XXX_REG_CTRL, BQ34110_CAL_TOGGLE,
+					       false, BQ34110_RW_DELAY_US);
+		if (ret < 0)
+			return ret;
+		ret = bq27xxx_write_with_delay(di, BQ27XXX_REG_CTRL, BQ34110_MAC_STATUS,
+					       false, BQ34110_RW_DELAY_US);
+		if (ret < 0)
+			return ret;
+		ret = bq27xxx_read_block(di, BQ27XXX_MAC_DATA, (u8 *)(&val), 2);
+		if (ret < 0)
+			return ret;
+		if (val & BQ34110_CAL_EN_BIT) {
+			dev_dbg(di->dev, "Entering calibration mode\n");
+			return 0;
+		}
+		retries++;
+		usleep_range(BQ34110_RW_DELAY_US, BQ34110_RW_DELAY_US);
+	} while (!(val & BQ34110_CAL_EN_BIT) && (retries < BQ34110_CAL_RETRIES));
+
+	/* if we reach here then entering the calibration mode failed */
+	dev_err(di->dev, "Failed to enter calibration mode\n");
+
+	return -EIO;
+}
+
+static int bq34110_exit_calibrate(struct bq27xxx_device_info *di)
+{
+	int ret = 0, retries = 0;
+	u16 val = 0;
+
+	do {
+		ret = bq27xxx_write_with_delay(di, BQ27XXX_REG_CTRL, BQ34110_CAL_TOGGLE,
+					       false, BQ34110_RW_DELAY_US);
+		if (ret < 0)
+			return ret;
+		ret = bq27xxx_write_with_delay(di, BQ27XXX_REG_CTRL, BQ34110_MAC_STATUS,
+					       false, BQ34110_RW_DELAY_US);
+		if (ret < 0)
+			return ret;
+		ret = bq27xxx_read_block(di, BQ27XXX_MAC_DATA, (u8 *)(&val), 2);
+		if (ret < 0)
+			return ret;
+		if (!(val & BQ34110_CAL_EN_BIT)) {
+			dev_info(di->dev, "Exiting calibration mode\n");
+			return 0;
+		}
+		usleep_range(BQ34110_RW_DELAY_US, BQ34110_RW_DELAY_US);
+		retries++;
+	} while ((val & BQ34110_CAL_EN_BIT) && (retries < BQ34110_CAL_RETRIES));
+
+	/* if we reach here then exiting the calibration mode failed */
+	dev_err(di->dev, "Failed to exit calibration mode\n");
+
+	return -EIO;
+}
+
+static int bq34110_df_write(struct bq27xxx_device_info *di, u16 reg, u16 val, int len)
+{
+	int ret =  0, tmp = 0;
+	u8 cksum = 0;
+
+	/* accept only writes less or equal than two bytes */
+	if (len > 2)
+		return -EINVAL;
+
+	/* first compute checksum */
+	tmp += (reg & 0xFF) + ((reg >> 8) & 0xFF);
+	tmp += (val & 0xFF) + ((val >> 8) & 0xFF);
+	cksum = 0xFF - (tmp & 0xFF);
+
+	ret = bq27xxx_write_with_delay(di, BQ27XXX_MAC_STATUS, reg, false,
+				       BQ34110_RW_DELAY_US);
+	if (ret < 0)
+		return ret;
+	ret = bq27xxx_write_with_delay(di, BQ27XXX_MAC_DATA, val, (len == 1) ? true : false,
+				       BQ34110_RW_DELAY_US);
+	if (ret < 0)
+		return ret;
+	ret = bq27xxx_write_with_delay(di, BQ27XXX_MAC_CKSUM, cksum, true,
+				       BQ34110_RW_DELAY_US);
+	if (ret < 0)
+		return ret;
+	ret = bq27xxx_write_with_delay(di, BQ27XXX_MAC_DLEN, 4 + len, true,
+				       BQ34110_RW_DELAY_US);
+	if (ret < 0)
+		return ret;
+
+	return ret;
+}
+
+static int bq34110_df_read(struct bq27xxx_device_info *di, u16 reg, int len)
+{
+	int ret = 0;
+	int val;
+
+	/* accept only reads less or equal than two bytes */
+	if (len > 2)
+		return -EINVAL;
+
+	ret = bq27xxx_write_with_delay(di, BQ27XXX_MAC_STATUS, reg, false,
+				       BQ34110_RW_DELAY_US);
+	if (ret < 0)
+		return ret;
+	val = bq27xxx_read_with_delay(di, BQ27XXX_MAC_STATUS, false, BQ34110_RW_DELAY_US);
+	if (val != reg)
+		return -EIO;
+	else if (val < 0)
+		return val;
+	val = bq27xxx_read_with_delay(di, BQ27XXX_MAC_DATA, (len == 1) ? true : false,
+				      BQ34110_RW_DELAY_US);
+	/* TODO: check the datalen and checksum */
+	return val;
+}
+
+static int bq34110_df_write_and_check(struct bq27xxx_device_info *di,
+				      u16 reg, u16 value, u8 len)
+{
+	int ret = 0;
+
+	/* verify first that the value has not been written */
+	ret = bq34110_df_read(di, reg, len);
+	if (ret < 0) {
+		return -EIO;
+	} else if (ret != value) {
+		/* write value */
+		ret = bq34110_df_write(di, reg, value, len);
+		if (ret < 0)
+			return ret;
+		/* read back the written value */
+		ret = bq34110_df_read(di, reg, len);
+		if ((ret != value) || (ret < 0))
+			return -EIO;
+	}
+
+	return 0;
+}
+
+static int bq34110_calibrate_voltage_divider(struct bq27xxx_device_info *di)
+{
+
+	int ret = 0;
+	u16 volt_divider;
+
+	ret = bq34110_enter_calibrate(di);
+	if (ret < 0)
+		return ret;
+
+	/* set VEN_EN bit to 1 */
+	ret = bq34110_df_write_and_check(di, BQ34110_PIN_CONTROL_CONFIG,
+					 BQ34110_VEN_EN_MASK, 1);
+	if (ret < 0)
+		goto exit;
+
+	/* set number of cells */
+	ret = bq34110_df_write_and_check(di, BQ34110_CELL_NUMBERS,
+					 di->cal_info.cell_nbr, 1);
+	if (ret < 0)
+		goto exit;
+
+	/* Swap the voltage divider bytes */
+	volt_divider = cpu_to_be16(di->cal_info.voltage_divider);
+	ret = bq34110_df_write_and_check(di, BQ34110_VOLTAGE_DIVIDER,
+					 volt_divider, 2);
+	if (ret < 0)
+		goto exit;
+
+	/* reset device */
+	ret = bq27xxx_write(di, BQ27XXX_REG_CTRL, BQ34110_RESET, false);
+	if (ret < 0)
+		goto exit;
+
+exit:   if (ret < 0)
+	ret = bq34110_exit_calibrate(di);
+
+	return ret;
+}
+
+static int bq34110_calibrate_board_offset(struct bq27xxx_device_info *di)
+{
+	int ret = 0, retries = 0;
+	int val = 0;
+
+	ret = bq34110_enter_calibrate(di);
+	if (ret < 0)
+		return ret;
+
+	/* Repeat until BCA & CCA == 1 */
+	do {
+		ret = bq27xxx_write_with_delay(di, BQ27XXX_REG_CTRL, BQ34110_BOARD_OFFSET, false,
+					       BQ34110_RW_DELAY_US);
+		if (ret < 0)
+			return ret;
+		ret = bq27xxx_write_with_delay(di, BQ27XXX_REG_CTRL, BQ34110_CONTROL_STATUS, false,
+					       BQ34110_RW_DELAY_US);
+		if (ret < 0)
+			return ret;
+		val = bq27xxx_read_with_delay(di, BQ27XXX_REG_CTRL, false, BQ34110_RW_DELAY_US);
+		if (val < 0)
+			return val;
+		usleep_range(BQ34110_POLL_DELAY_US, BQ34110_POLL_DELAY_US);
+		retries++;
+	} while (((val & BQ34110_BCA_BIT) && (val & BQ34110_CCA_BIT)) && (retries < BQ34110_CAL_RETRIES));
+	if (retries == BQ34110_CAL_RETRIES) {
+		dev_dbg(di->dev, "Timeout when doing Board offset calibratoin\n");
+		goto exit;
+	}
+
+	retries = 0;
+	/* now wait for BCA bit to clear */
+	do {
+		val = bq27xxx_read(di, BQ27XXX_REG_CTRL, false);
+		if (val < 0)
+			return val;
+		usleep_range(BQ34110_POLL_DELAY_US, BQ34110_POLL_DELAY_US);
+		retries++;
+	} while ((val & BQ34110_BCA_BIT) && (retries < BQ34110_CAL_RETRIES));
+	if (retries == BQ34110_CAL_RETRIES) {
+		dev_dbg(di->dev, "Timeout when doing Board offset calibratoin\n");
+		goto exit;
+	}
+
+exit:	ret = bq34110_exit_calibrate(di);
+
+	return ret;
+}
+
+static int bq34110_calibrate(struct bq27xxx_device_info *di, int val)
+{
+	int ret = 0;
+
+	switch (val) {
+	case BQ34110_CAL_BOARD_OFFSET:
+		ret = bq34110_calibrate_board_offset(di);
+		break;
+	case BQ34110_CAL_VOLTAGE_DIVIDER:
+		ret = bq34110_calibrate_voltage_divider(di);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return ret;
+}
+
+static int bq27xxx_calibrate(struct bq27xxx_device_info *di, int val)
+{
+	int ret = 0;
+
+	switch (di->chip) {
+	case BQ34110:
+		ret = bq34110_calibrate(di, val);
+		break;
+	default:
+		ret = -EINVAL;
+	}
+
+	return ret;
 }
 
 static int bq27xxx_battery_get_property(struct power_supply *psy,
@@ -1998,11 +2412,38 @@ static int bq27xxx_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_MANUFACTURER:
 		val->strval = BQ27XXX_MANUFACTURER;
 		break;
+	case POWER_SUPPLY_PROP_CALIBRATE:
+		return -ENODATA;
 	default:
 		return -EINVAL;
 	}
 
 	return ret;
+}
+
+static int bq27xxx_battery_set_property(struct power_supply *psy,
+					enum power_supply_property psp,
+					const union power_supply_propval *val)
+{
+	int ret = 0;
+	struct bq27xxx_device_info *di = power_supply_get_drvdata(psy);
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_CALIBRATE:
+		ret = bq27xxx_calibrate(di, val->intval);
+		break;
+
+	default:
+		ret = -EINVAL;
+	}
+
+	return ret;
+}
+
+static int bq27xxx_property_is_writeable(struct power_supply *psy,
+					    enum power_supply_property psp)
+{
+	return (psp == POWER_SUPPLY_PROP_CALIBRATE);
 }
 
 static void bq27xxx_external_power_changed(struct power_supply *psy)
@@ -2013,8 +2454,24 @@ static void bq27xxx_external_power_changed(struct power_supply *psy)
 	schedule_delayed_work(&di->work, 0);
 }
 
+static int bq27xxx_battery_dt_properties(struct bq27xxx_device_info *di) {
+	struct device_node *battery_np;
+
+	battery_np = of_parse_phandle(di->dev->of_node, "monitored-battery", 0);
+	if (!battery_np)
+		return -ENODEV;
+
+	of_property_read_u32(battery_np, "cell-numbers", &di->cal_info.cell_nbr);
+	of_property_read_u32(battery_np, "voltage-divider", &di->cal_info.voltage_divider);
+
+	of_node_put(battery_np);
+
+	return 0;
+}
+
 int bq27xxx_battery_setup(struct bq27xxx_device_info *di)
 {
+	int ret = 0;
 	struct power_supply_desc *psy_desc;
 	struct power_supply_config psy_cfg = {
 		.of_node = di->dev->of_node,
@@ -2029,6 +2486,17 @@ int bq27xxx_battery_setup(struct bq27xxx_device_info *di)
 	di->dm_regs    = bq27xxx_chip_data[di->chip].dm_regs;
 	di->opts       = bq27xxx_chip_data[di->chip].opts;
 
+	ret = bq27xxx_battery_dt_properties(di);
+	if (ret < 0) {
+		dev_err(di->dev, "couldn't find battery properties: %d\n", ret);
+		return ret;
+	}
+	ret = bq34110_calibrate_voltage_divider(di);
+	if (ret < 0) {
+		dev_err(di->dev, "Unable to calibrate the battery: %d\n", ret);
+		return ret;
+	}
+
 	psy_desc = devm_kzalloc(di->dev, sizeof(*psy_desc), GFP_KERNEL);
 	if (!psy_desc)
 		return -ENOMEM;
@@ -2038,7 +2506,9 @@ int bq27xxx_battery_setup(struct bq27xxx_device_info *di)
 	psy_desc->properties = bq27xxx_chip_data[di->chip].props;
 	psy_desc->num_properties = bq27xxx_chip_data[di->chip].props_size;
 	psy_desc->get_property = bq27xxx_battery_get_property;
+	psy_desc->set_property = bq27xxx_battery_set_property;
 	psy_desc->external_power_changed = bq27xxx_external_power_changed;
+	psy_desc->property_is_writeable	= bq27xxx_property_is_writeable,
 
 	di->bat = power_supply_register_no_ws(di->dev, psy_desc, &psy_cfg);
 	if (IS_ERR(di->bat))

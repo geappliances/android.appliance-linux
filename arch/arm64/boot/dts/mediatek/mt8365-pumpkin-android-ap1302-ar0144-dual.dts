@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2022 Baylibre, SAS
+ * Author: Vitor Sato Eschholz <vsatoes@baylibre.com>
+ */
+
+#include "mt8365-pumpkin-android-ap1302-ar0144-dual.dtsi"

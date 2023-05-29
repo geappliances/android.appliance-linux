@@ -166,6 +166,12 @@ static const struct stmmac_stats stmmac_gstrings_stats[] = {
 	/* TSO */
 	STMMAC_STAT(tx_tso_frames),
 	STMMAC_STAT(tx_tso_nfrags),
+	/* EST */
+	STMMAC_STAT(mtl_est_cgce),
+	STMMAC_STAT(mtl_est_hlbs),
+	STMMAC_STAT(mtl_est_hlbf),
+	STMMAC_STAT(mtl_est_btre),
+	STMMAC_STAT(mtl_est_btrlm),
 };
 #define STMMAC_STATS_LEN ARRAY_SIZE(stmmac_gstrings_stats)
 
@@ -276,6 +282,10 @@ static void stmmac_ethtool_getdrvinfo(struct net_device *dev,
 		strlcpy(info->driver, MAC100_ETHTOOL_NAME,
 			sizeof(info->driver));
 
+	if (priv->plat->pdev) {
+		strlcpy(info->bus_info, pci_name(priv->plat->pdev),
+			sizeof(info->bus_info));
+	}
 	strlcpy(info->version, DRV_MODULE_VERSION, sizeof(info->version));
 }
 

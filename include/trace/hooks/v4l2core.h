@@ -39,12 +39,12 @@ DECLARE_HOOK(android_vh_clear_mask_adjust,
 	TP_ARGS(ctrl, n));
 
 DECLARE_HOOK(android_vh_v4l2subdev_set_selection,
-	TP_PROTO(struct v4l2_subdev *sd, struct v4l2_subdev_pad_config *pad,
+	TP_PROTO(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 	struct v4l2_subdev_selection *sel, int *ret),
 	TP_ARGS(sd, pad, sel, ret));
 
 DECLARE_HOOK(android_vh_v4l2subdev_set_fmt,
-	TP_PROTO(struct v4l2_subdev *sd, struct v4l2_subdev_pad_config *pad,
+	TP_PROTO(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 	struct v4l2_subdev_format *format, int *ret),
 	TP_ARGS(sd, pad, format, ret));
 
@@ -54,12 +54,12 @@ DECLARE_HOOK(android_vh_v4l2subdev_set_frame_interval,
 	TP_ARGS(sd, fi, ret));
 
 DECLARE_RESTRICTED_HOOK(android_rvh_v4l2subdev_set_selection,
-	TP_PROTO(struct v4l2_subdev *sd, struct v4l2_subdev_pad_config *pad,
+	TP_PROTO(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 	struct v4l2_subdev_selection *sel, int *ret),
 	TP_ARGS(sd, pad, sel, ret), 1);
 
 DECLARE_RESTRICTED_HOOK(android_rvh_v4l2subdev_set_fmt,
-	TP_PROTO(struct v4l2_subdev *sd, struct v4l2_subdev_pad_config *pad,
+	TP_PROTO(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 	struct v4l2_subdev_format *format, int *ret),
 	TP_ARGS(sd, pad, format, ret), 1);
 

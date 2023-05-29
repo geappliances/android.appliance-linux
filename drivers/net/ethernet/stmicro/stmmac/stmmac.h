@@ -13,6 +13,7 @@
 #define DRV_MODULE_VERSION	"Jan_2016"
 
 #include <linux/clk.h>
+#include <linux/hrtimer.h>
 #include <linux/if_vlan.h>
 #include <linux/stmmac.h>
 #include <linux/phylink.h>
@@ -29,6 +30,10 @@ struct stmmac_resources {
 	int wol_irq;
 	int lpi_irq;
 	int irq;
+	int sfty_ce_irq;
+	int sfty_ue_irq;
+	int rx_irq[MTL_MAX_RX_QUEUES];
+	int tx_irq[MTL_MAX_TX_QUEUES];
 };
 
 struct stmmac_tx_info {
@@ -46,7 +51,7 @@ struct stmmac_tx_info {
 struct stmmac_tx_queue {
 	u32 tx_count_frames;
 	int tbs;
-	struct timer_list txtimer;
+	struct hrtimer txtimer;
 	u32 queue_index;
 	struct stmmac_priv *priv_data;
 	struct dma_extended_desc *dma_etx ____cacheline_aligned_in_smp;
@@ -207,6 +212,7 @@ struct stmmac_priv {
 	int tx_lpi_timer;
 	int tx_lpi_enabled;
 	int eee_tw_timer;
+	bool eee_sw_timer_en;
 	unsigned int mode;
 	unsigned int chain_mode;
 	int extend_desc;
@@ -223,6 +229,18 @@ struct stmmac_priv {
 	void __iomem *mmcaddr;
 	void __iomem *ptpaddr;
 	unsigned long active_vlans[BITS_TO_LONGS(VLAN_N_VID)];
+	int sfty_ce_irq;
+	int sfty_ue_irq;
+	int rx_irq[MTL_MAX_RX_QUEUES];
+	int tx_irq[MTL_MAX_TX_QUEUES];
+	/*irq name */
+	char int_name_mac[IFNAMSIZ + 9];
+	char int_name_wol[IFNAMSIZ + 9];
+	char int_name_lpi[IFNAMSIZ + 9];
+	char int_name_sfty_ce[IFNAMSIZ + 10];
+	char int_name_sfty_ue[IFNAMSIZ + 10];
+	char int_name_rx_irq[MTL_MAX_TX_QUEUES][IFNAMSIZ + 14];
+	char int_name_tx_irq[MTL_MAX_TX_QUEUES][IFNAMSIZ + 18];
 
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *dbgfs_dir;
@@ -231,6 +249,12 @@ struct stmmac_priv {
 	unsigned long state;
 	struct workqueue_struct *wq;
 	struct work_struct service_task;
+
+	/* Workqueue for handling FPE hand-shaking */
+	unsigned long fpe_task_state;
+	struct workqueue_struct *fpe_wq;
+	struct work_struct fpe_task;
+	char wq_name[IFNAMSIZ + 4];
 
 	/* TC Handling */
 	unsigned int tc_entries_max;
@@ -272,6 +296,7 @@ bool stmmac_eee_init(struct stmmac_priv *priv);
 int stmmac_reinit_queues(struct net_device *dev, u32 rx_cnt, u32 tx_cnt);
 int stmmac_reinit_ringparam(struct net_device *dev, u32 rx_size, u32 tx_size);
 int stmmac_bus_clks_config(struct stmmac_priv *priv, bool enabled);
+void stmmac_fpe_handshake(struct stmmac_priv *priv, bool enable);
 
 #if IS_ENABLED(CONFIG_STMMAC_SELFTESTS)
 void stmmac_selftest_run(struct net_device *dev,

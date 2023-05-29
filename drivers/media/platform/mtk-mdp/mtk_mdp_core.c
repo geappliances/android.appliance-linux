@@ -15,6 +15,7 @@
 #include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
+#include <linux/suspend.h>
 #include <linux/pm_runtime.h>
 #include <linux/workqueue.h>
 #include <soc/mediatek/smi.h>
@@ -31,6 +32,21 @@ module_param(mtk_mdp_dbg_level, int, 0644);
 
 static const struct of_device_id mtk_mdp_comp_dt_ids[] = {
 	{
+		.compatible = "mediatek,mt8167-mdp-rdma",
+		.data = (void *)MTK_MDP_RDMA
+	}, {
+		.compatible = "mediatek,mt8167-mdp-rsz",
+		.data = (void *)MTK_MDP_RSZ
+	}, {
+		.compatible = "mediatek,mt8167-mdp-wdma",
+		.data = (void *)MTK_MDP_WDMA
+	}, {
+		.compatible = "mediatek,mt8167-mdp-wrot",
+		.data = (void *)MTK_MDP_WROT
+	}, {
+		.compatible = "mediatek,mt8167-mdp-tdshp",
+		.data = (void *)MTK_MDP_TDSHP
+	}, {
 		.compatible = "mediatek,mt8173-mdp-rdma",
 		.data = (void *)MTK_MDP_RDMA
 	}, {
@@ -48,6 +64,7 @@ static const struct of_device_id mtk_mdp_comp_dt_ids[] = {
 
 static const struct of_device_id mtk_mdp_of_ids[] = {
 	{ .compatible = "mediatek,mt8173-mdp", },
+	{ .compatible = "mediatek,mt8167-mdp", },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, mtk_mdp_of_ids);
@@ -103,13 +120,68 @@ void mtk_mdp_unregister_component(struct mtk_mdp_dev *mdp,
 	list_del(&comp->node);
 }
 
+static int mtk_mdp_suspend_notifier(struct notifier_block *nb,
+				    unsigned long action, void *data)
+{
+	struct mtk_mdp_dev *mdp =
+		container_of(nb, struct mtk_mdp_dev, pm_notifier);
+	struct device *dev = &mdp->pdev->dev;
+
+	dev_dbg(dev, "[MDP] %s ok action = %ld\n", __func__, action);
+	switch (action) {
+	case PM_SUSPEND_PREPARE:
+		dev_dbg(dev, "[MDP] suspend_notifier: suspend prepare... \n");
+		v4l2_m2m_suspend(mdp->m2m_dev);
+		dev_dbg(dev, "[MDP] suspend_notifier: suspend prepare... done\n");
+		return NOTIFY_OK;
+	case PM_POST_SUSPEND:
+		dev_dbg(dev, "[MDP] suspend_notifier: post suspend... done\n");
+		return NOTIFY_OK;
+	default:
+		return NOTIFY_DONE;
+	}
+	return NOTIFY_DONE;
+}
+
+static const struct of_device_id mtk_mdp_comp_of_match[] = {
+	{ .compatible = "mediatek,mt8167-mdp-wdma" },
+	{ .compatible = "mediatek,mt8167-mdp-wrot" },
+	{},
+};
+MODULE_DEVICE_TABLE(of, mtk_mdp_comp_of_match);
+
+struct platform_driver mtk_mdp_comp = {
+	.driver		= {
+		.name	= "mediatek-mdp-comp",
+		.owner	= THIS_MODULE,
+		.of_match_table = mtk_mdp_comp_of_match,
+	},
+};
+
 static int mtk_mdp_probe(struct platform_device *pdev)
 {
 	struct mtk_mdp_dev *mdp;
 	struct device *dev = &pdev->dev;
 	struct device_node *node, *parent;
+	struct platform_device *cmdq_dev;
 	struct mtk_mdp_comp *comp, *comp_temp;
 	int ret = 0;
+
+	//mtk_mdp_dbg_level = 3;
+
+	/* Check whether cmdq driver is ready */
+	node = of_parse_phandle(dev->of_node, "mediatek,gce", 0);
+	if (!node) {
+		dev_err(dev, "cannot get gce node handle\n");
+		return -EINVAL;
+	}
+
+	cmdq_dev = of_find_device_by_node(node);
+	if (!cmdq_dev || !cmdq_dev->dev.driver) {
+		dev_err(dev, "Waiting cmdq driver ready...\n");
+		of_node_put(node);
+		return -EPROBE_DEFER;
+	}
 
 	mdp = devm_kzalloc(dev, sizeof(*mdp), GFP_KERNEL);
 	if (!mdp)
@@ -166,6 +238,8 @@ static int mtk_mdp_probe(struct platform_device *pdev)
 		mtk_mdp_register_component(mdp, comp);
 	}
 
+	platform_driver_register(&mtk_mdp_comp);
+
 	mdp->job_wq = create_singlethread_workqueue(MTK_MDP_MODULE_NAME);
 	if (!mdp->job_wq) {
 		dev_err(&pdev->dev, "unable to alloc job workqueue\n");
@@ -211,6 +285,12 @@ static int mtk_mdp_probe(struct platform_device *pdev)
 	}
 
 	pm_runtime_enable(dev);
+
+	mdp->pm_notifier.notifier_call = mtk_mdp_suspend_notifier;
+	register_pm_notifier(&mdp->pm_notifier);
+
+	mdp->cmdq_client = cmdq_mbox_create(dev, 0, CMDQ_NO_TIMEOUT);
+
 	dev_dbg(dev, "mdp-%d registered successfully\n", mdp->id);
 
 	return 0;
@@ -257,6 +337,9 @@ static int mtk_mdp_remove(struct platform_device *pdev)
 		mtk_mdp_comp_deinit(&pdev->dev, comp);
 	}
 
+	unregister_pm_notifier(&mdp->pm_notifier);
+	cmdq_mbox_destroy(mdp->cmdq_client);
+
 	dev_dbg(&pdev->dev, "%s driver unloaded\n", pdev->name);
 	return 0;
 }
@@ -264,8 +347,10 @@ static int mtk_mdp_remove(struct platform_device *pdev)
 static int __maybe_unused mtk_mdp_pm_suspend(struct device *dev)
 {
 	struct mtk_mdp_dev *mdp = dev_get_drvdata(dev);
-
+	dev_dbg(&mdp->pdev->dev, "[MDP] pm_suspend()...\n");
+	v4l2_m2m_suspend(mdp->m2m_dev);
 	mtk_mdp_clock_off(mdp);
+	dev_dbg(&mdp->pdev->dev, "[MDP] pm_suspend()... done\n");
 
 	return 0;
 }
@@ -274,7 +359,10 @@ static int __maybe_unused mtk_mdp_pm_resume(struct device *dev)
 {
 	struct mtk_mdp_dev *mdp = dev_get_drvdata(dev);
 
+	dev_dbg(&mdp->pdev->dev, "[MDP] pm_resume()...\n");
 	mtk_mdp_clock_on(mdp);
+	v4l2_m2m_resume(mdp->m2m_dev);
+	dev_dbg(&mdp->pdev->dev, "[MDP] pm_resume()... done\n");
 
 	return 0;
 }

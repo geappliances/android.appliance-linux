@@ -9,11 +9,13 @@
 #define __MTK_MDP_CORE_H__
 
 #include <linux/videodev2.h>
+#include <media/media-device.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-core.h>
 #include <media/videobuf2-dma-contig.h>
+#include <linux/soc/mediatek/mtk-cmdq.h>
 
 #include "mtk_mdp_vpu.h"
 #include "mtk_mdp_comp.h"
@@ -85,6 +87,8 @@ struct mtk_mdp_ctrls {
 	struct v4l2_ctrl *hflip;
 	struct v4l2_ctrl *vflip;
 	struct v4l2_ctrl *global_alpha;
+	struct v4l2_ctrl *sharpness;
+	struct v4l2_ctrl *contrast_auto;
 };
 
 /**
@@ -158,6 +162,7 @@ struct mtk_mdp_dev {
 	struct v4l2_m2m_dev		*m2m_dev;
 	struct list_head		ctx_list;
 	struct video_device		*vdev;
+	struct media_device		mdev;
 	struct v4l2_device		v4l2_dev;
 	struct workqueue_struct		*job_wq;
 	struct platform_device		*vpu_dev;
@@ -165,6 +170,9 @@ struct mtk_mdp_dev {
 	unsigned long			id_counter;
 	struct workqueue_struct		*wdt_wq;
 	struct work_struct		wdt_work;
+	struct cmdq_client		*cmdq_client;
+
+	struct notifier_block pm_notifier;
 };
 
 /**
@@ -203,6 +211,8 @@ struct mtk_mdp_ctx {
 	int				rotation;
 	u32				hflip:1;
 	u32				vflip:1;
+	u32				contrast_auto:1;
+	int				sharpness;
 	struct mtk_mdp_dev		*mdp_dev;
 	struct v4l2_m2m_ctx		*m2m_ctx;
 	struct v4l2_fh			fh;
@@ -217,6 +227,7 @@ struct mtk_mdp_ctx {
 	struct mtk_mdp_vpu		vpu;
 	struct mutex			slock;
 	struct work_struct		work;
+	struct cmdq_pkt			*cmdq_handle;
 };
 
 extern int mtk_mdp_dbg_level;

@@ -1,0 +1,129 @@
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/clock/mt8167-clk.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+
+#include "mt8516-pinfunc.h"
+#include "mt8167-pinfunc.h"
+
+&reserved_memory {
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	ramoops@43e00000 {
+		compatible = "ramoops";
+		reg = <0 0x43e00000 0 0x00100000>;
+		record-size = <0x8000>;
+		console-size = <0x8000>;
+		ftrace-size = <0x0>;
+		pmsg-size = <0x8000>;
+	};
+};
+
+&pio {
+	i2c1_pins_a: i2c1@0 {
+		pins1 {
+			pinmux = <MT8167_PIN_52_SDA1__FUNC_SDA1_0>,
+				 <MT8167_PIN_53_SCL1__FUNC_SCL1_0>;
+			bias-disable;
+		};
+	};
+
+	panel_pins: panel_pins {
+		pins {
+			pinmux = <MT8167_PIN_66_LCM_RST__FUNC_GPIO66>,
+				 <MT8167_PIN_67_DSI_TE__FUNC_GPIO67>;
+			output-high;
+		};
+	};
+
+	ts_pins: ts_pins {
+		pins {
+			pinmux = <MT8167_PIN_2_EINT2__FUNC_GPIO2>;
+			input-enable;
+			bias-pull-up;
+		};
+	};
+};
+
+&i2c1 {
+	clock-div = <2>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c1_pins_a>;
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	touchscreen: touchscreen@0 {
+		compatible = "pumpkin,7inch-touchscreen-panel";
+		reg = <0x45>;
+		status = "okay";
+		pinctrl-0 = <&panel_pins>;
+		pinctrl-names = "default";
+		power-supply = <&mt6392_vgp2_reg>;
+	};
+
+	touch: ft5x06@38 {
+		compatible = "pumpkin,rpi-ts";
+		reg = <0x38>;
+		status = "okay";
+		pinctrl-0 = <&ts_pins>;
+		pinctrl-names = "default";
+		interrupt-parent = <&pio>;
+		interrupts = <2 IRQ_TYPE_EDGE_FALLING>;
+		touchscreen-size-y = <480>;
+		touchscreen-size-x = <800>;
+		touchscreen-inverted-y = <1>;
+		touchscreen-inverted-x = <1>;
+	};
+};
+
+&backlight_lcd0{
+	compatible = "raspberrypi,rpi-backlight";
+	status = "okay";
+};
+
+&dsi {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@0 {
+			reg = <0>;
+
+			dsi_out: endpoint {
+				remote-endpoint = <&panel_in>;
+			};
+		};
+	};
+
+	panel@0 {
+		compatible = "pumpkin,7inch-touchscreen-panel-dsi";
+		reg = <0>;
+		pumpkin,touchscreen = <&touchscreen>;
+		backlight = <&backlight_lcd0>;
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+	};
+};
+
+&mipi_tx {
+	status = "okay";
+};
+
+&hdmi {
+	status = "disabled";
+};
+
+&dpi1 {
+	status = "disabled";
+};

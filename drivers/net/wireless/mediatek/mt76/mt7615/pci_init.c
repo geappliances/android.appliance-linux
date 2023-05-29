@@ -8,6 +8,7 @@
  */
 
 #include <linux/etherdevice.h>
+#include <delay.h>
 #include "mt7615.h"
 #include "mac.h"
 #include "eeprom.h"
@@ -16,9 +17,18 @@ static void mt7615_init_work(struct work_struct *work)
 {
 	struct mt7615_dev *dev = container_of(work, struct mt7615_dev,
 					      mcu_work);
-
-	if (mt7615_mcu_init(dev))
+	int ret;
+retry:
+	ret = mt7615_mcu_init(dev);
+	if (ret == -EAGAIN) {
+		dev_err(dev->mt76.dev, "Firmware init failed, retrying\n");
+		msleep(250);
+		goto retry;
+	}
+	else if(ret) {
+		dev_err(dev->mt76.dev, "Firmware init failed, NOT RETRYING, interface will not be usable : %d\n", ret);
 		return;
+	}
 
 	mt7615_mcu_set_eeprom(dev);
 	mt7615_mac_init(dev);

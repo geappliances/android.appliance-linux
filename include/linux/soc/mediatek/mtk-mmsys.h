@@ -33,6 +33,7 @@ enum mtk_ddp_comp_id {
 	DDP_COMPONENT_PWM0,
 	DDP_COMPONENT_PWM1,
 	DDP_COMPONENT_PWM2,
+	DDP_COMPONENT_LVDS,
 	DDP_COMPONENT_RDMA0,
 	DDP_COMPONENT_RDMA1,
 	DDP_COMPONENT_RDMA2,
@@ -41,6 +42,8 @@ enum mtk_ddp_comp_id {
 	DDP_COMPONENT_WDMA1,
 	DDP_COMPONENT_ID_MAX,
 };
+
+void mtk_mmsys_ddp_lvds_sys_cfg_lvds(struct device *dev);
 
 void mtk_mmsys_ddp_connect(struct device *dev,
 			   enum mtk_ddp_comp_id cur,

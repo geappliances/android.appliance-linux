@@ -490,9 +490,10 @@ static int __tegra_channel_try_format(struct tegra_vi_channel *chan,
 				      struct v4l2_pix_format *pix)
 {
 	const struct tegra_video_format *fmtinfo;
+	static struct lock_class_key key;
 	struct v4l2_subdev *subdev;
 	struct v4l2_subdev_format fmt;
-	struct v4l2_subdev_pad_config *pad_cfg;
+	struct v4l2_subdev_state *sd_state;
 	struct v4l2_subdev_frame_size_enum fse = {
 		.which = V4L2_SUBDEV_FORMAT_TRY,
 	};
@@ -506,9 +507,10 @@ static int __tegra_channel_try_format(struct tegra_vi_channel *chan,
 	if (!subdev)
 		return -ENODEV;
 
-	pad_cfg = v4l2_subdev_alloc_pad_config(subdev);
-	if (!pad_cfg)
-		return -ENOMEM;
+	sd_state = __v4l2_subdev_state_alloc(subdev, "tegra:state->lock",
+					     &key);
+	if (IS_ERR(sd_state))
+		return PTR_ERR(sd_state);
 	/*
 	 * Retrieve the format information and if requested format isn't
 	 * supported, keep the current format.
@@ -531,26 +533,26 @@ static int __tegra_channel_try_format(struct tegra_vi_channel *chan,
 	 * If not available, try to get crop boundary from subdev.
 	 */
 	fse.code = fmtinfo->code;
-	ret = v4l2_subdev_call(subdev, pad, enum_frame_size, pad_cfg, &fse);
+	ret = v4l2_subdev_call(subdev, pad, enum_frame_size, sd_state, &fse);
 	if (ret) {
 		ret = v4l2_subdev_call(subdev, pad, get_selection, NULL, &sdsel);
 		if (ret)
 			return -EINVAL;
-		pad_cfg->try_crop.width = sdsel.r.width;
-		pad_cfg->try_crop.height = sdsel.r.height;
+		sd_state->pads->try_crop.width = sdsel.r.width;
+		sd_state->pads->try_crop.height = sdsel.r.height;
 	} else {
-		pad_cfg->try_crop.width = fse.max_width;
-		pad_cfg->try_crop.height = fse.max_height;
+		sd_state->pads->try_crop.width = fse.max_width;
+		sd_state->pads->try_crop.height = fse.max_height;
 	}
 
-	ret = v4l2_subdev_call(subdev, pad, set_fmt, pad_cfg, &fmt);
+	ret = v4l2_subdev_call(subdev, pad, set_fmt, sd_state, &fmt);
 	if (ret < 0)
 		return ret;
 
 	v4l2_fill_pix_format(pix, &fmt.format);
 	tegra_channel_fmt_align(chan, pix, fmtinfo->bpp);
 
-	v4l2_subdev_free_pad_config(pad_cfg);
+	__v4l2_subdev_state_free(sd_state);
 
 	return 0;
 }

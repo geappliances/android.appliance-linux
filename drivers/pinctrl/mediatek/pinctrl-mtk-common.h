@@ -22,6 +22,8 @@
 
 #define MTK_PINCTRL_NOT_SUPPORT	(0xffff)
 
+#define MTK_PINCTRL_MODE_SET_CLR_BROKEN   BIT(0)
+
 struct mtk_desc_function {
 	const char *name;
 	unsigned char muxval;
@@ -66,6 +68,28 @@ struct mtk_pinctrl_group {
 	unsigned long	config;
 	unsigned	pin;
 };
+
+
+/**
+ * struct mt_pin_info - For all pins' setting
+ * @pin: The pin number
+ * @offset: The address offset of pin setting register
+ * @bit: The bit shift at setting register
+ * @width: The bit width at setting register
+ */
+struct mtk_pin_info {
+	unsigned int pin;
+	unsigned int offset;
+	unsigned char bit;
+	unsigned char width;
+};
+#define MTK_PIN_INFO(_pin, _offset, _bit, _width)	\
+	{	\
+		.pin = _pin,	\
+		.offset = _offset,	\
+		.bit = _bit, \
+		.width = _width, \
+	}
 
 /**
  * struct mtk_drv_group_desc - Provide driving group data.
@@ -254,6 +278,10 @@ struct mtk_pinctrl_devdata {
 	unsigned char  port_align;
 	struct mtk_eint_hw eint_hw;
 	struct mtk_eint_regs *eint_regs;
+	unsigned int mode_mask;
+	unsigned int mode_per_reg;
+	unsigned int mode_shf;
+	unsigned long quirks;
 };
 
 struct mtk_pinctrl {
@@ -273,6 +301,11 @@ struct mtk_pinctrl {
 int mtk_pctrl_init(struct platform_device *pdev,
 		const struct mtk_pinctrl_devdata *data,
 		struct regmap *regmap);
+
+int mtk_rsel_r1r0_set_samereg(struct regmap *regmap,
+		const struct mtk_pin_info *rsel_infos,
+		unsigned int info_num, unsigned int pin,
+		unsigned int r1r0);
 
 int mtk_pctrl_spec_pull_set_samereg(struct regmap *regmap,
 		const struct mtk_pin_spec_pupd_set_samereg *pupd_infos,

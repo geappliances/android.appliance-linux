@@ -112,6 +112,11 @@ module_param(chain_mode, int, 0444);
 MODULE_PARM_DESC(chain_mode, "To use chain instead of ring mode");
 
 static irqreturn_t stmmac_interrupt(int irq, void *dev_id);
+/* For MSI interrupts handling */
+static irqreturn_t stmmac_mac_interrupt(int irq, void *dev_id);
+static irqreturn_t stmmac_safety_interrupt(int irq, void *dev_id);
+static irqreturn_t stmmac_msi_intr_tx(int irq, void *data);
+static irqreturn_t stmmac_msi_intr_rx(int irq, void *data);
 
 #ifdef CONFIG_DEBUG_FS
 static const struct net_device_ops stmmac_netdev_ops;
@@ -119,7 +124,7 @@ static void stmmac_init_fs(struct net_device *dev);
 static void stmmac_exit_fs(struct net_device *dev);
 #endif
 
-#define STMMAC_COAL_TIMER(x) (jiffies + usecs_to_jiffies(x))
+#define STMMAC_COAL_TIMER(x) (ns_to_ktime((x) * NSEC_PER_USEC))
 
 int stmmac_bus_clks_config(struct stmmac_priv *priv, bool enabled)
 {
@@ -134,9 +139,19 @@ int stmmac_bus_clks_config(struct stmmac_priv *priv, bool enabled)
 			clk_disable_unprepare(priv->plat->stmmac_clk);
 			return ret;
 		}
+		if (priv->plat->clks_config) {
+			ret = priv->plat->clks_config(priv->plat->bsp_priv, enabled);
+			if (ret) {
+				clk_disable_unprepare(priv->plat->stmmac_clk);
+				clk_disable_unprepare(priv->plat->pclk);
+				return ret;
+			}
+		}
 	} else {
 		clk_disable_unprepare(priv->plat->stmmac_clk);
 		clk_disable_unprepare(priv->plat->pclk);
+		if (priv->plat->clks_config)
+			priv->plat->clks_config(priv->plat->bsp_priv, enabled);
 	}
 
 	return ret;
@@ -324,6 +339,16 @@ static inline u32 stmmac_rx_dirty(struct stmmac_priv *priv, u32 queue)
 	return dirty;
 }
 
+static void stmmac_lpi_entry_timer_config(struct stmmac_priv *priv, bool en)
+{
+	int tx_lpi_timer;
+
+	/* Clear/set the SW EEE timer flag based on LPI ET enablement */
+	priv->eee_sw_timer_en = en ? 0 : 1;
+	tx_lpi_timer  = en ? priv->tx_lpi_timer : 0;
+	stmmac_set_eee_lpi_timer(priv, priv->hw, tx_lpi_timer);
+}
+
 /**
  * stmmac_enable_eee_mode - check and enter in LPI mode
  * @priv: driver private structure
@@ -357,6 +382,11 @@ static void stmmac_enable_eee_mode(struct stmmac_priv *priv)
  */
 void stmmac_disable_eee_mode(struct stmmac_priv *priv)
 {
+	if (!priv->eee_sw_timer_en) {
+		stmmac_lpi_entry_timer_config(priv, 0);
+		return;
+	}
+
 	stmmac_reset_eee_mode(priv, priv->hw);
 	del_timer_sync(&priv->eee_ctrl_timer);
 	priv->tx_path_in_lpi_mode = false;
@@ -406,6 +436,7 @@ bool stmmac_eee_init(struct stmmac_priv *priv)
 	if (!priv->eee_active) {
 		if (priv->eee_enabled) {
 			netdev_dbg(priv->dev, "disable EEE\n");
+			stmmac_lpi_entry_timer_config(priv, 0);
 			del_timer_sync(&priv->eee_ctrl_timer);
 			stmmac_set_eee_timer(priv, priv->hw, 0, eee_tw_timer);
 		}
@@ -419,7 +450,15 @@ bool stmmac_eee_init(struct stmmac_priv *priv)
 				     eee_tw_timer);
 	}
 
-	mod_timer(&priv->eee_ctrl_timer, STMMAC_LPI_T(priv->tx_lpi_timer));
+	if (priv->plat->has_gmac4 && priv->tx_lpi_timer <= STMMAC_ET_MAX) {
+		del_timer_sync(&priv->eee_ctrl_timer);
+		priv->tx_path_in_lpi_mode = false;
+		stmmac_lpi_entry_timer_config(priv, 1);
+	} else {
+		stmmac_lpi_entry_timer_config(priv, 0);
+		mod_timer(&priv->eee_ctrl_timer,
+			  STMMAC_LPI_T(priv->tx_lpi_timer));
+	}
 
 	mutex_unlock(&priv->lock);
 	netdev_dbg(priv->dev, "Energy-Efficient Ethernet initialized\n");
@@ -947,6 +986,21 @@ static void stmmac_mac_an_restart(struct phylink_config *config)
 	/* Not Supported */
 }
 
+static void stmmac_fpe_link_state_handle(struct stmmac_priv *priv, bool is_up)
+{
+	struct stmmac_fpe_cfg *fpe_cfg = priv->plat->fpe_cfg;
+	enum stmmac_fpe_state *lo_state = &fpe_cfg->lo_fpe_state;
+	enum stmmac_fpe_state *lp_state = &fpe_cfg->lp_fpe_state;
+	bool *hs_enable = &fpe_cfg->hs_enable;
+
+	if (is_up && *hs_enable) {
+		stmmac_fpe_send_mpacket(priv, priv->ioaddr, MPACKET_VERIFY);
+	} else {
+		*lo_state = FPE_EVENT_UNKNOWN;
+		*lp_state = FPE_EVENT_UNKNOWN;
+	}
+}
+
 static void stmmac_mac_link_down(struct phylink_config *config,
 				 unsigned int mode, phy_interface_t interface)
 {
@@ -957,6 +1011,9 @@ static void stmmac_mac_link_down(struct phylink_config *config,
 	priv->tx_lpi_enabled = false;
 	stmmac_eee_init(priv);
 	stmmac_set_eee_pls(priv, priv->hw, false);
+
+	if (priv->dma_cap.fpesel)
+		stmmac_fpe_link_state_handle(priv, false);
 }
 
 static void stmmac_mac_link_up(struct phylink_config *config,
@@ -1064,6 +1121,9 @@ static void stmmac_mac_link_up(struct phylink_config *config,
 		priv->tx_lpi_enabled = priv->eee_enabled;
 		stmmac_set_eee_pls(priv, priv->hw, true);
 	}
+
+	if (priv->dma_cap.fpesel)
+		stmmac_fpe_link_state_handle(priv, true);
 }
 
 static const struct phylink_mac_ops stmmac_phylink_mac_ops = {
@@ -1420,6 +1480,88 @@ static void stmmac_free_tx_buffer(struct stmmac_priv *priv, u32 queue, int i)
 		tx_q->tx_skbuff_dma[i].buf = 0;
 		tx_q->tx_skbuff_dma[i].map_as_page = false;
 	}
+}
+
+/**
+ * stmmac_reinit_rx_buffers - reinit the RX descriptor buffer.
+ * @priv: driver private structure
+ * Description: this function is called to re-allocate a receive buffer, perform
+ * the DMA mapping and init the descriptor.
+ */
+static void stmmac_reinit_rx_buffers(struct stmmac_priv *priv)
+{
+	u32 rx_count = priv->plat->rx_queues_to_use;
+	u32 queue;
+	int i;
+
+	for (queue = 0; queue < rx_count; queue++) {
+		struct stmmac_rx_queue *rx_q = &priv->rx_queue[queue];
+
+		for (i = 0; i < priv->dma_rx_size; i++) {
+			struct stmmac_rx_buffer *buf = &rx_q->buf_pool[i];
+
+			if (buf->page) {
+				page_pool_recycle_direct(rx_q->page_pool, buf->page);
+				buf->page = NULL;
+			}
+
+			if (priv->sph && buf->sec_page) {
+				page_pool_recycle_direct(rx_q->page_pool, buf->sec_page);
+				buf->sec_page = NULL;
+			}
+		}
+	}
+
+	for (queue = 0; queue < rx_count; queue++) {
+		struct stmmac_rx_queue *rx_q = &priv->rx_queue[queue];
+
+		for (i = 0; i < priv->dma_rx_size; i++) {
+			struct stmmac_rx_buffer *buf = &rx_q->buf_pool[i];
+			struct dma_desc *p;
+
+			if (priv->extend_desc)
+				p = &((rx_q->dma_erx + i)->basic);
+			else
+				p = rx_q->dma_rx + i;
+
+			if (!buf->page) {
+				buf->page = page_pool_dev_alloc_pages(rx_q->page_pool);
+				if (!buf->page)
+					goto err_reinit_rx_buffers;
+
+				buf->addr = page_pool_get_dma_addr(buf->page);
+			}
+
+			if (priv->sph && !buf->sec_page) {
+				buf->sec_page = page_pool_dev_alloc_pages(rx_q->page_pool);
+				if (!buf->sec_page)
+					goto err_reinit_rx_buffers;
+
+				buf->sec_addr = page_pool_get_dma_addr(buf->sec_page);
+			}
+
+			stmmac_set_desc_addr(priv, p, buf->addr);
+			if (priv->sph)
+				stmmac_set_desc_sec_addr(priv, p, buf->sec_addr, true);
+			else
+				stmmac_set_desc_sec_addr(priv, p, buf->sec_addr, false);
+			if (priv->dma_buf_sz == BUF_SIZE_16KiB)
+				stmmac_init_desc3(priv, p);
+		}
+	}
+
+	return;
+
+err_reinit_rx_buffers:
+	do {
+		while (--i >= 0)
+			stmmac_free_rx_buffer(priv, queue, i);
+
+		if (queue == 0)
+			break;
+
+		i = priv->dma_rx_size;
+	} while (queue-- > 0);
 }
 
 /**
@@ -2136,14 +2278,16 @@ static int stmmac_tx_clean(struct stmmac_priv *priv, int budget, u32 queue)
 		netif_tx_wake_queue(netdev_get_tx_queue(priv->dev, queue));
 	}
 
-	if ((priv->eee_enabled) && (!priv->tx_path_in_lpi_mode)) {
+	if (priv->eee_enabled && !priv->tx_path_in_lpi_mode &&
+	    priv->eee_sw_timer_en) {
 		stmmac_enable_eee_mode(priv);
 		mod_timer(&priv->eee_ctrl_timer, STMMAC_LPI_T(priv->tx_lpi_timer));
 	}
 
 	/* We still have pending packets, let's call for a new scheduling */
 	if (tx_q->dirty_tx != tx_q->cur_tx)
-		mod_timer(&tx_q->txtimer, STMMAC_COAL_TIMER(priv->tx_coal_timer));
+		hrtimer_start(&tx_q->txtimer, STMMAC_COAL_TIMER(priv->tx_coal_timer),
+			      HRTIMER_MODE_REL);
 
 	__netif_tx_unlock_bh(netdev_get_tx_queue(priv->dev, queue));
 
@@ -2225,10 +2369,10 @@ static bool stmmac_safety_feat_interrupt(struct stmmac_priv *priv)
 	return false;
 }
 
-static int stmmac_napi_check(struct stmmac_priv *priv, u32 chan)
+static int stmmac_napi_check(struct stmmac_priv *priv, u32 chan, u32 dir)
 {
 	int status = stmmac_dma_interrupt_status(priv, priv->ioaddr,
-						 &priv->xstats, chan);
+						 &priv->xstats, chan, dir);
 	struct stmmac_channel *ch = &priv->channel[chan];
 	unsigned long flags;
 
@@ -2274,7 +2418,8 @@ static void stmmac_dma_interrupt(struct stmmac_priv *priv)
 		channels_to_check = ARRAY_SIZE(status);
 
 	for (chan = 0; chan < channels_to_check; chan++)
-		status[chan] = stmmac_napi_check(priv, chan);
+		status[chan] = stmmac_napi_check(priv, chan,
+						 DMA_DIR_RXTX);
 
 	for (chan = 0; chan < tx_channel_count; chan++) {
 		if (unlikely(status[chan] & tx_hard_error_bump_tc)) {
@@ -2427,7 +2572,8 @@ static void stmmac_tx_timer_arm(struct stmmac_priv *priv, u32 queue)
 {
 	struct stmmac_tx_queue *tx_q = &priv->tx_queue[queue];
 
-	mod_timer(&tx_q->txtimer, STMMAC_COAL_TIMER(priv->tx_coal_timer));
+	hrtimer_start(&tx_q->txtimer, STMMAC_COAL_TIMER(priv->tx_coal_timer),
+		      HRTIMER_MODE_REL);
 }
 
 /**
@@ -2436,9 +2582,9 @@ static void stmmac_tx_timer_arm(struct stmmac_priv *priv, u32 queue)
  * Description:
  * This is the timer handler to directly invoke the stmmac_tx_clean.
  */
-static void stmmac_tx_timer(struct timer_list *t)
+static enum hrtimer_restart stmmac_tx_timer(struct hrtimer *t)
 {
-	struct stmmac_tx_queue *tx_q = from_timer(tx_q, t, txtimer);
+	struct stmmac_tx_queue *tx_q = container_of(t, struct stmmac_tx_queue, txtimer);
 	struct stmmac_priv *priv = tx_q->priv_data;
 	struct stmmac_channel *ch;
 
@@ -2452,6 +2598,8 @@ static void stmmac_tx_timer(struct timer_list *t)
 		spin_unlock_irqrestore(&ch->lock, flags);
 		__napi_schedule(&ch->tx_napi);
 	}
+
+	return HRTIMER_NORESTART;
 }
 
 /**
@@ -2474,7 +2622,8 @@ static void stmmac_init_coalesce(struct stmmac_priv *priv)
 	for (chan = 0; chan < tx_channel_count; chan++) {
 		struct stmmac_tx_queue *tx_q = &priv->tx_queue[chan];
 
-		timer_setup(&tx_q->txtimer, stmmac_tx_timer, 0);
+		hrtimer_init(&tx_q->txtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+		tx_q->txtimer.function = stmmac_tx_timer;
 	}
 }
 
@@ -2686,10 +2835,32 @@ static void stmmac_safety_feat_configuration(struct stmmac_priv *priv)
 {
 	if (priv->dma_cap.asp) {
 		netdev_info(priv->dev, "Enabling Safety Features\n");
-		stmmac_safety_feat_config(priv, priv->ioaddr, priv->dma_cap.asp);
+		stmmac_safety_feat_config(priv, priv->ioaddr, priv->dma_cap.asp,
+					  priv->plat->safety_feat_cfg);
 	} else {
 		netdev_info(priv->dev, "No Safety Features support found\n");
 	}
+}
+
+static int stmmac_fpe_start_wq(struct stmmac_priv *priv)
+{
+	char *name;
+
+	clear_bit(__FPE_TASK_SCHED, &priv->fpe_task_state);
+	clear_bit(__FPE_REMOVING,  &priv->fpe_task_state);
+
+	name = priv->wq_name;
+	sprintf(name, "%s-fpe", priv->dev->name);
+
+	priv->fpe_wq = create_singlethread_workqueue(name);
+	if (!priv->fpe_wq) {
+		netdev_err(priv->dev, "%s: Failed to create workqueue\n", name);
+
+		return -ENOMEM;
+	}
+	netdev_info(priv->dev, "FPE workqueue start");
+
+	return 0;
 }
 
 /**
@@ -2834,6 +3005,13 @@ static int stmmac_hw_setup(struct net_device *dev, bool ptp_register)
 	/* Start the ball rolling... */
 	stmmac_start_all_dma(priv);
 
+	if (priv->dma_cap.fpesel) {
+		stmmac_fpe_start_wq(priv);
+
+		if (priv->plat->fpe_cfg->enable)
+			stmmac_fpe_handshake(priv, true);
+	}
+
 	return 0;
 }
 
@@ -2842,6 +3020,260 @@ static void stmmac_hw_teardown(struct net_device *dev)
 	struct stmmac_priv *priv = netdev_priv(dev);
 
 	clk_disable_unprepare(priv->plat->clk_ptp_ref);
+}
+
+static void stmmac_free_irq(struct net_device *dev,
+			    enum request_irq_err irq_err, int irq_idx)
+{
+	struct stmmac_priv *priv = netdev_priv(dev);
+	int j;
+
+	switch (irq_err) {
+	case REQ_IRQ_ERR_ALL:
+		irq_idx = priv->plat->tx_queues_to_use;
+		fallthrough;
+	case REQ_IRQ_ERR_TX:
+		for (j = irq_idx - 1; j >= 0; j--) {
+			if (priv->tx_irq[j] > 0)
+				free_irq(priv->tx_irq[j], &priv->tx_queue[j]);
+		}
+		irq_idx = priv->plat->rx_queues_to_use;
+		fallthrough;
+	case REQ_IRQ_ERR_RX:
+		for (j = irq_idx - 1; j >= 0; j--) {
+			if (priv->rx_irq[j] > 0)
+				free_irq(priv->rx_irq[j], &priv->rx_queue[j]);
+		}
+
+		if (priv->sfty_ue_irq > 0 && priv->sfty_ue_irq != dev->irq)
+			free_irq(priv->sfty_ue_irq, dev);
+		fallthrough;
+	case REQ_IRQ_ERR_SFTY_UE:
+		if (priv->sfty_ce_irq > 0 && priv->sfty_ce_irq != dev->irq)
+			free_irq(priv->sfty_ce_irq, dev);
+		fallthrough;
+	case REQ_IRQ_ERR_SFTY_CE:
+		if (priv->lpi_irq > 0 && priv->lpi_irq != dev->irq)
+			free_irq(priv->lpi_irq, dev);
+		fallthrough;
+	case REQ_IRQ_ERR_LPI:
+		if (priv->wol_irq > 0 && priv->wol_irq != dev->irq)
+			free_irq(priv->wol_irq, dev);
+		fallthrough;
+	case REQ_IRQ_ERR_WOL:
+		free_irq(dev->irq, dev);
+		fallthrough;
+	case REQ_IRQ_ERR_MAC:
+	case REQ_IRQ_ERR_NO:
+		/* If MAC IRQ request error, no more IRQ to free */
+		break;
+	}
+}
+
+static int stmmac_request_irq_multi_msi(struct net_device *dev)
+{
+	enum request_irq_err irq_err = REQ_IRQ_ERR_NO;
+	struct stmmac_priv *priv = netdev_priv(dev);
+	int irq_idx = 0;
+	char *int_name;
+	int ret;
+	int i;
+
+	/* For common interrupt */
+	int_name = priv->int_name_mac;
+	sprintf(int_name, "%s:%s", dev->name, "mac");
+	ret = request_irq(dev->irq, stmmac_mac_interrupt,
+			  0, int_name, dev);
+	if (unlikely(ret < 0)) {
+		netdev_err(priv->dev,
+			   "%s: alloc mac MSI %d (error: %d)\n",
+			   __func__, dev->irq, ret);
+		irq_err = REQ_IRQ_ERR_MAC;
+		goto irq_error;
+	}
+
+	/* Request the Wake IRQ in case of another line
+	 * is used for WoL
+	 */
+	if (priv->wol_irq > 0 && priv->wol_irq != dev->irq) {
+		int_name = priv->int_name_wol;
+		sprintf(int_name, "%s:%s", dev->name, "wol");
+		ret = request_irq(priv->wol_irq,
+				  stmmac_mac_interrupt,
+				  0, int_name, dev);
+		if (unlikely(ret < 0)) {
+			netdev_err(priv->dev,
+				   "%s: alloc wol MSI %d (error: %d)\n",
+				   __func__, priv->wol_irq, ret);
+			irq_err = REQ_IRQ_ERR_WOL;
+			goto irq_error;
+		}
+	}
+
+	/* Request the LPI IRQ in case of another line
+	 * is used for LPI
+	 */
+	if (priv->lpi_irq > 0 && priv->lpi_irq != dev->irq) {
+		int_name = priv->int_name_lpi;
+		sprintf(int_name, "%s:%s", dev->name, "lpi");
+		ret = request_irq(priv->lpi_irq,
+				  stmmac_mac_interrupt,
+				  0, int_name, dev);
+		if (unlikely(ret < 0)) {
+			netdev_err(priv->dev,
+				   "%s: alloc lpi MSI %d (error: %d)\n",
+				   __func__, priv->lpi_irq, ret);
+			irq_err = REQ_IRQ_ERR_LPI;
+			goto irq_error;
+		}
+	}
+
+	/* Request the Safety Feature Correctible Error line in
+	 * case of another line is used
+	 */
+	if (priv->sfty_ce_irq > 0 && priv->sfty_ce_irq != dev->irq) {
+		int_name = priv->int_name_sfty_ce;
+		sprintf(int_name, "%s:%s", dev->name, "safety-ce");
+		ret = request_irq(priv->sfty_ce_irq,
+				  stmmac_safety_interrupt,
+				  0, int_name, dev);
+		if (unlikely(ret < 0)) {
+			netdev_err(priv->dev,
+				   "%s: alloc sfty ce MSI %d (error: %d)\n",
+				   __func__, priv->sfty_ce_irq, ret);
+			irq_err = REQ_IRQ_ERR_SFTY_CE;
+			goto irq_error;
+		}
+	}
+
+	/* Request the Safety Feature Uncorrectible Error line in
+	 * case of another line is used
+	 */
+	if (priv->sfty_ue_irq > 0 && priv->sfty_ue_irq != dev->irq) {
+		int_name = priv->int_name_sfty_ue;
+		sprintf(int_name, "%s:%s", dev->name, "safety-ue");
+		ret = request_irq(priv->sfty_ue_irq,
+				  stmmac_safety_interrupt,
+				  0, int_name, dev);
+		if (unlikely(ret < 0)) {
+			netdev_err(priv->dev,
+				   "%s: alloc sfty ue MSI %d (error: %d)\n",
+				   __func__, priv->sfty_ue_irq, ret);
+			irq_err = REQ_IRQ_ERR_SFTY_UE;
+			goto irq_error;
+		}
+	}
+
+	/* Request Rx MSI irq */
+	for (i = 0; i < priv->plat->rx_queues_to_use; i++) {
+		if (priv->rx_irq[i] == 0)
+			continue;
+
+		int_name = priv->int_name_rx_irq[i];
+		sprintf(int_name, "%s:%s-%d", dev->name, "rx", i);
+		ret = request_irq(priv->rx_irq[i],
+				  stmmac_msi_intr_rx,
+				  0, int_name, &priv->rx_queue[i]);
+		if (unlikely(ret < 0)) {
+			netdev_err(priv->dev,
+				   "%s: alloc rx-%d  MSI %d (error: %d)\n",
+				   __func__, i, priv->rx_irq[i], ret);
+			irq_err = REQ_IRQ_ERR_RX;
+			irq_idx = i;
+			goto irq_error;
+		}
+	}
+
+	/* Request Tx MSI irq */
+	for (i = 0; i < priv->plat->tx_queues_to_use; i++) {
+		if (priv->tx_irq[i] == 0)
+			continue;
+
+		int_name = priv->int_name_tx_irq[i];
+		sprintf(int_name, "%s:%s-%d", dev->name, "tx", i);
+		ret = request_irq(priv->tx_irq[i],
+				  stmmac_msi_intr_tx,
+				  0, int_name, &priv->tx_queue[i]);
+		if (unlikely(ret < 0)) {
+			netdev_err(priv->dev,
+				   "%s: alloc tx-%d  MSI %d (error: %d)\n",
+				   __func__, i, priv->tx_irq[i], ret);
+			irq_err = REQ_IRQ_ERR_TX;
+			irq_idx = i;
+			goto irq_error;
+		}
+	}
+
+	return 0;
+
+irq_error:
+	stmmac_free_irq(dev, irq_err, irq_idx);
+	return ret;
+}
+
+static int stmmac_request_irq_single(struct net_device *dev)
+{
+	enum request_irq_err irq_err = REQ_IRQ_ERR_NO;
+	struct stmmac_priv *priv = netdev_priv(dev);
+	int ret;
+
+	ret = request_irq(dev->irq, stmmac_interrupt,
+			  IRQF_SHARED, dev->name, dev);
+	if (unlikely(ret < 0)) {
+		netdev_err(priv->dev,
+			   "%s: ERROR: allocating the IRQ %d (error: %d)\n",
+			   __func__, dev->irq, ret);
+		irq_err = REQ_IRQ_ERR_MAC;
+		return ret;
+	}
+
+	/* Request the Wake IRQ in case of another line
+	 * is used for WoL
+	 */
+	if (priv->wol_irq > 0 && priv->wol_irq != dev->irq) {
+		ret = request_irq(priv->wol_irq, stmmac_interrupt,
+				  IRQF_SHARED, dev->name, dev);
+		if (unlikely(ret < 0)) {
+			netdev_err(priv->dev,
+				   "%s: ERROR: allocating the WoL IRQ %d (%d)\n",
+				   __func__, priv->wol_irq, ret);
+			irq_err = REQ_IRQ_ERR_WOL;
+			return ret;
+		}
+	}
+
+	/* Request the IRQ lines */
+	if (priv->lpi_irq > 0 && priv->lpi_irq != dev->irq) {
+		ret = request_irq(priv->lpi_irq, stmmac_interrupt,
+				  IRQF_SHARED, dev->name, dev);
+		if (unlikely(ret < 0)) {
+			netdev_err(priv->dev,
+				   "%s: ERROR: allocating the LPI IRQ %d (%d)\n",
+				   __func__, priv->lpi_irq, ret);
+			irq_err = REQ_IRQ_ERR_LPI;
+			goto irq_error;
+		}
+	}
+
+	return 0;
+
+irq_error:
+	stmmac_free_irq(dev, irq_err, 0);
+	return ret;
+}
+
+static int stmmac_request_irq(struct net_device *dev)
+{
+	struct stmmac_priv *priv = netdev_priv(dev);
+	int ret;
+
+	/* Request the IRQ lines */
+	if (priv->plat->multi_msi_en)
+		ret = stmmac_request_irq_multi_msi(dev);
+	else
+		ret = stmmac_request_irq_single(dev);
+
+	return ret;
 }
 
 /**
@@ -2943,55 +3375,20 @@ static int stmmac_open(struct net_device *dev)
 	/* We may have called phylink_speed_down before */
 	phylink_speed_up(priv->phylink);
 
-	/* Request the IRQ lines */
-	ret = request_irq(dev->irq, stmmac_interrupt,
-			  IRQF_SHARED, dev->name, dev);
-	if (unlikely(ret < 0)) {
-		netdev_err(priv->dev,
-			   "%s: ERROR: allocating the IRQ %d (error: %d)\n",
-			   __func__, dev->irq, ret);
+	ret = stmmac_request_irq(dev);
+	if (ret)
 		goto irq_error;
-	}
-
-	/* Request the Wake IRQ in case of another line is used for WoL */
-	if (priv->wol_irq != dev->irq) {
-		ret = request_irq(priv->wol_irq, stmmac_interrupt,
-				  IRQF_SHARED, dev->name, dev);
-		if (unlikely(ret < 0)) {
-			netdev_err(priv->dev,
-				   "%s: ERROR: allocating the WoL IRQ %d (%d)\n",
-				   __func__, priv->wol_irq, ret);
-			goto wolirq_error;
-		}
-	}
-
-	/* Request the IRQ lines */
-	if (priv->lpi_irq > 0) {
-		ret = request_irq(priv->lpi_irq, stmmac_interrupt, IRQF_SHARED,
-				  dev->name, dev);
-		if (unlikely(ret < 0)) {
-			netdev_err(priv->dev,
-				   "%s: ERROR: allocating the LPI IRQ %d (%d)\n",
-				   __func__, priv->lpi_irq, ret);
-			goto lpiirq_error;
-		}
-	}
 
 	stmmac_enable_all_queues(priv);
 	netif_tx_start_all_queues(priv->dev);
 
 	return 0;
 
-lpiirq_error:
-	if (priv->wol_irq != dev->irq)
-		free_irq(priv->wol_irq, dev);
-wolirq_error:
-	free_irq(dev->irq, dev);
 irq_error:
 	phylink_stop(priv->phylink);
 
 	for (chan = 0; chan < priv->plat->tx_queues_to_use; chan++)
-		del_timer_sync(&priv->tx_queue[chan].txtimer);
+		hrtimer_cancel(&priv->tx_queue[chan].txtimer);
 
 	stmmac_hw_teardown(dev);
 init_error:
@@ -3001,6 +3398,16 @@ dma_desc_error:
 init_phy_error:
 	pm_runtime_put(priv->device);
 	return ret;
+}
+
+static void stmmac_fpe_stop_wq(struct stmmac_priv *priv)
+{
+	set_bit(__FPE_REMOVING, &priv->fpe_task_state);
+
+	if (priv->fpe_wq)
+		destroy_workqueue(priv->fpe_wq);
+
+	netdev_info(priv->dev, "FPE workqueue stop");
 }
 
 /**
@@ -3023,14 +3430,10 @@ static int stmmac_release(struct net_device *dev)
 	stmmac_disable_all_queues(priv);
 
 	for (chan = 0; chan < priv->plat->tx_queues_to_use; chan++)
-		del_timer_sync(&priv->tx_queue[chan].txtimer);
+		hrtimer_cancel(&priv->tx_queue[chan].txtimer);
 
 	/* Free the IRQ lines */
-	free_irq(dev->irq, dev);
-	if (priv->wol_irq != dev->irq)
-		free_irq(priv->wol_irq, dev);
-	if (priv->lpi_irq > 0)
-		free_irq(priv->lpi_irq, dev);
+	stmmac_free_irq(dev, REQ_IRQ_ERR_ALL, 0);
 
 	if (priv->eee_enabled) {
 		priv->tx_path_in_lpi_mode = false;
@@ -3055,6 +3458,9 @@ static int stmmac_release(struct net_device *dev)
 	stmmac_release_ptp(priv);
 
 	pm_runtime_put(priv->device);
+
+	if (priv->dma_cap.fpesel)
+		stmmac_fpe_stop_wq(priv);
 
 	return 0;
 }
@@ -3433,7 +3839,7 @@ static netdev_tx_t stmmac_xmit(struct sk_buff *skb, struct net_device *dev)
 	tx_q = &priv->tx_queue[queue];
 	first_tx = tx_q->cur_tx;
 
-	if (priv->tx_path_in_lpi_mode)
+	if (priv->tx_path_in_lpi_mode && priv->eee_sw_timer_en)
 		stmmac_disable_eee_mode(priv);
 
 	/* Manage oversized TCP frames for GMAC4 device */
@@ -4195,21 +4601,50 @@ static int stmmac_set_features(struct net_device *netdev,
 	return 0;
 }
 
-/**
- *  stmmac_interrupt - main ISR
- *  @irq: interrupt number.
- *  @dev_id: to pass the net device pointer (must be valid).
- *  Description: this is the main driver interrupt service routine.
- *  It can call:
- *  o DMA service routine (to manage incoming frame reception and transmission
- *    status)
- *  o Core interrupts to manage: remote wake-up, management counter, LPI
- *    interrupts.
- */
-static irqreturn_t stmmac_interrupt(int irq, void *dev_id)
+static void stmmac_fpe_event_status(struct stmmac_priv *priv, int status)
 {
-	struct net_device *dev = (struct net_device *)dev_id;
-	struct stmmac_priv *priv = netdev_priv(dev);
+	struct stmmac_fpe_cfg *fpe_cfg = priv->plat->fpe_cfg;
+	enum stmmac_fpe_state *lo_state = &fpe_cfg->lo_fpe_state;
+	enum stmmac_fpe_state *lp_state = &fpe_cfg->lp_fpe_state;
+	bool *hs_enable = &fpe_cfg->hs_enable;
+
+	if (status == FPE_EVENT_UNKNOWN || !*hs_enable)
+		return;
+
+	/* If LP has sent verify mPacket, LP is FPE capable */
+	if ((status & FPE_EVENT_RVER) == FPE_EVENT_RVER) {
+		if (*lp_state < FPE_STATE_CAPABLE)
+			*lp_state = FPE_STATE_CAPABLE;
+
+		/* If user has requested FPE enable, quickly response */
+		if (*hs_enable)
+			stmmac_fpe_send_mpacket(priv, priv->ioaddr,
+						MPACKET_RESPONSE);
+	}
+
+	/* If Local has sent verify mPacket, Local is FPE capable */
+	if ((status & FPE_EVENT_TVER) == FPE_EVENT_TVER) {
+		if (*lo_state < FPE_STATE_CAPABLE)
+			*lo_state = FPE_STATE_CAPABLE;
+	}
+
+	/* If LP has sent response mPacket, LP is entering FPE ON */
+	if ((status & FPE_EVENT_RRSP) == FPE_EVENT_RRSP)
+		*lp_state = FPE_STATE_ENTERING_ON;
+
+	/* If Local has sent response mPacket, Local is entering FPE ON */
+	if ((status & FPE_EVENT_TRSP) == FPE_EVENT_TRSP)
+		*lo_state = FPE_STATE_ENTERING_ON;
+
+	if (!test_bit(__FPE_REMOVING, &priv->fpe_task_state) &&
+	    !test_and_set_bit(__FPE_TASK_SCHED, &priv->fpe_task_state) &&
+	    priv->fpe_wq) {
+		queue_work(priv->fpe_wq, &priv->fpe_task);
+	}
+}
+
+static void stmmac_common_interrupt(struct stmmac_priv *priv)
+{
 	u32 rx_cnt = priv->plat->rx_queues_to_use;
 	u32 tx_cnt = priv->plat->tx_queues_to_use;
 	u32 queues_count;
@@ -4222,12 +4657,16 @@ static irqreturn_t stmmac_interrupt(int irq, void *dev_id)
 	if (priv->irq_wake)
 		pm_wakeup_event(priv->device, 0);
 
-	/* Check if adapter is up */
-	if (test_bit(STMMAC_DOWN, &priv->state))
-		return IRQ_HANDLED;
-	/* Check if a fatal error happened */
-	if (stmmac_safety_feat_interrupt(priv))
-		return IRQ_HANDLED;
+	if (priv->dma_cap.estsel)
+		stmmac_est_irq_status(priv, priv->ioaddr, priv->dev,
+				      &priv->xstats, tx_cnt);
+
+	if (priv->dma_cap.fpesel) {
+		int status = stmmac_fpe_irq_status(priv, priv->ioaddr,
+						   priv->dev);
+
+		stmmac_fpe_event_status(priv, status);
+	}
 
 	/* To handle GMAC own interrupts */
 	if ((priv->plat->has_gmac) || xmac) {
@@ -4249,14 +4688,148 @@ static irqreturn_t stmmac_interrupt(int irq, void *dev_id)
 		/* PCS link status */
 		if (priv->hw->pcs) {
 			if (priv->xstats.pcs_link)
-				netif_carrier_on(dev);
+				netif_carrier_on(priv->dev);
 			else
-				netif_carrier_off(dev);
+				netif_carrier_off(priv->dev);
 		}
 	}
+}
+
+/**
+ *  stmmac_interrupt - main ISR
+ *  @irq: interrupt number.
+ *  @dev_id: to pass the net device pointer.
+ *  Description: this is the main driver interrupt service routine.
+ *  It can call:
+ *  o DMA service routine (to manage incoming frame reception and transmission
+ *    status)
+ *  o Core interrupts to manage: remote wake-up, management counter, LPI
+ *    interrupts.
+ */
+static irqreturn_t stmmac_interrupt(int irq, void *dev_id)
+{
+	struct net_device *dev = (struct net_device *)dev_id;
+	struct stmmac_priv *priv = netdev_priv(dev);
+
+	/* Check if adapter is up */
+	if (test_bit(STMMAC_DOWN, &priv->state))
+		return IRQ_HANDLED;
+
+	/* Check if a fatal error happened */
+	if (stmmac_safety_feat_interrupt(priv))
+		return IRQ_HANDLED;
+
+	/* To handle Common interrupts */
+	stmmac_common_interrupt(priv);
 
 	/* To handle DMA interrupts */
 	stmmac_dma_interrupt(priv);
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t stmmac_mac_interrupt(int irq, void *dev_id)
+{
+	struct net_device *dev = (struct net_device *)dev_id;
+	struct stmmac_priv *priv = netdev_priv(dev);
+
+	if (unlikely(!dev)) {
+		netdev_err(priv->dev, "%s: invalid dev pointer\n", __func__);
+		return IRQ_NONE;
+	}
+
+	/* Check if adapter is up */
+	if (test_bit(STMMAC_DOWN, &priv->state))
+		return IRQ_HANDLED;
+
+	/* To handle Common interrupts */
+	stmmac_common_interrupt(priv);
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t stmmac_safety_interrupt(int irq, void *dev_id)
+{
+	struct net_device *dev = (struct net_device *)dev_id;
+	struct stmmac_priv *priv = netdev_priv(dev);
+
+	if (unlikely(!dev)) {
+		netdev_err(priv->dev, "%s: invalid dev pointer\n", __func__);
+		return IRQ_NONE;
+	}
+
+	/* Check if adapter is up */
+	if (test_bit(STMMAC_DOWN, &priv->state))
+		return IRQ_HANDLED;
+
+	/* Check if a fatal error happened */
+	stmmac_safety_feat_interrupt(priv);
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t stmmac_msi_intr_tx(int irq, void *data)
+{
+	struct stmmac_tx_queue *tx_q = (struct stmmac_tx_queue *)data;
+	int chan = tx_q->queue_index;
+	struct stmmac_priv *priv;
+	int status;
+
+	priv = container_of(tx_q, struct stmmac_priv, tx_queue[chan]);
+
+	if (unlikely(!data)) {
+		netdev_err(priv->dev, "%s: invalid dev pointer\n", __func__);
+		return IRQ_NONE;
+	}
+
+	/* Check if adapter is up */
+	if (test_bit(STMMAC_DOWN, &priv->state))
+		return IRQ_HANDLED;
+
+	status = stmmac_napi_check(priv, chan, DMA_DIR_TX);
+
+	if (unlikely(status & tx_hard_error_bump_tc)) {
+		/* Try to bump up the dma threshold on this failure */
+		if (unlikely(priv->xstats.threshold != SF_DMA_MODE) &&
+		    tc <= 256) {
+			tc += 64;
+			if (priv->plat->force_thresh_dma_mode)
+				stmmac_set_dma_operation_mode(priv,
+							      tc,
+							      tc,
+							      chan);
+			else
+				stmmac_set_dma_operation_mode(priv,
+							      tc,
+							      SF_DMA_MODE,
+							      chan);
+			priv->xstats.threshold = tc;
+		}
+	} else if (unlikely(status == tx_hard_error)) {
+		stmmac_tx_err(priv, chan);
+	}
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t stmmac_msi_intr_rx(int irq, void *data)
+{
+	struct stmmac_rx_queue *rx_q = (struct stmmac_rx_queue *)data;
+	int chan = rx_q->queue_index;
+	struct stmmac_priv *priv;
+
+	priv = container_of(rx_q, struct stmmac_priv, rx_queue[chan]);
+
+	if (unlikely(!data)) {
+		netdev_err(priv->dev, "%s: invalid dev pointer\n", __func__);
+		return IRQ_NONE;
+	}
+
+	/* Check if adapter is up */
+	if (test_bit(STMMAC_DOWN, &priv->state))
+		return IRQ_HANDLED;
+
+	stmmac_napi_check(priv, chan, DMA_DIR_RX);
 
 	return IRQ_HANDLED;
 }
@@ -4267,9 +4840,24 @@ static irqreturn_t stmmac_interrupt(int irq, void *dev_id)
  */
 static void stmmac_poll_controller(struct net_device *dev)
 {
-	disable_irq(dev->irq);
-	stmmac_interrupt(dev->irq, dev);
-	enable_irq(dev->irq);
+	struct stmmac_priv *priv = netdev_priv(dev);
+	int i;
+
+	/* If adapter is down, do nothing */
+	if (test_bit(STMMAC_DOWN, &priv->state))
+		return;
+
+	if (priv->plat->multi_msi_en) {
+		for (i = 0; i < priv->plat->rx_queues_to_use; i++)
+			stmmac_msi_intr_rx(0, &priv->rx_queue[i]);
+
+		for (i = 0; i < priv->plat->tx_queues_to_use; i++)
+			stmmac_msi_intr_tx(0, &priv->tx_queue[i]);
+	} else {
+		disable_irq(dev->irq);
+		stmmac_interrupt(dev->irq, dev);
+		enable_irq(dev->irq);
+	}
 }
 #endif
 
@@ -4691,6 +5279,12 @@ static int stmmac_vlan_rx_add_vid(struct net_device *ndev, __be16 proto, u16 vid
 	bool is_double = false;
 	int ret;
 
+	ret = pm_runtime_get_sync(priv->device);
+	if (ret < 0) {
+		pm_runtime_put_noidle(priv->device);
+		return ret;
+	}
+
 	if (be16_to_cpu(proto) == ETH_P_8021AD)
 		is_double = true;
 
@@ -4825,7 +5419,8 @@ static int stmmac_hw_init(struct stmmac_priv *priv)
 		 * register (if supported).
 		 */
 		priv->plat->enh_desc = priv->dma_cap.enh_desc;
-		priv->plat->pmt = priv->dma_cap.pmt_remote_wake_up;
+		priv->plat->pmt = priv->dma_cap.pmt_remote_wake_up &&
+				!priv->plat->use_phy_wol;
 		priv->hw->pmt = priv->plat->pmt;
 		if (priv->dma_cap.hash_tb_sz) {
 			priv->hw->multicast_filter_bins =
@@ -4979,6 +5574,68 @@ int stmmac_reinit_ringparam(struct net_device *dev, u32 rx_size, u32 tx_size)
 	return ret;
 }
 
+#define SEND_VERIFY_MPAKCET_FMT "Send Verify mPacket lo_state=%d lp_state=%d\n"
+static void stmmac_fpe_lp_task(struct work_struct *work)
+{
+	struct stmmac_priv *priv = container_of(work, struct stmmac_priv,
+						fpe_task);
+	struct stmmac_fpe_cfg *fpe_cfg = priv->plat->fpe_cfg;
+	enum stmmac_fpe_state *lo_state = &fpe_cfg->lo_fpe_state;
+	enum stmmac_fpe_state *lp_state = &fpe_cfg->lp_fpe_state;
+	bool *hs_enable = &fpe_cfg->hs_enable;
+	bool *enable = &fpe_cfg->enable;
+	int retries = 20;
+
+	while (retries-- > 0) {
+		/* Bail out immediately if FPE handshake is OFF */
+		if (*lo_state == FPE_STATE_OFF || !*hs_enable)
+			break;
+
+		if (*lo_state == FPE_STATE_ENTERING_ON &&
+		    *lp_state == FPE_STATE_ENTERING_ON) {
+			stmmac_fpe_configure(priv, priv->ioaddr,
+					     priv->plat->tx_queues_to_use,
+					     priv->plat->rx_queues_to_use,
+					     *enable);
+
+			netdev_info(priv->dev, "configured FPE\n");
+
+			*lo_state = FPE_STATE_ON;
+			*lp_state = FPE_STATE_ON;
+			netdev_info(priv->dev, "!!! BOTH FPE stations ON\n");
+			break;
+		}
+
+		if ((*lo_state == FPE_STATE_CAPABLE ||
+		     *lo_state == FPE_STATE_ENTERING_ON) &&
+		     *lp_state != FPE_STATE_ON) {
+			netdev_info(priv->dev, SEND_VERIFY_MPAKCET_FMT,
+				    *lo_state, *lp_state);
+			stmmac_fpe_send_mpacket(priv, priv->ioaddr,
+						MPACKET_VERIFY);
+		}
+		/* Sleep then retry */
+		msleep(500);
+	}
+
+	clear_bit(__FPE_TASK_SCHED, &priv->fpe_task_state);
+}
+
+void stmmac_fpe_handshake(struct stmmac_priv *priv, bool enable)
+{
+	if (priv->plat->fpe_cfg->hs_enable != enable) {
+		if (enable) {
+			stmmac_fpe_send_mpacket(priv, priv->ioaddr,
+						MPACKET_VERIFY);
+		} else {
+			priv->plat->fpe_cfg->lo_fpe_state = FPE_STATE_OFF;
+			priv->plat->fpe_cfg->lp_fpe_state = FPE_STATE_OFF;
+		}
+
+		priv->plat->fpe_cfg->hs_enable = enable;
+	}
+}
+
 /**
  * stmmac_dvr_probe
  * @device: device pointer
@@ -5018,6 +5675,12 @@ int stmmac_dvr_probe(struct device *device,
 	priv->dev->irq = res->irq;
 	priv->wol_irq = res->wol_irq;
 	priv->lpi_irq = res->lpi_irq;
+	priv->sfty_ce_irq = res->sfty_ce_irq;
+	priv->sfty_ue_irq = res->sfty_ue_irq;
+	for (i = 0; i < MTL_MAX_RX_QUEUES; i++)
+		priv->rx_irq[i] = res->rx_irq[i];
+	for (i = 0; i < MTL_MAX_TX_QUEUES; i++)
+		priv->tx_irq[i] = res->tx_irq[i];
 
 	if (!IS_ERR_OR_NULL(res->mac))
 		memcpy(priv->dev->dev_addr, res->mac, ETH_ALEN);
@@ -5035,6 +5698,9 @@ int stmmac_dvr_probe(struct device *device,
 	}
 
 	INIT_WORK(&priv->service_task, stmmac_service_task);
+
+	/* Initialize Link Partner FPE workqueue */
+	INIT_WORK(&priv->fpe_task, stmmac_fpe_lp_task);
 
 	/* Override with kernel parameters if supplied XXX CRS XXX
 	 * this needs to have multiple instances
@@ -5231,6 +5897,7 @@ error_mdio_register:
 	stmmac_napi_del(ndev);
 error_hw_init:
 	destroy_workqueue(priv->wq);
+	stmmac_bus_clks_config(priv, false);
 
 	return ret;
 }
@@ -5290,6 +5957,7 @@ int stmmac_suspend(struct device *dev)
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct stmmac_priv *priv = netdev_priv(ndev);
 	u32 chan;
+	int ret;
 
 	if (!ndev || !netif_running(ndev))
 		return 0;
@@ -5303,7 +5971,7 @@ int stmmac_suspend(struct device *dev)
 	stmmac_disable_all_queues(priv);
 
 	for (chan = 0; chan < priv->plat->tx_queues_to_use; chan++)
-		del_timer_sync(&priv->tx_queue[chan].txtimer);
+		hrtimer_cancel(&priv->tx_queue[chan].txtimer);
 
 	if (priv->eee_enabled) {
 		priv->tx_path_in_lpi_mode = false;
@@ -5331,8 +5999,21 @@ int stmmac_suspend(struct device *dev)
 
 		stmmac_mac_set(priv, priv->ioaddr, false);
 		pinctrl_pm_select_sleep_state(priv->device);
+		ret = pm_runtime_force_suspend(dev);
+		if (ret)
+			return ret;
 	}
+
 	mutex_unlock(&priv->lock);
+
+	if (priv->dma_cap.fpesel) {
+		/* Disable FPE */
+		stmmac_fpe_configure(priv, priv->ioaddr,
+				     priv->plat->tx_queues_to_use,
+				     priv->plat->rx_queues_to_use, false);
+
+		stmmac_fpe_handshake(priv, false);
+	}
 
 	priv->speed = SPEED_UNKNOWN;
 	return 0;
@@ -5420,7 +6101,7 @@ int stmmac_resume(struct device *dev)
 	mutex_lock(&priv->lock);
 
 	stmmac_reset_queues_param(priv);
-
+	stmmac_reinit_rx_buffers(priv);
 	stmmac_free_tx_skbufs(priv);
 	stmmac_clear_descriptors(priv);
 

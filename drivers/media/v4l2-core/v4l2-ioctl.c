@@ -15,6 +15,7 @@
 #include <linux/kernel.h>
 #include <linux/version.h>
 
+#include <linux/v4l2-subdev.h>
 #include <linux/videodev2.h>
 
 #include <media/v4l2-common.h>
@@ -1414,6 +1415,38 @@ static void v4l_fill_fmtdesc(struct v4l2_fmtdesc *fmt)
 	case V4L2_PIX_FMT_KONICA420:	descr = "GSPCA KONICA420"; break;
 	case V4L2_PIX_FMT_HSV24:	descr = "24-bit HSV 8-8-8"; break;
 	case V4L2_PIX_FMT_HSV32:	descr = "32-bit XHSV 8-8-8-8"; break;
+	case V4L2_PIX_FMT_MTISP_SBGGR8: descr = "8-bit Bayer BGGR MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGBRG8: descr = "8-bit Bayer GBRG MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGRBG8: descr = "8-bit Bayer GRBG MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SRGGB8: descr = "8-bit Bayer RGGB MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SBGGR10: descr = "10-bit Bayer BGGR MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGBRG10: descr = "10-bit Bayer GBRG MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGRBG10: descr = "10-bit Bayer GRBG MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SRGGB10: descr = "10-bit Bayer RGGB MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SBGGR12: descr = "12-bit Bayer BGGR MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGBRG12: descr = "12-bit Bayer GBRG MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGRBG12: descr = "12-bit Bayer GRBG MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SRGGB12: descr = "12-bit Bayer RGGB MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SBGGR14: descr = "14-bit Bayer BGGR MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGBRG14: descr = "14-bit Bayer GBRG MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGRBG14: descr = "14-bit Bayer GRBG MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SRGGB14: descr = "14-bit Bayer RGGB MTISP Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SBGGR8F: descr = "8-bit Full-G Bayer BGGR Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGBRG8F: descr = "8-bit Full-G Bayer GBRG Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGRBG8F: descr = "8-bit Full-G Bayer GRBG Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SRGGB8F: descr = "8-bit Full-G Bayer RGGB Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SBGGR10F: descr = "10-bit Full-G Bayer BGGR Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGBRG10F: descr = "10-bit Full-G Bayer GBRG Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGRBG10F: descr = "10-bit Full-G Bayer GRBG Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SRGGB10F: descr = "10-bit Full-G Bayer RGGB Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SBGGR12F: descr = "12-bit Full-G Bayer BGGR Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGBRG12F: descr = "12-bit Full-G Bayer GBRG Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGRBG12F: descr = "12-bit Full-G Bayer GRBG Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SRGGB12F: descr = "12-bit Full-G Bayer RGGB Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SBGGR14F: descr = "14-bit Full-G Bayer BGGR Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGBRG14F: descr = "14-bit Full-G Bayer GBRG Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SGRBG14F: descr = "14-bit Full-G Bayer GRBG Packed"; break;
+	case V4L2_PIX_FMT_MTISP_SRGGB14F: descr = "14-bit Full-G Bayer RGGB Packed"; break;
 	case V4L2_SDR_FMT_CU8:		descr = "Complex U8"; break;
 	case V4L2_SDR_FMT_CU16LE:	descr = "Complex U16LE"; break;
 	case V4L2_SDR_FMT_CS8:		descr = "Complex S8"; break;
@@ -1431,6 +1464,11 @@ static void v4l_fill_fmtdesc(struct v4l2_fmtdesc *fmt)
 	case V4L2_META_FMT_UVC:		descr = "UVC Payload Header Metadata"; break;
 	case V4L2_META_FMT_D4XX:	descr = "Intel D4xx UVC Metadata"; break;
 	case V4L2_META_FMT_VIVID:       descr = "Vivid Metadata"; break;
+	case V4L2_META_FMT_MTISP_3A:	descr = "AE/AWB Histogram"; break;
+	case V4L2_META_FMT_MTISP_AF:	descr = "AF Histogram"; break;
+	case V4L2_META_FMT_MTISP_LCS:	descr = "Local Contrast Enhancement Stat"; break;
+	case V4L2_META_FMT_MTISP_LMV:	descr = "Local Motion Vector Histogram"; break;
+	case V4L2_META_FMT_MTISP_PARAMS: descr = "MTK ISP Tuning Metadata"; break;
 
 	default:
 		/* Compressed formats */
@@ -1478,6 +1516,7 @@ static void v4l_fill_fmtdesc(struct v4l2_fmtdesc *fmt)
 		case V4L2_PIX_FMT_JPGL:		descr = "JPEG Lite"; break;
 		case V4L2_PIX_FMT_SE401:	descr = "GSPCA SE401"; break;
 		case V4L2_PIX_FMT_S5C_UYVY_JPG:	descr = "S5C73MX interleaved UYVY/JPEG"; break;
+		case V4L2_PIX_FMT_MT21:		descr = "Mediatek block Format"; break;
 		case V4L2_PIX_FMT_MT21C:	descr = "Mediatek Compressed Format"; break;
 		case V4L2_PIX_FMT_SUNXI_TILED_NV12: descr = "Sunxi Tiled NV12 Format"; break;
 		default:
@@ -3120,6 +3159,21 @@ static int check_array_args(unsigned int cmd, void *parg, size_t *array_size,
 		}
 		break;
 	}
+
+	case VIDIOC_SUBDEV_G_ROUTING:
+	case VIDIOC_SUBDEV_S_ROUTING: {
+		struct v4l2_subdev_routing *routing = parg;
+
+		if (routing->num_routes > 256)
+			return -EINVAL;
+
+		*user_ptr = u64_to_user_ptr(routing->routes);
+		*kernel_ptr = (void **)&routing->routes;
+		*array_size = sizeof(struct v4l2_subdev_route)
+			    * routing->num_routes;
+		ret = 1;
+		break;
+	}
 	}
 
 	return ret;
@@ -3357,8 +3411,15 @@ video_usercopy(struct file *file, unsigned int orig_cmd, unsigned long arg,
 	/*
 	 * Some ioctls can return an error, but still have valid
 	 * results that must be returned.
+	 *
+	 * FIXME: subdev IOCTLS are partially handled here and partially in
+	 * v4l2-subdev.c and the 'always_copy' flag can only be set for IOCTLS
+	 * defined here as part of the 'v4l2_ioctls' array. As
+	 * VIDIOC_SUBDEV_G_ROUTING needs to return results to applications even
+	 * in case of failure, but it is not defined here as part of the
+	 * 'v4l2_ioctls' array, insert an ad-hoc check to address that.
 	 */
-	if (err < 0 && !always_copy)
+	if (err < 0 && !always_copy && cmd != VIDIOC_SUBDEV_G_ROUTING)
 		goto out;
 
 out_array_args:

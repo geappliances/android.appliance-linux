@@ -990,7 +990,7 @@ static int cio2_vb2_start_streaming(struct vb2_queue *vq, unsigned int count)
 		return r;
 	}
 
-	r = media_pipeline_start(&q->vdev.entity, &q->pipe);
+	r = media_pipeline_start(q->vdev.entity.pads, &q->pipe);
 	if (r)
 		goto fail_pipeline;
 
@@ -1010,7 +1010,7 @@ static int cio2_vb2_start_streaming(struct vb2_queue *vq, unsigned int count)
 fail_csi2_subdev:
 	cio2_hw_exit(cio2, q);
 fail_hw:
-	media_pipeline_stop(&q->vdev.entity);
+	media_pipeline_stop(q->vdev.entity.pads);
 fail_pipeline:
 	dev_dbg(&cio2->pci_dev->dev, "failed to start streaming (%d)\n", r);
 	cio2_vb2_return_all_buffers(q, VB2_BUF_STATE_QUEUED);
@@ -1031,7 +1031,7 @@ static void cio2_vb2_stop_streaming(struct vb2_queue *vq)
 	cio2_hw_exit(cio2, q);
 	synchronize_irq(cio2->pci_dev->irq);
 	cio2_vb2_return_all_buffers(q, VB2_BUF_STATE_ERROR);
-	media_pipeline_stop(&q->vdev.entity);
+	media_pipeline_stop(q->vdev.entity.pads);
 	pm_runtime_put(&cio2->pci_dev->dev);
 	cio2->streaming = false;
 }
@@ -1211,11 +1211,11 @@ static int cio2_subdev_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	};
 
 	/* Initialize try_fmt */
-	format = v4l2_subdev_get_try_format(sd, fh->pad, CIO2_PAD_SINK);
+	format = v4l2_subdev_get_try_format(sd, fh->state, CIO2_PAD_SINK);
 	*format = fmt_default;
 
 	/* same as sink */
-	format = v4l2_subdev_get_try_format(sd, fh->pad, CIO2_PAD_SOURCE);
+	format = v4l2_subdev_get_try_format(sd, fh->state, CIO2_PAD_SOURCE);
 	*format = fmt_default;
 
 	return 0;
@@ -1224,12 +1224,12 @@ static int cio2_subdev_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 /*
  * cio2_subdev_get_fmt - Handle get format by pads subdev method
  * @sd : pointer to v4l2 subdev structure
- * @cfg: V4L2 subdev pad config
+ * @sd_state: V4L2 subdev state
  * @fmt: pointer to v4l2 subdev format structure
  * return -EINVAL or zero on success
  */
 static int cio2_subdev_get_fmt(struct v4l2_subdev *sd,
-			       struct v4l2_subdev_pad_config *cfg,
+			       struct v4l2_subdev_state *sd_state,
 			       struct v4l2_subdev_format *fmt)
 {
 	struct cio2_queue *q = container_of(sd, struct cio2_queue, subdev);
@@ -1237,7 +1237,8 @@ static int cio2_subdev_get_fmt(struct v4l2_subdev *sd,
 	mutex_lock(&q->subdev_lock);
 
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
-		fmt->format = *v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
+		fmt->format = *v4l2_subdev_get_try_format(sd, sd_state,
+							  fmt->pad);
 	else
 		fmt->format = q->subdev_fmt;
 
@@ -1249,12 +1250,12 @@ static int cio2_subdev_get_fmt(struct v4l2_subdev *sd,
 /*
  * cio2_subdev_set_fmt - Handle set format by pads subdev method
  * @sd : pointer to v4l2 subdev structure
- * @cfg: V4L2 subdev pad config
+ * @sd_state: V4L2 subdev state
  * @fmt: pointer to v4l2 subdev format structure
  * return -EINVAL or zero on success
  */
 static int cio2_subdev_set_fmt(struct v4l2_subdev *sd,
-			       struct v4l2_subdev_pad_config *cfg,
+			       struct v4l2_subdev_state *sd_state,
 			       struct v4l2_subdev_format *fmt)
 {
 	struct cio2_queue *q = container_of(sd, struct cio2_queue, subdev);
@@ -1267,10 +1268,10 @@ static int cio2_subdev_set_fmt(struct v4l2_subdev *sd,
 	 * source always propagates from sink
 	 */
 	if (fmt->pad == CIO2_PAD_SOURCE)
-		return cio2_subdev_get_fmt(sd, cfg, fmt);
+		return cio2_subdev_get_fmt(sd, sd_state, fmt);
 
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
-		mbus = v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
+		mbus = v4l2_subdev_get_try_format(sd, sd_state, fmt->pad);
 	else
 		mbus = &q->subdev_fmt;
 
@@ -1296,7 +1297,7 @@ static int cio2_subdev_set_fmt(struct v4l2_subdev *sd,
 }
 
 static int cio2_subdev_enum_mbus_code(struct v4l2_subdev *sd,
-				      struct v4l2_subdev_pad_config *cfg,
+				      struct v4l2_subdev_state *sd_state,
 				      struct v4l2_subdev_mbus_code_enum *code)
 {
 	if (code->index >= ARRAY_SIZE(formats))

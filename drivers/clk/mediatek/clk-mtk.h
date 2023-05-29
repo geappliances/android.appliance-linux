@@ -10,6 +10,7 @@
 #include <linux/regmap.h>
 #include <linux/bitops.h>
 #include <linux/clk-provider.h>
+#include <linux/platform_device.h>
 
 struct clk;
 struct clk_onecell_data;
@@ -181,6 +182,7 @@ struct mtk_clk_divider {
 	unsigned long flags;
 
 	u32 div_reg;
+	u32 div_reg_fixup;
 	unsigned char div_shift;
 	unsigned char div_width;
 	unsigned char clk_divider_flags;
@@ -201,6 +203,7 @@ void mtk_clk_register_dividers(const struct mtk_clk_divider *mcds,
 				struct clk_onecell_data *clk_data);
 
 struct clk_onecell_data *mtk_alloc_clk_data(unsigned int clk_num);
+void mtk_free_clk_data(struct clk_onecell_data *clk_data);
 
 #define HAVE_RST_BAR	BIT(0)
 #define PLL_AO		BIT(1)
@@ -213,13 +216,13 @@ struct mtk_pll_div_table {
 struct mtk_pll_data {
 	int id;
 	const char *name;
-	uint32_t reg;
-	uint32_t pwr_reg;
-	uint32_t en_mask;
-	uint32_t pd_reg;
-	uint32_t tuner_reg;
-	uint32_t tuner_en_reg;
-	uint8_t tuner_en_bit;
+	u32 reg;
+	u32 pwr_reg;
+	u32 en_mask;
+	u32 pd_reg;
+	u32 tuner_reg;
+	u32 tuner_en_reg;
+	u8 tuner_en_bit;
 	int pd_shift;
 	unsigned int flags;
 	const struct clk_ops *ops;
@@ -228,11 +231,13 @@ struct mtk_pll_data {
 	unsigned long fmax;
 	int pcwbits;
 	int pcwibits;
-	uint32_t pcw_reg;
+	u32 pcw_reg;
 	int pcw_shift;
-	uint32_t pcw_chg_reg;
+	u32 pcw_chg_reg;
 	const struct mtk_pll_div_table *div_table;
 	const char *parent_name;
+	u32 en_reg;
+	u8 pll_en_bit; /* Assume 0, indicates BIT(0) by default */
 };
 
 void mtk_clk_register_plls(struct device_node *node,
@@ -247,5 +252,47 @@ void mtk_register_reset_controller(struct device_node *np,
 
 void mtk_register_reset_controller_set_clr(struct device_node *np,
 	unsigned int num_regs, int regofs);
+
+struct mtk_clk_desc {
+	const struct mtk_gate *clks;
+	size_t num_clks;
+};
+
+int mtk_clk_simple_probe(struct platform_device *pdev);
+
+struct clk_fixup_div {
+	int id;
+	const char *name;
+	const char *parent_name;
+
+	void __iomem *reg_fixup;
+	const struct clk_div_table *clk_div_table;
+
+	struct clk_divider divider;
+	const struct clk_ops *ops;
+
+};
+
+static inline struct clk_fixup_div *to_clk_fixup_div(struct clk_hw *hw)
+{
+	struct clk_divider *divider = to_clk_divider(hw);
+
+	return container_of(divider, struct clk_fixup_div, divider);
+}
+
+struct clk *mtk_clk_fixup_divider(
+		const char *name,
+		const char *parent,
+		unsigned long flags,
+		void __iomem *reg,
+		void __iomem *reg_fixup,
+		u8 shift,
+		u8 width,
+		u8 clk_divider_flags,
+		spinlock_t *lock);
+
+void mtk_clk_register_fixup_dividers(const struct mtk_clk_divider *mcds,
+			int num, void __iomem *base, spinlock_t *lock,
+				struct clk_onecell_data *clk_data);
 
 #endif /* __DRV_CLK_MTK_H */

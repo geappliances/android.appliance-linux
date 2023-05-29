@@ -154,6 +154,7 @@ static int __smiapp_pll_calculate(
 	struct smiapp_pll *pll, struct smiapp_pll_branch *op_pll, uint32_t mul,
 	uint32_t div, uint32_t lane_op_clock_ratio)
 {
+	unsigned int num_readout_paths;
 	uint32_t sys_div;
 	uint32_t best_pix_div = INT_MAX >> 1;
 	uint32_t vt_op_binning_div;
@@ -189,7 +190,7 @@ static int __smiapp_pll_calculate(
 		more_mul_max);
 	/* Don't go above the division capability of op sys clock divider. */
 	more_mul_max = min(more_mul_max,
-			   op_limits->max_sys_clk_div * pll->pre_pll_clk_div
+			   limits->op.max_sys_clk_div * pll->pre_pll_clk_div
 			   / div);
 	dev_dbg(dev, "more_mul_max: max_op_sys_clk_div check: %u\n",
 		more_mul_max);
@@ -283,8 +284,12 @@ static int __smiapp_pll_calculate(
 	 * Find absolute limits for the factor of vt divider.
 	 */
 	dev_dbg(dev, "scale_m: %u\n", pll->scale_m);
+	if (pll->flags & SMIAPP_PLL_FLAG_DUAL_READOUT)
+		num_readout_paths = 2;
+	else
+		num_readout_paths = 1;
 	min_vt_div = DIV_ROUND_UP(op_pll->pix_clk_div * op_pll->sys_clk_div
-				  * pll->scale_n,
+				  * pll->scale_n * num_readout_paths,
 				  lane_op_clock_ratio * vt_op_binning_div
 				  * pll->scale_m);
 

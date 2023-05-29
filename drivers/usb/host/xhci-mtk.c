@@ -56,7 +56,34 @@
 /* u2_phy_pll register */
 #define CTRL_U2_FORCE_PLL_STB	BIT(28)
 
+/* xHCI CSR */
+#define LS_EOF_CFG		0x930
+#define LSEOF_OFFSET		0x89
+
+#define FS_EOF_CFG		0x934
+#define FSEOF_OFFSET		0x2e
+
+#define SS_GEN1_EOF_CFG		0x93c
+#define SSG1EOF_OFFSET		0x78
+
+#define HFCNTR_CFG		0x944
+#define ITP_DELTA_CLK		(0xa << 1)
+#define ITP_DELTA_CLK_MASK	GENMASK(5, 1)
+#define FRMCNT_LEV1_RANG	(0x12b << 8)
+#define FRMCNT_LEV1_RANG_MASK	GENMASK(19, 8)
+
+#define SS_GEN2_EOF_CFG		0x990
+#define SSG2EOF_OFFSET		0x3c
+
+#define XSEOF_OFFSET_MASK	GENMASK(11, 0)
+
 /* usb remote wakeup registers in syscon */
+/* mt8183 etc */
+#define PERI_WK_CTRL0	0x20
+#define WC0_IS_C(x)	(((u32)(x) & 0xf) << 28)  /* cycle debounce */
+#define WC0_IS_P	BIT(12)	/* polarity */
+#define WC0_IS_EN	BIT(6)
+
 /* mt8173 etc */
 #define PERI_WK_CTRL1	0x4
 #define WC1_IS_C(x)	(((x) & 0xf) << 26)  /* cycle debounce */
@@ -69,9 +96,50 @@
 #define SSC_SPM_INT_EN		BIT(1)
 
 enum ssusb_uwk_vers {
-	SSUSB_UWK_V1 = 1,
+	SSUSB_UWK_V0 = 0,
+	SSUSB_UWK_V1,
 	SSUSB_UWK_V2,
 };
+
+/*
+ * MT8195 has 4 controllers, the controller1~3's default SOF/ITP interval
+ * is calculated from the frame counter clock 24M, but in fact, the clock
+ * is 48M, add workaround for it.
+ */
+static void xhci_mtk_set_frame_interval(struct xhci_hcd_mtk *mtk)
+{
+	struct device *dev = mtk->dev;
+	struct usb_hcd *hcd = mtk->hcd;
+	u32 value;
+
+	if (!of_device_is_compatible(dev->of_node, "mediatek,mt8195-xhci"))
+		return;
+
+	value = readl(hcd->regs + HFCNTR_CFG);
+	value &= ~(ITP_DELTA_CLK_MASK | FRMCNT_LEV1_RANG_MASK);
+	value |= (ITP_DELTA_CLK | FRMCNT_LEV1_RANG);
+	writel(value, hcd->regs + HFCNTR_CFG);
+
+	value = readl(hcd->regs + LS_EOF_CFG);
+	value &= ~XSEOF_OFFSET_MASK;
+	value |= LSEOF_OFFSET;
+	writel(value, hcd->regs + LS_EOF_CFG);
+
+	value = readl(hcd->regs + FS_EOF_CFG);
+	value &= ~XSEOF_OFFSET_MASK;
+	value |= FSEOF_OFFSET;
+	writel(value, hcd->regs + FS_EOF_CFG);
+
+	value = readl(hcd->regs + SS_GEN1_EOF_CFG);
+	value &= ~XSEOF_OFFSET_MASK;
+	value |= SSG1EOF_OFFSET;
+	writel(value, hcd->regs + SS_GEN1_EOF_CFG);
+
+	value = readl(hcd->regs + SS_GEN2_EOF_CFG);
+	value &= ~XSEOF_OFFSET_MASK;
+	value |= SSG2EOF_OFFSET;
+	writel(value, hcd->regs + SS_GEN2_EOF_CFG);
+}
 
 static int xhci_mtk_host_enable(struct xhci_hcd_mtk *mtk)
 {
@@ -232,20 +300,22 @@ static int xhci_mtk_clks_get(struct xhci_hcd_mtk *mtk)
 	return PTR_ERR_OR_ZERO(mtk->dma_clk);
 }
 
-static int xhci_mtk_clks_enable(struct xhci_hcd_mtk *mtk)
+static int xhci_mtk_clks_enable(struct xhci_hcd_mtk *mtk, bool pm)
 {
 	int ret;
 
-	ret = clk_prepare_enable(mtk->ref_clk);
-	if (ret) {
-		dev_err(mtk->dev, "failed to enable ref_clk\n");
-		goto ref_clk_err;
-	}
+	if (!pm || (pm && !mtk->uwk_en)) {
+		ret = clk_prepare_enable(mtk->ref_clk);
+		if (ret) {
+			dev_err(mtk->dev, "failed to enable ref_clk\n");
+			goto ref_clk_err;
+		}
 
-	ret = clk_prepare_enable(mtk->sys_clk);
-	if (ret) {
-		dev_err(mtk->dev, "failed to enable sys_clk\n");
-		goto sys_clk_err;
+		ret = clk_prepare_enable(mtk->sys_clk);
+		if (ret) {
+			dev_err(mtk->dev, "failed to enable sys_clk\n");
+			goto sys_clk_err;
+		}
 	}
 
 	ret = clk_prepare_enable(mtk->xhci_clk);
@@ -280,21 +350,29 @@ ref_clk_err:
 	return ret;
 }
 
-static void xhci_mtk_clks_disable(struct xhci_hcd_mtk *mtk)
+static void xhci_mtk_clks_disable(struct xhci_hcd_mtk *mtk, bool pm)
 {
 	clk_disable_unprepare(mtk->dma_clk);
 	clk_disable_unprepare(mtk->mcu_clk);
 	clk_disable_unprepare(mtk->xhci_clk);
-	clk_disable_unprepare(mtk->sys_clk);
-	clk_disable_unprepare(mtk->ref_clk);
+	if (!pm || (pm && !mtk->uwk_en)) {
+		clk_disable_unprepare(mtk->sys_clk);
+		clk_disable_unprepare(mtk->ref_clk);
+	}
 }
 
 /* only clocks can be turn off for ip-sleep wakeup mode */
 static void usb_wakeup_ip_sleep_set(struct xhci_hcd_mtk *mtk, bool enable)
 {
+	int ret;
 	u32 reg, msk, val;
 
 	switch (mtk->uwk_vers) {
+	case SSUSB_UWK_V0:
+		reg = mtk->uwk_reg_base + PERI_WK_CTRL0;
+		msk = WC0_IS_EN | WC0_IS_C(0xf) | WC0_IS_P;
+		val = enable ? (WC0_IS_EN | WC0_IS_C(0x8)) : 0;
+		break;
 	case SSUSB_UWK_V1:
 		reg = mtk->uwk_reg_base + PERI_WK_CTRL1;
 		msk = WC1_IS_EN | WC1_IS_C(0xf) | WC1_IS_P;
@@ -309,6 +387,15 @@ static void usb_wakeup_ip_sleep_set(struct xhci_hcd_mtk *mtk, bool enable)
 		return;
 	}
 	regmap_update_bits(mtk->uwk, reg, msk, val);
+
+	if (enable)
+		ret = enable_irq_wake(mtk->irq);
+	else
+		ret = disable_irq_wake(mtk->irq);
+
+	if (ret)
+		dev_warn(mtk->dev, "Failed to %s wakeup on IRQ %u: %d\n",
+			 enable ? "enable" : "disable", mtk->irq, ret);
 }
 
 static int usb_wakeup_of_property_parse(struct xhci_hcd_mtk *mtk,
@@ -324,8 +411,10 @@ static int usb_wakeup_of_property_parse(struct xhci_hcd_mtk *mtk,
 
 	ret = of_parse_phandle_with_fixed_args(dn,
 				"mediatek,syscon-wakeup", 2, 0, &args);
-	if (ret)
+	if (ret) {
+		dev_err(mtk->dev, "Failed to get syscon\n");
 		return ret;
+	}
 
 	mtk->uwk_reg_base = args.args[0];
 	mtk->uwk_vers = args.args[1];
@@ -409,6 +498,9 @@ static int xhci_mtk_setup(struct usb_hcd *hcd)
 		ret = xhci_mtk_ssusb_config(mtk);
 		if (ret)
 			return ret;
+
+		/* workaround only for mt8195 */
+		xhci_mtk_set_frame_interval(mtk);
 	}
 
 	ret = xhci_gen_setup(hcd, xhci_mtk_quirks);
@@ -444,7 +536,6 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct usb_hcd *hcd;
 	int ret = -ENODEV;
-	int irq;
 
 	if (usb_disabled())
 		return -ENODEV;
@@ -491,15 +582,14 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 	if (ret)
 		goto disable_pm;
 
-	ret = xhci_mtk_clks_enable(mtk);
+	ret = xhci_mtk_clks_enable(mtk, false);
 	if (ret)
 		goto disable_ldos;
 
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
-		ret = irq;
+	ret = platform_get_irq(pdev, 0);
+	if (ret < 0)
 		goto disable_clk;
-	}
+	mtk->irq = ret;
 
 	hcd = usb_create_hcd(driver, dev, dev_name(dev));
 	if (!hcd) {
@@ -555,7 +645,7 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 		goto disable_device_wakeup;
 	}
 
-	ret = usb_add_hcd(hcd, irq, IRQF_SHARED);
+	ret = usb_add_hcd(hcd, mtk->irq, IRQF_SHARED);
 	if (ret)
 		goto put_usb3_hcd;
 
@@ -563,7 +653,7 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 	    !(xhci->quirks & XHCI_BROKEN_STREAMS))
 		xhci->shared_hcd->can_do_streams = 1;
 
-	ret = usb_add_hcd(xhci->shared_hcd, irq, IRQF_SHARED);
+	ret = usb_add_hcd(xhci->shared_hcd, mtk->irq, IRQF_SHARED);
 	if (ret)
 		goto dealloc_usb2_hcd;
 
@@ -583,7 +673,7 @@ put_usb2_hcd:
 	usb_put_hcd(hcd);
 
 disable_clk:
-	xhci_mtk_clks_disable(mtk);
+	xhci_mtk_clks_disable(mtk, false);
 
 disable_ldos:
 	xhci_mtk_ldos_disable(mtk);
@@ -612,7 +702,7 @@ static int xhci_mtk_remove(struct platform_device *dev)
 	usb_put_hcd(shared_hcd);
 	usb_put_hcd(hcd);
 	xhci_mtk_sch_exit(mtk);
-	xhci_mtk_clks_disable(mtk);
+	xhci_mtk_clks_disable(mtk, false);
 	xhci_mtk_ldos_disable(mtk);
 
 	return 0;
@@ -638,7 +728,7 @@ static int __maybe_unused xhci_mtk_suspend(struct device *dev)
 	del_timer_sync(&xhci->shared_hcd->rh_timer);
 
 	xhci_mtk_host_disable(mtk);
-	xhci_mtk_clks_disable(mtk);
+	xhci_mtk_clks_disable(mtk, true);
 	usb_wakeup_set(mtk, true);
 	return 0;
 }
@@ -650,7 +740,7 @@ static int __maybe_unused xhci_mtk_resume(struct device *dev)
 	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
 
 	usb_wakeup_set(mtk, false);
-	xhci_mtk_clks_enable(mtk);
+	xhci_mtk_clks_enable(mtk, true);
 	xhci_mtk_host_enable(mtk);
 
 	xhci_dbg(xhci, "%s: restart port polling\n", __func__);
@@ -669,6 +759,7 @@ static const struct dev_pm_ops xhci_mtk_pm_ops = {
 #ifdef CONFIG_OF
 static const struct of_device_id mtk_xhci_of_match[] = {
 	{ .compatible = "mediatek,mt8173-xhci"},
+	{ .compatible = "mediatek,mt8195-xhci"},
 	{ .compatible = "mediatek,mtk-xhci"},
 	{ },
 };

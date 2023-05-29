@@ -17,6 +17,7 @@
 #include <linux/iopoll.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/of_net.h>
 #include <linux/pm_runtime.h>
 #include <linux/skbuff.h>
 
@@ -34,20 +35,55 @@
 #define FIRMWARE_MT7663		"mediatek/mt7663pr2h.bin"
 #define FIRMWARE_MT7668		"mediatek/mt7668pr2h.bin"
 
+/* MT7668 EFUSE registers
+ * 0x384: bt mac address [ 7: 0]
+ * 0x385: bt mac address [15: 8]
+ * 0x386: bt mac address [23:16]
+ * 0x387: bt mac address [31:24]
+ * 0x388: bt mac address [39:32]
+ * 0x389: bt mac address [47:40]
+ */
+#define MT7668_EFUSE_BT_MAC_REG0	0xe1 /* bytes 0x384-0x387 for BT_MAC */
+#define MT7668_EFUSE_BT_MAC_REG1	0xe2 /* bytes 0x388-0x389 for BT_MAC */
+
+/* MT7663 EFUSE registers
+ * 0x131: bt mac address [ 7: 0]
+ * 0x132: bt mac address [15: 8]
+ * 0x133: bt mac address [23:16]
+ * 0x134: bt mac address [31:24]
+ * 0x135: bt mac address [39:32]
+ * 0x136: bt mac address [47:40]
+ */
+#define MT7663_EFUSE_BT_MAC_REG0	0x4c /* bytes 0x131-0x134 for BT_MAC */
+#define MT7663_EFUSE_BT_MAC_REG1	0x4d /* bytes 0x135-0x136 for BT_MAC */
+
 #define MTKBTSDIO_AUTOSUSPEND_DELAY	8000
+
+#define BT_MTK_QUIRK_BLE 1
+#define BT_MTK_QUIRK_NO_SET_DEFAULT_PHY 2
 
 static bool enable_autosuspend;
 
 struct btmtksdio_data {
 	const char *fwname;
+	u8 mac_reg0;
+	u8 mac_reg1;
+	u8 mac_offset;
+	u8 quirks;
 };
 
 static const struct btmtksdio_data mt7663_data = {
 	.fwname = FIRMWARE_MT7663,
+	.mac_reg0 = MT7663_EFUSE_BT_MAC_REG0,
+	.mac_reg1 = MT7663_EFUSE_BT_MAC_REG1,
+	.mac_offset = 1,
 };
 
 static const struct btmtksdio_data mt7668_data = {
 	.fwname = FIRMWARE_MT7668,
+	.mac_reg0 = MT7668_EFUSE_BT_MAC_REG0,
+	.mac_reg1 = MT7668_EFUSE_BT_MAC_REG1,
+	.quirks = BT_MTK_QUIRK_BLE | BT_MTK_QUIRK_NO_SET_DEFAULT_PHY,
 };
 
 static const struct sdio_device_id btmtksdio_table[] = {
@@ -58,6 +94,9 @@ static const struct sdio_device_id btmtksdio_table[] = {
 	{ }	/* Terminating entry */
 };
 MODULE_DEVICE_TABLE(sdio, btmtksdio_table);
+
+/* Vendor-specific HCI commands */
+#define HCI_VS_WRITE_BD_ADDR			0xfc1a
 
 #define MTK_REG_CHLPCR		0x4	/* W1S */
 #define C_INT_EN_SET		BIT(0)
@@ -89,6 +128,7 @@ MODULE_DEVICE_TABLE(sdio, btmtksdio_table);
 #define MTK_SDIO_BLOCK_SIZE	256
 
 #define BTMTKSDIO_TX_WAIT_VND_EVT	1
+#define BTMTKSDIO_TX_WAIT_EEPROM_READ_BDADDR	2
 
 enum {
 	MTK_WMT_PATCH_DWNLD = 0x1,
@@ -97,6 +137,7 @@ enum {
 	MTK_WMT_HIF = 0x4,
 	MTK_WMT_FUNC_CTRL = 0x6,
 	MTK_WMT_RST = 0x7,
+	MTK_WMT_EFUSE_READ = 0xd,
 	MTK_WMT_SEMAPHORE = 0x17,
 };
 
@@ -122,6 +163,11 @@ struct mtk_wmt_hdr {
 	u8	flag;
 } __packed;
 
+struct mtk_efuse_reg {
+	__le16 reg;
+	u8 val[4];
+} __packed;
+
 struct mtk_hci_wmt_cmd {
 	struct mtk_wmt_hdr hdr;
 	u8 data[256];
@@ -135,6 +181,18 @@ struct btmtk_hci_wmt_evt {
 struct btmtk_hci_wmt_evt_funcc {
 	struct btmtk_hci_wmt_evt hwhdr;
 	__be16 status;
+} __packed;
+
+#define EFUSE_CMD_MAX_REG 4
+struct btmtk_hci_wmt_cmd_efuser {
+	u8 num_regs;
+	__le16 regs[EFUSE_CMD_MAX_REG];
+} __packed;
+
+struct btmtk_hci_wmt_evt_efuser {
+	struct btmtk_hci_wmt_evt hwhdr;
+	u8 num_regs;
+	struct mtk_efuse_reg regs[EFUSE_CMD_MAX_REG];
 } __packed;
 
 struct btmtk_tci_sleep {
@@ -165,6 +223,9 @@ struct btmtksdio_dev {
 	struct sk_buff *evt_skb;
 
 	const struct btmtksdio_data *data;
+	bdaddr_t efuse_bdaddr;
+
+	bool local_commands_quirk;
 };
 
 static int mtk_hci_wmt_sync(struct hci_dev *hdev,
@@ -172,11 +233,13 @@ static int mtk_hci_wmt_sync(struct hci_dev *hdev,
 {
 	struct btmtksdio_dev *bdev = hci_get_drvdata(hdev);
 	struct btmtk_hci_wmt_evt_funcc *wmt_evt_funcc;
+	struct btmtk_hci_wmt_evt_efuser *wmt_evt_efuser;
 	u32 hlen, status = BTMTK_WMT_INVALID;
 	struct btmtk_hci_wmt_evt *wmt_evt;
 	struct mtk_hci_wmt_cmd wc;
 	struct mtk_wmt_hdr *hdr;
 	int err;
+	int i;
 
 	hlen = sizeof(*hdr) + wmt_params->dlen;
 	if (hlen > 255)
@@ -244,6 +307,26 @@ static int mtk_hci_wmt_sync(struct hci_dev *hdev,
 			status = BTMTK_WMT_ON_PROGRESS;
 		else
 			status = BTMTK_WMT_ON_UNDONE;
+		break;
+	case MTK_WMT_EFUSE_READ:
+		wmt_evt_efuser = (struct btmtk_hci_wmt_evt_efuser *)wmt_evt;
+		if (test_and_clear_bit(BTMTKSDIO_TX_WAIT_EEPROM_READ_BDADDR,
+				       &bdev->tx_state)) {
+			for (i = 0; i < 6; i++) {
+				int byte = (bdev->data->mac_offset + i) % 4;
+				int reg = (bdev->data->mac_offset + i) / 4;
+
+				bdev->efuse_bdaddr.b[5 - i] =
+					wmt_evt_efuser->regs[reg].val[byte];
+
+			}
+
+			/* Barrier to sync with other CPUs */
+			smp_mb__after_atomic();
+			wake_up_bit(&bdev->tx_state,
+				    BTMTKSDIO_TX_WAIT_EEPROM_READ_BDADDR);
+		}
+
 		break;
 	}
 
@@ -354,6 +437,22 @@ static int btmtksdio_recv_event(struct hci_dev *hdev, struct sk_buff *skb)
 	err = hci_recv_frame(hdev, skb);
 	if (err < 0)
 		goto err_free_skb;
+
+	if (bdev->local_commands_quirk) {
+		/* The firmware claims it doesn't support BLE whereas it does */
+		if (bdev->data->quirks & BT_MTK_QUIRK_BLE) {
+			bt_dev_info(hdev, "Enable BLE workaround\n");
+			hdev->commands[25] = 0xff;
+			hdev->commands[26] = 0xff;
+			hdev->commands[27] = 0xff;
+		}
+		/* The firmware fails to execute this command */
+		if (bdev->data->quirks & BT_MTK_QUIRK_NO_SET_DEFAULT_PHY) {
+			bt_dev_info(hdev, "Disable HCI_OP_LE_SET_DEFAULT_PHY\n");
+			hdev->commands[35] &= ~0x20;
+		}
+		bdev->local_commands_quirk = 0;
+	}
 
 	if (hdr->evt == HCI_EV_VENDOR) {
 		if (test_and_clear_bit(BTMTKSDIO_TX_WAIT_VND_EVT,
@@ -623,6 +722,15 @@ static int btmtksdio_close(struct hci_dev *hdev)
 	u32 status;
 	int err;
 
+	pm_runtime_put_noidle(bdev->dev);
+	pm_runtime_disable(bdev->dev);
+	if (!enable_autosuspend)
+		pm_runtime_allow(bdev->dev);
+	err = pm_runtime_set_suspended(bdev->dev);
+	if (err)
+		bt_dev_err(bdev->hdev, "Failed to set runtime suspended: %d",
+			   err);
+
 	sdio_claim_host(bdev->func);
 
 	/* Disable interrupt */
@@ -693,18 +801,20 @@ static int mtk_setup_firmware(struct hci_dev *hdev, const char *fwname)
 		return err;
 	}
 
-	/* Power on data RAM the firmware relies on. */
-	param = 1;
-	wmt_params.op = MTK_WMT_FUNC_CTRL;
-	wmt_params.flag = 3;
-	wmt_params.dlen = sizeof(param);
-	wmt_params.data = &param;
-	wmt_params.status = NULL;
+	if (!strcmp(fwname, FIRMWARE_MT7663)) {
+		/* Power on data RAM the firmware relies on. */
+		param = 1;
+		wmt_params.op = MTK_WMT_FUNC_CTRL;
+		wmt_params.flag = 3;
+		wmt_params.dlen = sizeof(param);
+		wmt_params.data = &param;
+		wmt_params.status = NULL;
 
-	err = mtk_hci_wmt_sync(hdev, &wmt_params);
-	if (err < 0) {
-		bt_dev_err(hdev, "Failed to power on data RAM (%d)", err);
-		goto free_fw;
+		err = mtk_hci_wmt_sync(hdev, &wmt_params);
+		if (err < 0) {
+			bt_dev_err(hdev, "Failed to power on data RAM (%d)", err);
+			goto free_fw;
+		}
 	}
 
 	fw_ptr = fw->data;
@@ -768,6 +878,53 @@ free_fw:
 	return err;
 }
 
+static int btmtksdio_set_bdaddr(struct hci_dev *hdev, const bdaddr_t *bdaddr);
+
+static int mtk_setup_bdaddr_efuse(struct hci_dev *hdev)
+{
+	struct btmtksdio_dev *bdev = hci_get_drvdata(hdev);
+	struct btmtk_hci_wmt_params wmt_params;
+	int err;
+
+	struct btmtk_hci_wmt_cmd_efuser read_bdaddr = {
+		.num_regs = 2,
+		.regs = { bdev->data->mac_reg0, bdev->data->mac_reg1 },
+	};
+
+	wmt_params.op = MTK_WMT_EFUSE_READ;
+	wmt_params.flag = 0x02;
+	wmt_params.dlen = sizeof(read_bdaddr);
+	wmt_params.data = &read_bdaddr;
+	wmt_params.status = NULL;
+
+	set_bit(BTMTKSDIO_TX_WAIT_EEPROM_READ_BDADDR, &bdev->tx_state);
+
+	err = mtk_hci_wmt_sync(hdev, &wmt_params);
+	if (err < 0) {
+		bt_dev_err(hdev, "Failed to read bdaddr from e-fuse (%d)", err);
+		return err;
+	}
+
+	err = wait_on_bit_timeout(&bdev->tx_state,
+				  BTMTKSDIO_TX_WAIT_EEPROM_READ_BDADDR,
+				  TASK_INTERRUPTIBLE, HCI_INIT_TIMEOUT);
+
+	if (err == -EINTR) {
+		bt_dev_err(hdev, "Execution of wmt command interrupted");
+		clear_bit(BTMTKSDIO_TX_WAIT_EEPROM_READ_BDADDR,
+			  &bdev->tx_state);
+		return err;
+	}
+
+	err = btmtksdio_set_bdaddr(hdev, &(bdev->efuse_bdaddr));
+	if (err < 0) {
+		bt_dev_err(hdev, "Failed to set bdaddr (%d)", err);
+		return err;
+	}
+
+	return 0;
+}
+
 static int btmtksdio_setup(struct hci_dev *hdev)
 {
 	struct btmtksdio_dev *bdev = hci_get_drvdata(hdev);
@@ -778,6 +935,7 @@ static int btmtksdio_setup(struct hci_dev *hdev)
 	struct sk_buff *skb;
 	int err, status;
 	u8 param = 0x1;
+	const bdaddr_t *bdaddr;
 
 	calltime = ktime_get();
 
@@ -833,6 +991,19 @@ ignore_setup_fw:
 	if (err < 0) {
 		bt_dev_err(hdev, "Failed to send wmt func ctrl (%d)", err);
 		return err;
+	}
+
+	/* Setup the bdaddr from built-in E-fuse */
+	err = mtk_setup_bdaddr_efuse(hdev);
+	if (err < 0)
+		return err;
+
+	/* Setup the bdaddr from the device-tree if present */
+	bdaddr = of_get_mac_address(bdev->dev->of_node);
+	if (!IS_ERR(bdaddr)) {
+		err = btmtksdio_set_bdaddr(hdev, bdaddr);
+		if (err < 0)
+			return err;
 	}
 
 ignore_func_on:
@@ -903,15 +1074,13 @@ static int btmtksdio_shutdown(struct hci_dev *hdev)
 		return err;
 	}
 
-	pm_runtime_put_noidle(bdev->dev);
-	pm_runtime_disable(bdev->dev);
-
 	return 0;
 }
 
 static int btmtksdio_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	struct btmtksdio_dev *bdev = hci_get_drvdata(hdev);
+	struct hci_command_hdr *hdr = (void *)skb->data;
 
 	switch (hci_skb_pkt_type(skb)) {
 	case HCI_COMMAND_PKT:
@@ -930,9 +1099,31 @@ static int btmtksdio_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		return -EILSEQ;
 	}
 
+	/*
+	 * We are requesting the firmware to expose its capabilities.
+	 * Some firmware don't set them correctly. This allows to handle the
+	 * the reply and to fix the capabilities before the framework tries
+	 * to use it.
+	 */
+	if (__le16_to_cpu(hdr->opcode) == HCI_OP_READ_LOCAL_COMMANDS)
+		bdev->local_commands_quirk = 1;
+
 	skb_queue_tail(&bdev->txq, skb);
 
 	schedule_work(&bdev->tx_work);
+
+	return 0;
+}
+
+static int btmtksdio_set_bdaddr(struct hci_dev *hdev, const bdaddr_t *bdaddr)
+{
+	struct sk_buff *skb;
+
+	skb = __hci_cmd_sync(hdev, HCI_VS_WRITE_BD_ADDR, sizeof(bdaddr), bdaddr,
+						 HCI_INIT_TIMEOUT);
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
+	kfree_skb(skb);
 
 	return 0;
 }
@@ -970,12 +1161,13 @@ static int btmtksdio_probe(struct sdio_func *func,
 	hdev->bus = HCI_SDIO;
 	hci_set_drvdata(hdev, bdev);
 
-	hdev->open     = btmtksdio_open;
-	hdev->close    = btmtksdio_close;
-	hdev->flush    = btmtksdio_flush;
-	hdev->setup    = btmtksdio_setup;
-	hdev->shutdown = btmtksdio_shutdown;
-	hdev->send     = btmtksdio_send_frame;
+	hdev->open       = btmtksdio_open;
+	hdev->close      = btmtksdio_close;
+	hdev->flush      = btmtksdio_flush;
+	hdev->setup      = btmtksdio_setup;
+	hdev->shutdown   = btmtksdio_shutdown;
+	hdev->send       = btmtksdio_send_frame;
+	hdev->set_bdaddr = btmtksdio_set_bdaddr;
 	SET_HCIDEV_DEV(hdev, &func->dev);
 
 	hdev->manufacturer = 70;
@@ -1087,8 +1279,13 @@ out:
 	return err;
 }
 
-static UNIVERSAL_DEV_PM_OPS(btmtksdio_pm_ops, btmtksdio_runtime_suspend,
-			    btmtksdio_runtime_resume, NULL);
+static const struct dev_pm_ops btmtksdio_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+	SET_RUNTIME_PM_OPS(btmtksdio_runtime_suspend,
+			   btmtksdio_runtime_resume, NULL)
+};
+
 #define BTMTKSDIO_PM_OPS (&btmtksdio_pm_ops)
 #else	/* CONFIG_PM */
 #define BTMTKSDIO_PM_OPS NULL

@@ -309,10 +309,8 @@ static int isp_video_release(struct file *file)
 
 	mutex_lock(&isp->video_lock);
 
-	is_singular_file = v4l2_fh_is_singular_file(file);
-
-	if (is_singular_file && ivc->streaming) {
-		media_pipeline_stop(entity);
+	if (v4l2_fh_is_singular_file(file) && ivc->streaming) {
+		media_pipeline_stop(entity->pads);
 		ivc->streaming = 0;
 	}
 

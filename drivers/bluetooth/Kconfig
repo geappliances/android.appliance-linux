@@ -383,6 +383,7 @@ config BT_ATH3K
 config BT_MTKSDIO
 	tristate "MediaTek HCI SDIO driver"
 	depends on MMC
+	select OF_NET
 	help
 	  MediaTek Bluetooth HCI SDIO driver.
 	  This driver is required if you want to use MediaTek Bluetooth
