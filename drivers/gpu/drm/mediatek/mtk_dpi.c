@@ -15,6 +15,7 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <linux/types.h>
+#include <linux/soc/mediatek/mtk-cmdq.h>
 
 #include <video/videomode.h>
 
@@ -627,7 +628,6 @@ static void mtk_dpi_bridge_enable(struct drm_bridge *bridge)
 		pinctrl_select_state(dpi->pinctrl, dpi->pins_dpi);
 
 	mtk_dpi_power_on(dpi);
-	mtk_dpi_adjust_pll_rate(dpi, &dpi->mode);
 	mtk_dpi_set_display_mode(dpi, &dpi->mode);
 	mtk_dpi_enable(dpi);
 
@@ -664,6 +664,15 @@ static const struct drm_connector_funcs mtk_dpi_connector_funcs = {
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 };
 
+static void mtk_dpi_config(struct mtk_ddp_comp *comp, unsigned int w,
+			   unsigned int h, unsigned int vrefresh,
+			   unsigned int bpc, struct cmdq_pkt *cmdq_pkt)
+{
+	struct mtk_dpi *dpi = container_of(comp, struct mtk_dpi, ddp_comp);
+
+	mtk_dpi_adjust_pll_rate(dpi, &dpi->mode);
+}
+
 static void mtk_dpi_start(struct mtk_ddp_comp *comp)
 {
 	struct mtk_dpi *dpi = container_of(comp, struct mtk_dpi, ddp_comp);
@@ -679,6 +688,7 @@ static void mtk_dpi_stop(struct mtk_ddp_comp *comp)
 }
 
 static const struct mtk_ddp_comp_funcs mtk_dpi_funcs = {
+	.config = mtk_dpi_config,
 	.start = mtk_dpi_start,
 	.stop = mtk_dpi_stop,
 };
