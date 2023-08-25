@@ -10,8 +10,8 @@
 #include <linux/kernel.h>
 #include <linux/mfd/mt6323/registers.h>
 #include <linux/mfd/mt6357/registers.h>
-#include <linux/mfd/mt6392/registers.h>
 #include <linux/mfd/mt6358/registers.h>
+#include <linux/mfd/mt6392/registers.h>
 #include <linux/mfd/mt6397/core.h>
 #include <linux/mfd/mt6397/registers.h>
 #include <linux/module.h>
@@ -55,6 +55,7 @@ struct mtk_pmic_keys_regs {
 struct mtk_pmic_regs {
 	const struct mtk_pmic_keys_regs keys_regs[MTK_PMIC_MAX_KEY_COUNT];
 	u32 pmic_rst_reg;
+	u32 pmic_ppccfg0_reg;
 };
 
 static const struct mtk_pmic_regs mt6397_regs = {
@@ -65,6 +66,7 @@ static const struct mtk_pmic_regs mt6397_regs = {
 		MTK_PMIC_KEYS_REGS(MT6397_OCSTATUS2,
 		0x10, MT6397_INT_RSV, 0x8),
 	.pmic_rst_reg = MT6397_TOP_RST_MISC,
+	.pmic_ppccfg0_reg = 0x0,
 };
 
 static const struct mtk_pmic_regs mt6323_regs = {
@@ -75,6 +77,7 @@ static const struct mtk_pmic_regs mt6323_regs = {
 		MTK_PMIC_KEYS_REGS(MT6323_CHRSTATUS,
 		0x4, MT6323_INT_MISC_CON, 0x8),
 	.pmic_rst_reg = MT6323_TOP_RST_MISC,
+	.pmic_ppccfg0_reg = 0x0,
 };
 
 static const struct mtk_pmic_regs mt6357_regs = {
@@ -85,16 +88,7 @@ static const struct mtk_pmic_regs mt6357_regs = {
 		MTK_PMIC_KEYS_REGS(MT6357_TOPSTATUS,
 		0x8, MT6357_PSC_TOP_INT_CON0, 0xa),
 	.pmic_rst_reg = MT6357_TOP_RST_MISC,
-};
-
-static const struct mtk_pmic_regs mt6392_regs = {
-	.keys_regs[MTK_PMIC_PWRKEY_INDEX] =
-		MTK_PMIC_KEYS_REGS(MT6392_CHRSTATUS,
-		0x2, MT6392_INT_MISC_CON, 0x10),
-	.keys_regs[MTK_PMIC_HOMEKEY_INDEX] =
-		MTK_PMIC_KEYS_REGS(MT6392_CHRSTATUS,
-		0x4, MT6392_INT_MISC_CON, 0x8),
-	.pmic_rst_reg = MT6392_TOP_RST_MISC,
+	.pmic_ppccfg0_reg = MT6357_PPCCFG0,
 };
 
 static const struct mtk_pmic_regs mt6358_regs = {
@@ -105,6 +99,18 @@ static const struct mtk_pmic_regs mt6358_regs = {
 		MTK_PMIC_KEYS_REGS(MT6358_TOPSTATUS,
 		0x8, MT6358_PSC_TOP_INT_CON0, 0xa),
 	.pmic_rst_reg = MT6358_TOP_RST_MISC,
+	.pmic_ppccfg0_reg = 0x0,
+};
+
+static const struct mtk_pmic_regs mt6392_regs = {
+	.keys_regs[MTK_PMIC_PWRKEY_INDEX] =
+		MTK_PMIC_KEYS_REGS(MT6392_CHRSTATUS,
+		0x2, MT6392_INT_MISC_CON, 0x10),
+	.keys_regs[MTK_PMIC_HOMEKEY_INDEX] =
+		MTK_PMIC_KEYS_REGS(MT6392_CHRSTATUS,
+		0x4, MT6392_INT_MISC_CON, 0x8),
+	.pmic_rst_reg = MT6392_TOP_RST_MISC,
+	.pmic_ppccfg0_reg = 0x0,
 };
 
 struct mtk_pmic_keys_info {
@@ -177,6 +183,31 @@ static void mtk_pmic_keys_lp_reset_setup(struct mtk_pmic_keys *keys,
 	default:
 		break;
 	}
+}
+
+enum mtk_wdtrst_act_mode {
+	PMIC_REG_RESET  = 0,
+	PMIC_WARM_RESET = 1,
+	PMIC_COLD_RESET = 2,
+	PMIC_RESERVED   = 3,
+};
+
+static void mtk_pmic_wdtrst_act(struct mtk_pmic_keys *keys, u32 pmic_ppccfg0_reg,
+				enum mtk_wdtrst_act_mode mode)
+{
+        int  ret ;
+	u32  mask    = 0;
+	u32  reg_val = 0;
+
+	// do nothing if reg is invalid
+	if ( pmic_ppccfg0_reg == 0x0 ) return ;
+
+	// mask for WDTRST_ACT is at bit 4,5 (bit position starts from 0)
+	mask = mask | ( 3 << 4 ) ;
+        reg_val = mode << 4;
+        ret = regmap_update_bits(keys->regmap, pmic_ppccfg0_reg, mask, reg_val);
+
+	printk("<ffr> set RG_WDTRST_ACT (reg) %08x  (mask) %02x (value) %02x \n", pmic_ppccfg0_reg, mask, reg_val);
 }
 
 static irqreturn_t mtk_pmic_keys_irq_handler_thread(int irq, void *data)
@@ -286,11 +317,11 @@ static const struct of_device_id of_mtk_pmic_keys_match_tbl[] = {
 		.compatible = "mediatek,mt6357-keys",
 		.data = &mt6357_regs,
 	}, {
-		.compatible = "mediatek,mt6392-keys",
-		.data = &mt6392_regs,
-	}, {
 		.compatible = "mediatek,mt6358-keys",
 		.data = &mt6358_regs,
+	}, {
+		.compatible = "mediatek,mt6392-keys",
+		.data = &mt6392_regs,
 	}, {
 		/* sentinel */
 	}
@@ -382,6 +413,8 @@ static int mtk_pmic_keys_probe(struct platform_device *pdev)
 	}
 
 	mtk_pmic_keys_lp_reset_setup(keys, mtk_pmic_regs->pmic_rst_reg);
+
+        mtk_pmic_wdtrst_act(keys, mtk_pmic_regs->pmic_ppccfg0_reg, PMIC_WARM_RESET);
 
 	platform_set_drvdata(pdev, keys);
 
