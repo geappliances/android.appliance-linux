@@ -228,19 +228,19 @@
 
 			trips {
 				threshold: trip-point0 {
-					temperature = <95000>;
+					temperature = <65000>;
 					hysteresis = <2000>;
 					type = "passive";
 				};
 
 				target: trip-point1 {
-					temperature = <105000>;
+					temperature = <80000>;
 					hysteresis = <2000>;
 					type = "passive";
 				};
 
 				cpu_crit: cpu_crit0 {
-					temperature = <117000>;
+					temperature = <95000>;
 					hysteresis = <2000>;
 					type = "critical";
 				};
@@ -248,6 +248,23 @@
 
 			cooling-maps {
 				map0 {
+					trip = <&threshold>;
+					cooling-device =
+						<&cpu0
+						 THERMAL_NO_LIMIT
+						 THERMAL_NO_LIMIT>,
+						<&cpu1
+						 THERMAL_NO_LIMIT
+						 THERMAL_NO_LIMIT>,
+						<&cpu2
+						 THERMAL_NO_LIMIT
+						 THERMAL_NO_LIMIT>,
+						<&cpu3
+						 THERMAL_NO_LIMIT
+						 THERMAL_NO_LIMIT>;
+					contribution = <100>;
+				};
+				map1 {
 					trip = <&target>;
 					cooling-device =
 						<&cpu0
