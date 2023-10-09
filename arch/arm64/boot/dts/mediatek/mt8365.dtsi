@@ -247,7 +247,7 @@
 			};
 
 			cooling-maps {
-				map0 {
+				map0: map0 {
 					trip = <&threshold>;
 					cooling-device =
 						<&cpu0
@@ -264,7 +264,7 @@
 						 THERMAL_NO_LIMIT>;
 					contribution = <100>;
 				};
-				map1 {
+				map1: map1 {
 					trip = <&target>;
 					cooling-device =
 						<&cpu0
