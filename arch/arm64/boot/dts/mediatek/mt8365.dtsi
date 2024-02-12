@@ -343,6 +343,13 @@
 			     <GIC_PPI 10 IRQ_TYPE_LEVEL_LOW 0>;
 	};
 
+	dmic_codec: dmic-codec {
+		#sound-dai-cells = <0>;
+		compatible = "dmic-codec";
+		num-channels = <2>;
+		wakeup-delay-ms = <10>;
+	};
+
 	soc {
 		#address-cells = <2>;
 		#size-cells = <2>;
