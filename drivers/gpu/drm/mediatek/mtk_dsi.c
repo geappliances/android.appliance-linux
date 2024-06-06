@@ -821,11 +821,14 @@ static int mtk_dsi_encoder_init(struct drm_device *drm, struct mtk_dsi *dsi)
 		}
 	}
 
-	if (indicated_disp_path == -1)
-		dsi->encoder.possible_crtcs =
-			mtk_drm_find_possible_crtc_by_comp(drm, dsi->host.dev);
-	else
+	if (indicated_disp_path == -1) {
+		ret = mtk_drm_find_possible_crtc_by_comp(drm, dsi->host.dev);
+		if (ret < 0)
+			goto err_cleanup_encoder;
+		dsi->encoder.possible_crtcs = ret;
+	} else {
 		dsi->encoder.possible_crtcs = (1 << indicated_disp_path);
+	}
 
 	ret = drm_bridge_attach(&dsi->encoder, &dsi->bridge, NULL,
 				DRM_BRIDGE_ATTACH_NO_CONNECTOR);

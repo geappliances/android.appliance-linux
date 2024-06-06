@@ -953,10 +953,14 @@ static int mtk_dpi_bind(struct device *dev, struct device *master, void *data)
 		}
 	}
 
-	if (indicated_disp_path == -1)
-		dpi->encoder.possible_crtcs = mtk_drm_find_possible_crtc_by_comp(drm_dev, dpi->dev);
-	else
+	if (indicated_disp_path == -1) {
+		ret = mtk_drm_find_possible_crtc_by_comp(drm_dev, dpi->dev);
+		if (ret < 0)
+			goto err_cleanup;
+		dpi->encoder.possible_crtcs = ret;
+	} else {
 		dpi->encoder.possible_crtcs = (1 << indicated_disp_path);
+	}
 
 	ret = drm_bridge_attach(&dpi->encoder, &dpi->bridge, NULL,
 				DRM_BRIDGE_ATTACH_NO_CONNECTOR);

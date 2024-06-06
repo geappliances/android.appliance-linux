@@ -532,6 +532,27 @@ static int mtk_drm_find_comp_in_ddp_conn_path(struct device *dev,
 	return ret;
 }
 
+static bool mtk_ddp_path_available(const unsigned int *path,
+				   unsigned int path_len,
+				   struct device_node **comp_node)
+{
+	unsigned int i;
+
+	if (!path || !path_len)
+		return false;
+
+	for (i = 0U; i < path_len; i++) {
+		/* OVL_ADAPTOR doesn't have a device node */
+		if (path[i] == DDP_COMPONENT_DRM_OVL_ADAPTOR)
+			continue;
+
+		if (!comp_node[path[i]])
+			return false;
+	}
+
+	return true;
+}
+
 int mtk_ddp_comp_get_id(struct device_node *node,
 			enum mtk_ddp_comp_type comp_type)
 {
@@ -547,49 +568,86 @@ int mtk_ddp_comp_get_id(struct device_node *node,
 	return -EINVAL;
 }
 
-unsigned int mtk_drm_find_possible_crtc_by_comp(struct drm_device *drm,
-						struct device *dev)
+int mtk_drm_find_possible_crtc_by_comp(struct drm_device *drm,
+				       struct device *dev)
 {
 	struct mtk_drm_private *private = drm->dev_private;
 	struct mtk_drm_private **private_all = private->all_drm_private;
+	const struct mtk_mmsys_driver_data *data;
+	struct mtk_drm_private *priv_n;
 	unsigned int ret = 0;
-	int i, j;
+	int crtc_id = 0;
+	int i, j, k;
 
-	for (i = 0; i < private->data->mmsys_dev_num; i++) {
-		if (mtk_drm_find_comp_in_ddp(dev, private_all[i]->data->main_path,
-				private_all[i]->data->main_len, private_all[i]->ddp_comp))
-			ret |= BIT(0);
-		if (mtk_drm_find_comp_in_ddp(dev, private_all[i]->data->main_dualpipe_path,
-				  private_all[i]->data->main_dualpipe_len,
-				  private_all[i]->ddp_comp))
-			ret |= BIT(0);
-		if (mtk_drm_find_comp_in_ddp(dev, private_all[i]->data->ext_path,
-				  private_all[i]->data->ext_len, private_all[i]->ddp_comp))
-			ret |= BIT(1);
-		if (mtk_drm_find_comp_in_ddp(dev, private_all[i]->data->third_path,
-				  private_all[i]->data->third_len, private_all[i]->ddp_comp))
-			ret |= BIT(2);
+	/*
+	 * Paths are optional, e.g. the main path might not be enabled, in
+	 * which case no CRTC is created for it and the IDs of the following
+	 * CRTCs shift down. Compute the CRTC IDs from the available paths,
+	 * following the same order as the CRTC creation in mtk_drm_kms_init().
+	 */
+	for (i = 0; i < MAX_CRTC; i++) {
+		for (j = 0; j < private->data->mmsys_dev_num; j++) {
+			priv_n = private_all[j];
+			data = priv_n->data;
 
-		ret |= mtk_drm_find_comp_in_ddp_conn_path(dev,
-						 private_all[i]->data->conn_routes,
-						 private_all[i]->data->conn_routes_num,
-						 private_all[i]->ddp_comp);
-
-		if (private_all[i]->is_sub_pipe) {
-			if (mtk_drm_find_comp_in_ddp(dev, private_all[i]->data->main_subpipe_path,
-				private_all[i]->data->main_subpipe_len, private_all[i]->ddp_comp))
-				ret |= BIT(2);
-
-			for (j = 0; j < private_all[i]->data->conn_subpipe_routes_num; j++)
-				if (mtk_drm_find_comp_in_ddp(dev,
-					private_all[i]->data->conn_subpipe_routes[j].route_ddp,
-					private_all[i]->data->conn_subpipe_routes[j].route_len,
-					private_all[i]->ddp_comp))
-					ret |= BIT(2);
+			if (i == 0 && data->main_len) {
+				if (!mtk_ddp_path_available(data->main_path, data->main_len,
+							    priv_n->comp_node))
+					continue;
+				if (mtk_drm_find_comp_in_ddp(dev, data->main_path,
+							     data->main_len, priv_n->ddp_comp) ||
+				    mtk_drm_find_comp_in_ddp(dev, data->main_dualpipe_path,
+							     data->main_dualpipe_len,
+							     priv_n->ddp_comp))
+					ret |= BIT(crtc_id);
+				crtc_id++;
+			} else if (i == 1 && data->ext_len) {
+				if (!mtk_ddp_path_available(data->ext_path, data->ext_len,
+							    priv_n->comp_node))
+					continue;
+				if (mtk_drm_find_comp_in_ddp(dev, data->ext_path,
+							     data->ext_len, priv_n->ddp_comp))
+					ret |= BIT(crtc_id);
+				crtc_id++;
+			} else if (i == 2 && data->third_len) {
+				if (!mtk_ddp_path_available(data->third_path, data->third_len,
+							    priv_n->comp_node))
+					continue;
+				if (mtk_drm_find_comp_in_ddp(dev, data->third_path,
+							     data->third_len, priv_n->ddp_comp))
+					ret |= BIT(crtc_id);
+				crtc_id++;
+			} else if (i == 2 && j == 0 && !private_all[0]->is_dual_pipe &&
+				   data->main_subpipe_len) {
+				if (!mtk_ddp_path_available(data->main_subpipe_path,
+							    data->main_subpipe_len,
+							    priv_n->comp_node))
+					continue;
+				if (mtk_drm_find_comp_in_ddp(dev, data->main_subpipe_path,
+							     data->main_subpipe_len,
+							     priv_n->ddp_comp))
+					ret |= BIT(crtc_id);
+				for (k = 0; k < data->conn_subpipe_routes_num; k++)
+					if (mtk_drm_find_comp_in_ddp(dev,
+						data->conn_subpipe_routes[k].route_ddp,
+						data->conn_subpipe_routes[k].route_len,
+						priv_n->ddp_comp))
+						ret |= BIT(crtc_id);
+				crtc_id++;
+			}
 		}
 	}
-	if (ret == 0)
-		DRM_DEBUG("This comp is not reachable by any crtc. Check if it is needed\n");
+
+	for (j = 0; j < private->data->mmsys_dev_num; j++)
+		ret |= mtk_drm_find_comp_in_ddp_conn_path(dev,
+					private_all[j]->data->conn_routes,
+					private_all[j]->data->conn_routes_num,
+					private_all[j]->ddp_comp);
+
+	if (ret == 0) {
+		DRM_INFO("Failed to find comp in ddp table, ret = %d\n", -ENODEV);
+		return -ENODEV;
+	}
 
 	return ret;
 }
