@@ -9,6 +9,7 @@
 #include <linux/gpio/consumer.h>
 #include <linux/delay.h>
 #include <linux/of_platform.h>
+#include <linux/regulator/consumer.h>
 #include <video/videomode.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_panel.h>
@@ -44,6 +45,7 @@ struct lvds_panel {
 	struct gpio_desc *lcd_stb_gpio;
 	struct gpio_desc *lcd_en_gpio;
 	struct gpio_desc *lcd_rst_gpio;
+	struct regulator *supply;
 
 	bool prepared;
 	bool enabled;
@@ -96,6 +98,9 @@ static int lvds_panel_unprepare(struct drm_panel *panel)
 
 	gpiod_set_value(lvds->lcd_en_gpio, 0);
 
+	if (lvds->supply)
+		regulator_disable(lvds->supply);
+
 	lvds->prepared = false;
 
 	return 0;
@@ -104,9 +109,18 @@ static int lvds_panel_unprepare(struct drm_panel *panel)
 static int lvds_panel_prepare(struct drm_panel *panel)
 {
 	struct lvds_panel *lvds = to_lvds_panel(panel);
+	int err;
 
 	if (lvds->prepared)
 		return 0;
+
+	if (lvds->supply) {
+		err = regulator_enable(lvds->supply);
+		if (err < 0) {
+			dev_err(lvds->dev, "failed to enable supply: %d\n", err);
+			return err;
+		}
+	}
 
 	gpiod_set_value(lvds->lcd_en_gpio, 1);
 
@@ -207,6 +221,16 @@ static int avd_lvds_panel_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to request %s GPIO: %d\n",
 			"reset", ret);
 		return ret;
+	}
+
+	lvds->supply = devm_regulator_get_optional(dev, "power");
+	if (IS_ERR(lvds->supply)) {
+		ret = PTR_ERR(lvds->supply);
+		if (ret != -ENODEV) {
+			dev_err(dev, "failed to request power regulator: %d\n", ret);
+			return ret;
+		}
+		lvds->supply = NULL;
 	}
 
 	ret = of_property_read_u32(np, "width-mm", &lvds->width);
