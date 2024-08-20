@@ -679,7 +679,7 @@ static const struct reg_default tas2562_reg_defaults[] = {
 	{ TAS2562_PAGE_CTRL, 0x00 },
 	{ TAS2562_SW_RESET, 0x00 },
 	{ TAS2562_PWR_CTRL, 0x0e },
-	{ TAS2562_PB_CFG1, 0x20 },
+	{ TAS2562_PB_CFG1, 0x18 },
 	{ TAS2562_TDM_CFG0, 0x09 },
 	{ TAS2562_TDM_CFG1, 0x02 },
 	{ TAS2562_DVC_CFG1, 0x40 },
