@@ -167,5 +167,16 @@ config SND_BCD2000
 
 source "sound/usb/line6/Kconfig"
 
+config MANEFACES_USB_CAMERA_AUDIO_DISABLE
+        tristate "Disables Sonix USB camera Audio Interface"
+        default n
+        help
+          This disables Sonix USB camera audio interface
+
+          Say Y here if you want to disable Sonix USB camera audio interface
+          to your system.
+
+          If unsure, say N.
+
 endif	# SND_USB
 
