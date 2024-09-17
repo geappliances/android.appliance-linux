@@ -592,6 +592,15 @@ int snd_usb_create_quirk(struct snd_usb_audio *chip,
 #define EXTIGY_FIRMWARE_SIZE_OLD 794
 #define EXTIGY_FIRMWARE_SIZE_NEW 483
 
+#ifdef CONFIG_MANEFACES_USB_CAMERA_AUDIO_DISABLE
+
+static int snd_usb_manefaces_boot_quirk(struct usb_device *dev, struct usb_interface *intf)
+{
+	return -ENODEV; /* quit to disable the audio interface */
+}
+
+#endif
+
 static int snd_usb_extigy_boot_quirk(struct usb_device *dev, struct usb_interface *intf)
 {
 	struct usb_host_config *config = dev->actconfig;
@@ -1323,6 +1332,11 @@ int snd_usb_apply_boot_quirk(struct usb_device *dev,
 			     unsigned int id)
 {
 	switch (id) {
+
+#ifdef CONFIG_MANEFACES_USB_CAMERA_AUDIO_DISABLE
+	case USB_ID(0x0c45, 0x6369):
+		return snd_usb_manefaces_boot_quirk(dev, intf);
+#endif
 	case USB_ID(0x041e, 0x3000):
 		/* SB Extigy needs special boot-up sequence */
 		/* if more models come, this will go to the quirk list. */
