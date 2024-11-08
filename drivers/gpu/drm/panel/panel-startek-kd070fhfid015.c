@@ -51,6 +51,7 @@ static int stk_panel_init(struct stk_panel *stk)
 {
 	struct mipi_dsi_device *dsi = stk->dsi;
 	struct device *dev = &stk->dsi->dev;
+	u16 brightness = stk->backlight->props.brightness;
 	int ret;
 
 	ret = mipi_dsi_dcs_soft_reset(dsi);
@@ -94,7 +95,8 @@ static int stk_panel_init(struct stk_panel *stk)
 		return ret;
 	}
 
-	ret = mipi_dsi_dcs_set_display_brightness(dsi, 0x77);
+	dev_info(dev, "init brightness to %hu\n", brightness);
+	ret = mipi_dsi_dcs_set_display_brightness(dsi, brightness);
 	if (ret < 0) {
 		dev_err(dev, "failed to write display brightness: %d\n", ret);
 		return ret;
@@ -325,8 +327,13 @@ static int dsi_dcs_bl_update_status(struct backlight_device *bl)
 	int ret;
 	struct stk_panel *stk = mipi_dsi_get_drvdata(dsi);
 
+	/*
+	 * return 0 is fine even if the panel is not prepared.
+	 * because the stk_panel_init() will setup the desired brightness
+	 * value afterwards.
+	 */
 	if (!stk->prepared)
-		return -EINVAL;
+		return 0;
 
 	dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
 
