@@ -417,7 +417,7 @@ static void mdp_prepare_buffer(struct img_image_buffer *b, struct mdp_frame *fra
 			mdp_fmt_get_plane_size(frame->mdp_fmt, stride,
 					       pix_mp->height, i);
 		if (vb)
-			b->iova[i] = vb2_dma_contig_plane_dma_addr(vb, i);
+			b->iova[i] = vb2_dma_contig_plane_dma_addr(vb, i) + vb->planes[i].data_offset;
 	}
 	for (; i < MDP_COLOR_GET_PLANE_COUNT(b->format.colorformat); ++i) {
 		u32 stride;
