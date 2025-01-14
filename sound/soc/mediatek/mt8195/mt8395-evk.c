@@ -297,34 +297,40 @@ static int mt8195_mt6359_init(struct snd_soc_pcm_runtime *rtd)
 {
 	struct mtk_soc_card_data *soc_card_data = snd_soc_card_get_drvdata(rtd->card);
 	struct mt8195_mt6359_priv *priv = soc_card_data->mach_priv;
-	struct snd_soc_component *cmpnt_codec =
-		asoc_rtd_to_codec(rtd, 0)->component;
-	struct snd_soc_component *cmpnt_accdet =
-		asoc_rtd_to_codec(rtd, 1)->component;
-	int ret;
+	struct snd_soc_component *cmpnt;
+	struct snd_soc_dai *codec_dai;
+	int i, ret;
 
-	/* set mtkaif protocol */
-	mt6359_set_mtkaif_protocol(cmpnt_codec,
-				   MT6359_MTKAIF_PROTOCOL_2_CLK_P2);
+	for_each_rtd_codec_dais(rtd, i, codec_dai) {
+		cmpnt = codec_dai->component;
+		if (strcmp(cmpnt->name, "mt6359-sound") == 0) {
+			/* set mtkaif protocol */
+			mt6359_set_mtkaif_protocol(cmpnt,
+						MT6359_MTKAIF_PROTOCOL_2_CLK_P2);
 
-	/* mtkaif calibration */
-	mt8195_mt6359_mtkaif_calibration(rtd);
+			/* mtkaif calibration */
+			mt8195_mt6359_mtkaif_calibration(rtd);
+		} else if (strcmp(cmpnt->name, "mt6359-accdet") == 0) {
+			ret = snd_soc_card_jack_new(rtd->card, "Headset Jack",
+						    SND_JACK_HEADSET | SND_JACK_BTN_0 |
+						    SND_JACK_BTN_1 | SND_JACK_BTN_2 |
+						    SND_JACK_BTN_3,
+						    &priv->headset_jack, mt8195_headset_jack_pins,
+						    ARRAY_SIZE(mt8195_headset_jack_pins));
+			if (ret) {
+				dev_err(rtd->dev, "Headset Jack create failed: %d\n", ret);
+				return ret;
+			}
 
-	ret = snd_soc_card_jack_new(rtd->card, "Headset Jack",
-				    SND_JACK_HEADSET | SND_JACK_BTN_0 |
-				    SND_JACK_BTN_1 | SND_JACK_BTN_2 |
-				    SND_JACK_BTN_3,
-				    &priv->headset_jack, mt8195_headset_jack_pins,
-				    ARRAY_SIZE(mt8195_headset_jack_pins));
-	if (ret) {
-		dev_err(rtd->dev, "Headset Jack create failed: %d\n", ret);
-		return ret;
-	}
-
-	ret = mt6359_accdet_enable_jack_detect(cmpnt_accdet, &priv->headset_jack);
-	if (ret) {
-		dev_err(rtd->dev, "Headset Jack enable failed: %d\n", ret);
-		return ret;
+			ret = mt6359_accdet_enable_jack_detect(cmpnt, &priv->headset_jack);
+			if (ret) {
+				dev_err(rtd->dev, "Headset Jack enable failed: %d\n", ret);
+				return ret;
+			}
+		} else {
+			dev_dbg(rtd->dev, "No init function for component '%s' in %s\n",
+				cmpnt->name, __func__);
+		}
 	}
 
 	return 0;
