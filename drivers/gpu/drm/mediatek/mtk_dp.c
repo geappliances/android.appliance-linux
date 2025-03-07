@@ -2345,7 +2345,7 @@ static int mtk_dp_dt_parse(struct mtk_dp *mtk_dp,
 	if (IS_ERR(mtk_dp->regs))
 		return PTR_ERR(mtk_dp->regs);
 
-	mtk_dp->dp_tx_clk = devm_clk_get(dev, "faxi");
+	mtk_dp->dp_tx_clk = devm_clk_get_optional(dev, "faxi");
 	if (IS_ERR(mtk_dp->dp_tx_clk)) {
 		ret = PTR_ERR(mtk_dp->dp_tx_clk);
 		dev_info(dev, "Failed to get dptx clock: %d\n", ret);
