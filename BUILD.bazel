@@ -580,6 +580,66 @@ copy_to_dist_dir(
     flat = True,
 )
 
+_MTK_MODULE_OUTS = [
+    # keep sorted
+    "drivers/bluetooth/btmtk.ko",
+    "drivers/bluetooth/btmtksdio.ko",
+    "drivers/bluetooth/btmtkuart.ko",
+    "drivers/gpu/drm/bridge/lontium-lt9611.ko",
+    "drivers/gpu/drm/dp/drm_dp_helper.ko",
+    "drivers/gpu/drm/drm_cma_helper.ko",
+    "drivers/gpu/drm/mediatek/mediatek-drm-hdmi.ko",
+    "drivers/gpu/drm/mediatek/mediatek-drm.ko",
+    "drivers/gpu/drm/panel/panel-rpi-pumpkin-touchscreen.ko",
+    "drivers/hwmon/ntc_thermistor.ko",
+    "drivers/input/misc/rotary_encoder.ko",
+    "drivers/input/touchscreen/ili210x.ko",
+    "drivers/media/common/videobuf2/videobuf2-common.ko",
+    "drivers/media/common/videobuf2/videobuf2-memops.ko",
+    "drivers/media/common/videobuf2/videobuf2-v4l2.ko",
+    "drivers/media/common/videobuf2/videobuf2-vmalloc.ko",
+    "drivers/media/usb/uvc/uvcvideo.ko",
+    "drivers/net/wireless/mediatek/mt76/mt76-connac-lib.ko",
+    "drivers/net/wireless/mediatek/mt76/mt76-sdio.ko",
+    "drivers/net/wireless/mediatek/mt76/mt76.ko",
+    "drivers/net/wireless/mediatek/mt76/mt7615/mt7615-common.ko",
+    "drivers/net/wireless/mediatek/mt76/mt7615/mt7663-usb-sdio-common.ko",
+    "drivers/net/wireless/mediatek/mt76/mt7615/mt7663s.ko",
+    "drivers/phy/mediatek/phy-mtk-hdmi-drv.ko",
+    "drivers/phy/mediatek/phy-mtk-mipi-dsi-drv.ko",
+    "drivers/power/supply/bq27xxx_battery.ko",
+    "drivers/power/supply/bq27xxx_battery_i2c.ko",
+    "sound/soc/codecs/snd-soc-hdmi-codec.ko",
+    "sound/soc/codecs/snd-soc-tas2562.ko",
+]
+
+kernel_build(
+    name = "mtk",
+    build_config = "build.config.mtk",
+    make_goals = [
+        "Image",
+        "modules",
+        "mediatek/mt8365-evk.dtb",
+    ],
+    outs = [
+        "Image",
+        "System.map",
+        "arch/arm64/boot/dts/mediatek/mt8365-evk.dtb",
+        "modules.builtin",
+        "modules.builtin.modinfo",
+        "vmlinux",
+        "vmlinux.symvers",
+    ],
+    module_outs = _MTK_MODULE_OUTS,
+)
+
+copy_to_dist_dir(
+    name = "mtk_dist",
+    data = [":mtk"],
+    dist_dir = "out/mtk/dist",
+    flat = True,
+)
+
 # allmodconfig build tests.
 # These are build tests only, so:
 # - outs are intentionally set to empty to not copy anything to DIST_DIR
