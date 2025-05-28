@@ -4,7 +4,6 @@ obj-y				:= dma-mapping.o extable.o fault.o init.o \
 				   ioremap.o mem_encrypt.o mmap.o pgd.o mmu.o \
 				   context.o proc.o pageattr.o
 obj-$(CONFIG_MEMORY_RELINQUISH)	+= mem_relinquish.o
-obj-$(CONFIG_ARCH_MEDIATEK)	+= cache-mtk-v8.o
 obj-$(CONFIG_HUGETLB_PAGE)	+= hugetlbpage.o
 obj-$(CONFIG_PTDUMP_CORE)	+= ptdump.o
 obj-$(CONFIG_PTDUMP_DEBUGFS)	+= ptdump_debugfs.o
