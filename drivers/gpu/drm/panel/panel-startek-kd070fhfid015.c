@@ -304,7 +304,6 @@ static int dsi_dcs_bl_get_brightness(struct backlight_device *bl)
 	struct mipi_dsi_device *dsi = bl_get_data(bl);
 	int ret;
 	u16 brightness = bl->props.brightness;
-	struct device *dev = &dsi->dev;
 	struct stk_panel *stk = mipi_dsi_get_drvdata(dsi);
 
 	if (!stk->prepared)

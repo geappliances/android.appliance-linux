@@ -535,7 +535,7 @@ static int mtk_crtc_ddp_hw_init(struct mtk_drm_crtc *mtk_crtc)
 		mtk_crtc->ddp_comp[i]->funcs->set_2p_input(mtk_crtc->ddp_comp[i]->dev, is_2p_input);
 
 	if (mtk_crtc->ddp_comp[i]->funcs->check_output_to_lvds) {
-		struct mtk_ddp_comp_funcs *funcs = mtk_crtc->ddp_comp[i]->funcs;
+		const struct mtk_ddp_comp_funcs *funcs = mtk_crtc->ddp_comp[i]->funcs;
 
 		output_to_lvds = funcs->check_output_to_lvds(mtk_crtc->ddp_comp[i]->dev);
 		if (output_to_lvds)

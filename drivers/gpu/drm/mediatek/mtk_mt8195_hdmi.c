@@ -1209,7 +1209,7 @@ static void mtk_hdmi_output_set_display_mode(struct mtk_hdmi *hdmi,
 
 	ret = phy_configure(hdmi->phy, &opts);
 	if (ret)
-		dev_err(hdmi->dev, "Setting clock=%lu failed: %d", mode->clock, ret);
+		dev_err(hdmi->dev, "Setting clock=%d failed: %d", mode->clock, ret);
 
 	mtk_hdmi_change_video_resolution(hdmi);
 	mtk_hdmi_aud_output_config(hdmi, mode);
@@ -1870,7 +1870,7 @@ void set_hdmi_codec_pdata_mt8195(struct hdmi_codec_pdata *codec_data)
 
 void set_abist_pattern(struct device *dev, enum mtk_abist_pattern mode_num)
 {
-	unsigned char abist_format;
+	int abist_format;
 	struct drm_display_mode *mode;
 	struct mtk_hdmi *hdmi = dev_get_drvdata(dev);
 

@@ -478,7 +478,7 @@ void ieee80211_process_addba_request(struct ieee80211_local *local,
 				     size_t len)
 {
 	u16 capab, tid, timeout, ba_policy, buf_size, start_seq_num;
-	struct ieee802_11_elems elems = { };
+	struct ieee802_11_elems *elems = NULL;
 	u8 dialog_token;
 	int ies_len;
 

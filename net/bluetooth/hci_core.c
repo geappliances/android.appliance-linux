@@ -3726,9 +3726,10 @@ static int hci_suspend_notifier(struct notifier_block *nb, unsigned long action,
 		 *  - Second, program event filter/accept list and enable scan
 		 */
 		ret = hci_change_suspend_state(hdev, BT_SUSPEND_DISCONNECT);
-		if (ret)
-			goto clear;
+		if (ret) {
 			state = BT_SUSPEND_DISCONNECT;
+			goto clear;
+		}
 
 		/* Only configure accept list if device may wakeup. */
 		if (hdev->wakeup && hdev->wakeup(hdev)) {

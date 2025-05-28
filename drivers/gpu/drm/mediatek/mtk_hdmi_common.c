@@ -608,7 +608,7 @@ static __maybe_unused int mtk_hdmi_resume(struct device *dev)
 
 	} else {
 		int ret = 0;
-		struct mtk_hdmi *hdmi = dev_get_drvdata(dev);
+		//struct mtk_hdmi *hdmi = dev_get_drvdata(dev);
 		//TODO: define 8183 clk disable function in conf data
 		//mtk_hdmi_clk_enable(hdmi);
 		//TODO:

@@ -249,6 +249,10 @@ static void mtk_dai_dmic_hw_gain_enable(struct mtk_base_afe *afe,
 		end = 1;
 	else if (channels > 0)
 		end = 0;
+	else {
+		dev_err(afe->dev, "%s invalid channels\n", __func__);
+		return;
+	}
 
 	for (id = 0; id <= end; id++) {
 		reorder_id = dmic_priv->clk_index[id];

@@ -113,7 +113,6 @@ void mtk_ddp_write_mask(struct cmdq_pkt *cmdq_pkt, unsigned int value,
 
 static int mtk_ddp_clk_enable(struct device *dev)
 {
-	int ret = 0;
 	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
 
 	return clk_prepare_enable(priv->clk);
