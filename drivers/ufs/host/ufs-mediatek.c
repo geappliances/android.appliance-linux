@@ -114,7 +114,7 @@ static bool ufs_mtk_is_pmc_via_fastauto(struct ufs_hba *hba)
 
 static void ufs_mtk_cfg_unipro_cg(struct ufs_hba *hba, bool enable)
 {
-	u32 tmp;
+	u32 tmp = 0;
 
 	if (enable) {
 		ufshcd_dme_get(hba,
@@ -154,7 +154,7 @@ static void ufs_mtk_crypto_enable(struct ufs_hba *hba)
 
 	ufs_mtk_crypto_ctrl(res, 1);
 	if (res.a0) {
-		dev_info(hba->dev, "%s: crypto enable failed, err: %lu\n",
+		dev_dbg(hba->dev, "%s: crypto enable failed, err: %lu\n",
 			 __func__, res.a0);
 		hba->caps &= ~UFSHCD_CAP_CRYPTO;
 	}
@@ -181,7 +181,7 @@ static void ufs_mtk_init_reset_control(struct ufs_hba *hba,
 {
 	*rc = devm_reset_control_get(hba->dev, str);
 	if (IS_ERR(*rc)) {
-		dev_info(hba->dev, "Failed to get reset control %s: %ld\n",
+		dev_dbg(hba->dev, "Failed to get reset control %s: %ld\n",
 			 str, PTR_ERR(*rc));
 		*rc = NULL;
 	}

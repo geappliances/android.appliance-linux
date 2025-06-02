@@ -15,6 +15,7 @@ config DRM_MEDIATEK
 	select MTK_SMI
 	select PHY_MTK_MIPI_DSI
 	select VIDEOMODE_HELPERS
+	select DRM_DP_HELPER
 	help
 	  Choose this option if you have a Mediatek SoCs.
 	  The module will be called mediatek-drm
@@ -28,3 +29,47 @@ config DRM_MEDIATEK_HDMI
 	select PHY_MTK_HDMI
 	help
 	  DRM/KMS HDMI driver for Mediatek SoCs
+
+config DRM_MEDIATEK_HDMI_HDCP
+	tristate "DRM HDMI HDCP Support for MediaTek SoCs"
+	depends on OPTEE
+	depends on DRM_MEDIATEK_HDMI
+	help
+	  DRM/KMS HDMI HDCP driver for MediaTek SoCs.
+	  Choose this option
+	  if you want to enable
+	  HDMI HDCP driver.
+
+config DRM_MEDIATEK_CEC
+	tristate "DRM CEC Support for MediaTek SoCs"
+	depends on DRM_MEDIATEK_HDMI
+	select CEC_CORE
+	help
+	  DRM/KMS HDMI CEC driver for MediaTek 8195 compatible HDMI SoCs.
+	  Choose this option if you want to
+	  enable the CEC driver. Note that the CEC
+	  driver depends on DRM_MEDIATEK_HDMI, so select
+	  DRM_MEDIATEK_HDMI before choosing this option.
+
+config DRM_MEDIATEK_CEC_SUSPEND_LOW_POWER
+	tristate "DRM CEC SUSPEND LOW POWER Support for MediaTek SoCs"
+	depends on DRM_MEDIATEK_CEC
+	help
+	  DRM/KMS CEC SUSPEND_LOW_POWER for MediaTek SoCs.
+	  Choose this option if you want to
+	  disable CEC clock when
+	  platform enter suspend.
+
+config MTK_DPTX_SUPPORT
+	tristate "DRM DPTX Support for Mediatek SoCs"
+	depends on DRM_MEDIATEK
+	select PHY_MTK_DP
+	help
+	  DRM/KMS Display Port driver for Mediatek SoCs.
+
+config MTK_LVDS_SUPPORT
+	tristate "DRM LVDS Support for MediaTek SoCs"
+	depends on DRM_MEDIATEK
+	select PHY_MTK_LVDS
+	help
+	  DRM/KMS LVDS driver for MediaTek SoCs.

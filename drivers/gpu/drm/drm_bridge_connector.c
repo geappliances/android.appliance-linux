@@ -113,19 +113,25 @@ static void drm_bridge_connector_hpd_cb(void *cb_data,
 	struct drm_bridge_connector *drm_bridge_connector = cb_data;
 	struct drm_connector *connector = &drm_bridge_connector->base;
 	struct drm_device *dev = connector->dev;
-	enum drm_connector_status old_status;
 
 	mutex_lock(&dev->mode_config.mutex);
-	old_status = connector->status;
 	connector->status = status;
 	mutex_unlock(&dev->mode_config.mutex);
-
-	if (old_status == status)
-		return;
 
 	drm_bridge_connector_hpd_notify(connector, status);
 
 	drm_kms_helper_hotplug_event(dev);
+}
+
+static void drm_bridge_connector_oob_hotplug_event(struct drm_connector *connector,
+						   enum drm_connector_status status)
+{
+	struct drm_bridge_connector *bridge_connector =
+		to_drm_bridge_connector(connector);
+	struct drm_bridge *hpd = bridge_connector->bridge_hpd;
+
+	if (hpd)
+		drm_bridge_connector_hpd_cb(bridge_connector, status);
 }
 
 /**
@@ -216,6 +222,20 @@ static void drm_bridge_connector_destroy(struct drm_connector *connector)
 	kfree(bridge_connector);
 }
 
+static void drm_bridge_connector_debugfs_init(struct drm_connector *connector,
+					      struct dentry *root)
+{
+	struct drm_bridge_connector *bridge_connector =
+		to_drm_bridge_connector(connector);
+	struct drm_encoder *encoder = bridge_connector->encoder;
+	struct drm_bridge *bridge;
+
+	list_for_each_entry(bridge, &encoder->bridge_chain, chain_node) {
+		if (bridge->funcs->debugfs_init)
+			bridge->funcs->debugfs_init(bridge, root);
+	}
+}
+
 static const struct drm_connector_funcs drm_bridge_connector_funcs = {
 	.reset = drm_atomic_helper_connector_reset,
 	.detect = drm_bridge_connector_detect,
@@ -223,6 +243,8 @@ static const struct drm_connector_funcs drm_bridge_connector_funcs = {
 	.destroy = drm_bridge_connector_destroy,
 	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
+	.debugfs_init = drm_bridge_connector_debugfs_init,
+	.oob_hotplug_event = drm_bridge_connector_oob_hotplug_event,
 };
 
 /* -----------------------------------------------------------------------------

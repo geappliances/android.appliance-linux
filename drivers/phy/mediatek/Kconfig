@@ -55,3 +55,43 @@ config PHY_MTK_MIPI_DSI
 	select GENERIC_PHY
 	help
 	  Support MIPI DSI for Mediatek SoCs.
+
+config PHY_MTK_CDPHY
+    tristate "MediaTek CD-PHY Driver"
+    depends on ARCH_MEDIATEK && OF
+    select GENERIC_PHY
+    help
+	  Enable this to support the MIPI CSI CD-PHY receiver.
+	  The driver supports multiple CSI cdphy ports simultaneously.
+
+config PHY_MTK_DPHY
+    tristate "MediaTek D-PHY Driver"
+    depends on ARCH_MEDIATEK && OF
+    select GENERIC_PHY
+    help
+	  Enable this to support the MIPI CSI D-PHY receiver.
+	  The driver supports multiple CSI dphy ports simultaneously.
+
+config PHY_MTK_PCIE
+	tristate "MediaTek PCIe-PHY Driver"
+	depends on ARCH_MEDIATEK && OF
+	select GENERIC_PHY
+	help
+	  Say 'Y' here to add support for MediaTeck PCIe PHY driver,
+	  This driver support for PCIe GEN3 port.
+
+config PHY_MTK_DP
+	tristate "MediaTek DP-PHY Driver"
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	depends on OF
+	select GENERIC_PHY
+	help
+	  Support DisplayPort PHY for Mediatek SoCs.
+
+config PHY_MTK_LVDS
+	tristate "MediaTek LVDS-PHY Driver"
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	depends on OF
+	select GENERIC_PHY
+	help
+	  Support LVDS PHY for MediaTek SoCs.

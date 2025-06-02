@@ -222,6 +222,7 @@ static int imx8_probe(struct snd_sof_dev *sdev)
 	if (!priv)
 		return -ENOMEM;
 
+	sdev->num_cores = 1;
 	sdev->pdata->hw_pdata = priv;
 	priv->dev = sdev->dev;
 	priv->sdev = sdev;
@@ -448,7 +449,7 @@ struct snd_sof_dsp_ops sof_imx8_ops = {
 	.dbg_dump = imx8_dump,
 
 	/* Firmware ops */
-	.arch_ops = &sof_xtensa_arch_ops,
+	.dsp_arch_ops = &sof_xtensa_arch_ops,
 
 	/* DAI drivers */
 	.drv = imx8_dai,
@@ -497,7 +498,7 @@ struct snd_sof_dsp_ops sof_imx8x_ops = {
 	.dbg_dump = imx8_dump,
 
 	/* Firmware ops */
-	.arch_ops = &sof_xtensa_arch_ops,
+	.dsp_arch_ops = &sof_xtensa_arch_ops,
 
 	/* DAI drivers */
 	.drv = imx8_dai,

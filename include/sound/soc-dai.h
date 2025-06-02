@@ -208,8 +208,6 @@ int snd_soc_dai_startup(struct snd_soc_dai *dai,
 			struct snd_pcm_substream *substream);
 void snd_soc_dai_shutdown(struct snd_soc_dai *dai,
 			  struct snd_pcm_substream *substream, int rollback);
-snd_pcm_sframes_t snd_soc_dai_delay(struct snd_soc_dai *dai,
-				    struct snd_pcm_substream *substream);
 void snd_soc_dai_suspend(struct snd_soc_dai *dai);
 void snd_soc_dai_resume(struct snd_soc_dai *dai);
 int snd_soc_dai_compress_new(struct snd_soc_dai *dai,
@@ -238,6 +236,8 @@ int snd_soc_pcm_dai_trigger(struct snd_pcm_substream *substream, int cmd,
 			    int rollback);
 int snd_soc_pcm_dai_bespoke_trigger(struct snd_pcm_substream *substream,
 				    int cmd);
+void snd_soc_pcm_dai_delay(struct snd_pcm_substream *substream,
+			   snd_pcm_sframes_t *cpu_delay, snd_pcm_sframes_t *codec_delay);
 
 int snd_soc_dai_compr_startup(struct snd_soc_dai *dai,
 			      struct snd_compr_stream *cstream);
@@ -472,11 +472,19 @@ snd_soc_dai_get_pcm_stream(const struct snd_soc_dai *dai, int stream)
 }
 
 static inline
-struct snd_soc_dapm_widget *snd_soc_dai_get_widget(
-	struct snd_soc_dai *dai, int stream)
+struct snd_soc_dapm_widget *snd_soc_dai_get_widget(struct snd_soc_dai *dai, int stream)
 {
 	return (stream == SNDRV_PCM_STREAM_PLAYBACK) ?
 		dai->playback_widget : dai->capture_widget;
+}
+
+static inline
+void snd_soc_dai_set_widget(struct snd_soc_dai *dai, int stream, struct snd_soc_dapm_widget *widget)
+{
+	if (stream == SNDRV_PCM_STREAM_PLAYBACK)
+		dai->playback_widget = widget;
+	else
+		dai->capture_widget  = widget;
 }
 
 static inline void *snd_soc_dai_get_dma_data(const struct snd_soc_dai *dai,

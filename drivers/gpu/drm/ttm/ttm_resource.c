@@ -22,7 +22,7 @@
  * Authors: Christian König
  */
 
-#include <linux/dma-buf-map.h>
+#include <linux/iosys-map.h>
 #include <linux/io-mapping.h>
 #include <linux/scatterlist.h>
 
@@ -49,6 +49,7 @@ void ttm_resource_init(struct ttm_buffer_object *bo,
 	res->bus.offset = 0;
 	res->bus.is_iomem = false;
 	res->bus.caching = ttm_cached;
+	res->bo = bo;
 }
 EXPORT_SYMBOL(ttm_resource_init);
 
@@ -90,20 +91,80 @@ void ttm_resource_free(struct ttm_buffer_object *bo, struct ttm_resource **res)
 }
 EXPORT_SYMBOL(ttm_resource_free);
 
+static bool ttm_resource_places_compat(struct ttm_resource *res,
+				       const struct ttm_place *places,
+				       unsigned num_placement)
+{
+	unsigned i;
+
+	if (res->placement & TTM_PL_FLAG_TEMPORARY)
+		return false;
+
+	for (i = 0; i < num_placement; i++) {
+		const struct ttm_place *heap = &places[i];
+
+		if (res->start < heap->fpfn || (heap->lpfn &&
+		    (res->start + res->num_pages) > heap->lpfn))
+			continue;
+
+		if ((res->mem_type == heap->mem_type) &&
+		    (!(heap->flags & TTM_PL_FLAG_CONTIGUOUS) ||
+		     (res->placement & TTM_PL_FLAG_CONTIGUOUS)))
+			return true;
+	}
+	return false;
+}
+
+/**
+ * ttm_resource_compat - check if resource is compatible with placement
+ *
+ * @res: the resource to check
+ * @placement: the placement to check against
+ *
+ * Returns true if the placement is compatible.
+ */
+bool ttm_resource_compat(struct ttm_resource *res,
+			 struct ttm_placement *placement)
+{
+	if (ttm_resource_places_compat(res, placement->placement,
+				       placement->num_placement))
+		return true;
+
+	if ((placement->busy_placement != placement->placement ||
+	     placement->num_busy_placement > placement->num_placement) &&
+	    ttm_resource_places_compat(res, placement->busy_placement,
+				       placement->num_busy_placement))
+		return true;
+
+	return false;
+}
+EXPORT_SYMBOL(ttm_resource_compat);
+
+void ttm_resource_set_bo(struct ttm_resource *res,
+			 struct ttm_buffer_object *bo)
+{
+	spin_lock(&bo->bdev->lru_lock);
+	res->bo = bo;
+	spin_unlock(&bo->bdev->lru_lock);
+}
+
 /**
  * ttm_resource_manager_init
  *
  * @man: memory manager object to init
+ * @bdev: ttm device this manager belongs to
  * @p_size: size managed area in pages.
  *
  * Initialise core parts of a manager object.
  */
 void ttm_resource_manager_init(struct ttm_resource_manager *man,
+			       struct ttm_device *bdev,
 			       unsigned long p_size)
 {
 	unsigned i;
 
 	spin_lock_init(&man->move_lock);
+	man->bdev = bdev;
 	man->size = p_size;
 
 	for (i = 0; i < TTM_MAX_BO_PRIORITY; ++i)
@@ -183,7 +244,7 @@ void ttm_resource_manager_debug(struct ttm_resource_manager *man,
 EXPORT_SYMBOL(ttm_resource_manager_debug);
 
 static void ttm_kmap_iter_iomap_map_local(struct ttm_kmap_iter *iter,
-					  struct dma_buf_map *dmap,
+					  struct iosys_map *dmap,
 					  pgoff_t i)
 {
 	struct ttm_kmap_iter_iomap *iter_io =
@@ -210,11 +271,11 @@ retry:
 	addr = io_mapping_map_local_wc(iter_io->iomap, iter_io->cache.offs +
 				       (((resource_size_t)i - iter_io->cache.i)
 					<< PAGE_SHIFT));
-	dma_buf_map_set_vaddr_iomem(dmap, addr);
+	iosys_map_set_vaddr_iomem(dmap, addr);
 }
 
 static void ttm_kmap_iter_iomap_unmap_local(struct ttm_kmap_iter *iter,
-					    struct dma_buf_map *map)
+					    struct iosys_map *map)
 {
 	io_mapping_unmap_local(map->vaddr_iomem);
 }
@@ -265,14 +326,14 @@ EXPORT_SYMBOL(ttm_kmap_iter_iomap_init);
  */
 
 static void ttm_kmap_iter_linear_io_map_local(struct ttm_kmap_iter *iter,
-					      struct dma_buf_map *dmap,
+					      struct iosys_map *dmap,
 					      pgoff_t i)
 {
 	struct ttm_kmap_iter_linear_io *iter_io =
 		container_of(iter, typeof(*iter_io), base);
 
 	*dmap = iter_io->dmap;
-	dma_buf_map_incr(dmap, i * PAGE_SIZE);
+	iosys_map_incr(dmap, i * PAGE_SIZE);
 }
 
 static const struct ttm_kmap_iter_ops ttm_kmap_iter_linear_io_ops = {
@@ -308,7 +369,7 @@ ttm_kmap_iter_linear_io_init(struct ttm_kmap_iter_linear_io *iter_io,
 	}
 
 	if (mem->bus.addr) {
-		dma_buf_map_set_vaddr(&iter_io->dmap, mem->bus.addr);
+		iosys_map_set_vaddr(&iter_io->dmap, mem->bus.addr);
 		iter_io->needs_unmap = false;
 	} else {
 		size_t bus_size = (size_t)mem->num_pages << PAGE_SHIFT;
@@ -316,23 +377,23 @@ ttm_kmap_iter_linear_io_init(struct ttm_kmap_iter_linear_io *iter_io,
 		iter_io->needs_unmap = true;
 		memset(&iter_io->dmap, 0, sizeof(iter_io->dmap));
 		if (mem->bus.caching == ttm_write_combined)
-			dma_buf_map_set_vaddr_iomem(&iter_io->dmap,
-						    ioremap_wc(mem->bus.offset,
-							       bus_size));
+			iosys_map_set_vaddr_iomem(&iter_io->dmap,
+						  ioremap_wc(mem->bus.offset,
+							     bus_size));
 		else if (mem->bus.caching == ttm_cached)
-			dma_buf_map_set_vaddr(&iter_io->dmap,
-					      memremap(mem->bus.offset, bus_size,
-						       MEMREMAP_WB |
-						       MEMREMAP_WT |
-						       MEMREMAP_WC));
+			iosys_map_set_vaddr(&iter_io->dmap,
+					    memremap(mem->bus.offset, bus_size,
+						     MEMREMAP_WB |
+						     MEMREMAP_WT |
+						     MEMREMAP_WC));
 
 		/* If uncached requested or if mapping cached or wc failed */
-		if (dma_buf_map_is_null(&iter_io->dmap))
-			dma_buf_map_set_vaddr_iomem(&iter_io->dmap,
-						    ioremap(mem->bus.offset,
-							    bus_size));
+		if (iosys_map_is_null(&iter_io->dmap))
+			iosys_map_set_vaddr_iomem(&iter_io->dmap,
+						  ioremap(mem->bus.offset,
+							  bus_size));
 
-		if (dma_buf_map_is_null(&iter_io->dmap)) {
+		if (iosys_map_is_null(&iter_io->dmap)) {
 			ret = -ENOMEM;
 			goto out_io_free;
 		}
@@ -361,7 +422,7 @@ ttm_kmap_iter_linear_io_fini(struct ttm_kmap_iter_linear_io *iter_io,
 			     struct ttm_device *bdev,
 			     struct ttm_resource *mem)
 {
-	if (iter_io->needs_unmap && dma_buf_map_is_set(&iter_io->dmap)) {
+	if (iter_io->needs_unmap && iosys_map_is_set(&iter_io->dmap)) {
 		if (iter_io->dmap.is_iomem)
 			iounmap(iter_io->dmap.vaddr_iomem);
 		else

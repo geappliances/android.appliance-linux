@@ -55,6 +55,7 @@
 #define ACCDET_DIGITAL_FASTDISCHARGE	BIT(13)
 #define ACCDET_AD_FASTDISCHRAGE		BIT(14)
 
+static struct snd_soc_dai_driver mt6359_accdet_dummy_dai_driver[1];
 static struct platform_driver mt6359_accdet_driver;
 static const struct snd_soc_component_driver mt6359_accdet_soc_driver;
 
@@ -585,7 +586,7 @@ static int mt6359_accdet_parse_dt(struct mt6359_accdet *priv)
 	ret = of_property_read_u32(node, "mediatek,eint-level-pol",
 				   &priv->data->eint_pol);
 	if (ret)
-		priv->data->eint_pol = 8;
+		priv->data->eint_pol = IRQ_TYPE_LEVEL_LOW;
 
 	ret = of_property_read_u32(node, "mediatek,eint-use-ap", &tmp);
 	if (ret)
@@ -736,6 +737,22 @@ static void config_digital_init_by_mode(struct mt6359_accdet *priv)
 					   ACCDET_EINT1_INVERTER_SW_EN_MASK_SFT,
 					   BIT(ACCDET_EINT1_INVERTER_SW_EN_SFT));
 		}
+	}
+
+	if (priv->data->eint_pol == IRQ_TYPE_LEVEL_LOW) {
+		/* EINT polarity normal */
+		regmap_update_bits(priv->regmap,
+				ACCDET_EINT_IN_INVERSE_ADDR,
+				ACCDET_EINT_IN_INVERSE_MASK_SFT,
+				0);
+	} else if (priv->data->eint_pol == IRQ_TYPE_LEVEL_HIGH) {
+		/* EINT polarity inverse */
+		regmap_update_bits(priv->regmap,
+				ACCDET_EINT_IN_INVERSE_ADDR,
+				ACCDET_EINT_IN_INVERSE_MASK_SFT,
+				BIT(ACCDET_EINT_IN_INVERSE_SFT));
+	} else {
+		dev_warn(priv->dev, "Unacceptable EINT level type, using default\n");
 	}
 }
 
@@ -1028,7 +1045,8 @@ static int mt6359_accdet_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, priv);
 	ret = devm_snd_soc_register_component(&pdev->dev,
 					      &mt6359_accdet_soc_driver,
-					      NULL, 0);
+					      mt6359_accdet_dummy_dai_driver,
+					      ARRAY_SIZE(mt6359_accdet_dummy_dai_driver));
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to register component\n");
 		return ret;
@@ -1051,9 +1069,18 @@ err_accdet_wq:
 	return ret;
 }
 
+const struct of_device_id accdet_of_match[] = {
+	{
+		.compatible = "mediatek,mt6359-accdet",
+	}, {
+		/* sentinel */
+	},
+};
+
 static struct platform_driver mt6359_accdet_driver = {
 	.driver = {
 		.name = "pmic-codec-accdet",
+		.of_match_table = accdet_of_match,
 	},
 	.probe = mt6359_accdet_probe,
 };

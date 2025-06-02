@@ -45,6 +45,30 @@ int ssusb_check_clocks(struct ssusb_mtk *ssusb, u32 ex_clks)
 	return 0;
 }
 
+void ssusb_set_force_vbus(struct ssusb_mtk *ssusb, bool vbus_on)
+{
+	u32 u2ctl;
+	u32 misc;
+
+	if (!ssusb->force_vbus)
+		return;
+
+	u2ctl = mtu3_readl(ssusb->ippc_base, SSUSB_U2_CTRL(0));
+	misc = mtu3_readl(ssusb->mac_base, U3D_MISC_CTRL);
+	if (vbus_on) {
+		u2ctl &= ~SSUSB_U2_PORT_OTG_SEL;
+		misc |= VBUS_FRC_EN | VBUS_ON;
+	} else {
+		/* FIXME The following commented line of code
+		 * is causing the crash of the host controller
+		 */
+		//u2ctl |= SSUSB_U2_PORT_OTG_SEL;
+		misc &= ~(VBUS_FRC_EN | VBUS_ON);
+	}
+	mtu3_writel(ssusb->ippc_base, SSUSB_U2_CTRL(0), u2ctl);
+	mtu3_writel(ssusb->mac_base, U3D_MISC_CTRL, misc);
+}
+
 static int wait_for_ip_sleep(struct ssusb_mtk *ssusb)
 {
 	bool sleep_check = true;
@@ -235,9 +259,15 @@ static int get_ssusb_rscs(struct platform_device *pdev, struct ssusb_mtk *ssusb)
 	if (IS_ERR(ssusb->ippc_base))
 		return PTR_ERR(ssusb->ippc_base);
 
+	ssusb->mac_base = devm_platform_ioremap_resource_byname(pdev, "mac");
+	if (IS_ERR(ssusb->mac_base))
+		return PTR_ERR(ssusb->mac_base);
+
 	ssusb->wakeup_irq = platform_get_irq_byname_optional(pdev, "wakeup");
 	if (ssusb->wakeup_irq == -EPROBE_DEFER)
 		return ssusb->wakeup_irq;
+
+	ssusb->force_vbus = of_property_read_bool(node, "mediatek,force-vbus");
 
 	ssusb->dr_mode = usb_get_dr_mode(dev);
 	if (ssusb->dr_mode == USB_DR_MODE_UNKNOWN)

@@ -21,6 +21,10 @@
 #define CMDQ_WFE_WAIT			BIT(15)
 #define CMDQ_WFE_WAIT_VALUE		0x1
 
+#define CMDQ_TIMEOUT_DEFAULT		1000
+
+#define CMDQ_EVENT_INVALID		(-1)
+
 /*
  * WFE arg_b
  * bit 0-11: wait value
@@ -34,6 +38,9 @@
 #define CMDQ_MAX_EVENT			0x3ff
 
 /*
+ * CMDQ_CODE_MOVE:
+ *   move bit[47:0] to GPR[52:48]
+ *   format: op move
  * CMDQ_CODE_MASK:
  *   set write mask
  *   format: op mask
@@ -54,6 +61,7 @@
  */
 enum cmdq_code {
 	CMDQ_CODE_MASK = 0x02,
+	CMDQ_CODE_MOVE = 0x02,
 	CMDQ_CODE_WRITE = 0x04,
 	CMDQ_CODE_POLL = 0x08,
 	CMDQ_CODE_JUMP = 0x10,
@@ -63,6 +71,8 @@ enum cmdq_code {
 	CMDQ_CODE_WRITE_S = 0x90,
 	CMDQ_CODE_WRITE_S_MASK = 0x91,
 	CMDQ_CODE_LOGIC = 0xa0,
+	CMDQ_CODE_JUMP_C_ABSOLUTE = 0xb0, /* conditional jump (absolute) */
+	CMDQ_CODE_JUMP_C_RELATIVE = 0xb1, /* conditional jump (related) */
 };
 
 struct cmdq_cb_data {
@@ -89,5 +99,9 @@ struct cmdq_pkt {
 };
 
 u8 cmdq_get_shift_pa(struct mbox_chan *chan);
+void cmdq_set_event(void *chan, u16 event_id);
+u32 cmdq_get_event(void *chan, u16 event_id);
+phys_addr_t cmdq_mbox_get_base_pa(struct mbox_chan *chan);
+s16 cmdq_get_gpr_timer_event(struct mbox_chan *chan);
 
 #endif /* __MTK_CMDQ_MAILBOX_H__ */

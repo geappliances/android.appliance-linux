@@ -44,8 +44,9 @@ static void mtk_plane_reset(struct drm_plane *plane)
 		state = kzalloc(sizeof(*state), GFP_KERNEL);
 		if (!state)
 			return;
-		plane->state = &state->base;
 	}
+
+	__drm_atomic_helper_plane_reset(plane, &state->base);
 
 	state->base.plane = plane;
 	state->pending.format = DRM_FORMAT_RGB565;
@@ -125,18 +126,18 @@ static void mtk_plane_update_new_state(struct drm_plane_state *new_state,
 	pitch = fb->pitches[0];
 	format = fb->format->format;
 
-	addr += (new_state->src.x1 >> 16) * fb->format->cpp[0];
-	addr += (new_state->src.y1 >> 16) * pitch;
-
 	mtk_plane_state->pending.enable = true;
 	mtk_plane_state->pending.pitch = pitch;
 	mtk_plane_state->pending.format = format;
 	mtk_plane_state->pending.addr = addr;
-	mtk_plane_state->pending.x = new_state->dst.x1;
-	mtk_plane_state->pending.y = new_state->dst.y1;
+	mtk_plane_state->pending.src_x = (new_state->src.x1 >> 16);
+	mtk_plane_state->pending.src_y = (new_state->src.y1 >> 16);
+	mtk_plane_state->pending.dst_x = new_state->dst.x1;
+	mtk_plane_state->pending.dst_y = new_state->dst.y1;
 	mtk_plane_state->pending.width = drm_rect_width(&new_state->dst);
 	mtk_plane_state->pending.height = drm_rect_height(&new_state->dst);
 	mtk_plane_state->pending.rotation = new_state->rotation;
+	mtk_plane_state->pending.color_encoding = new_state->color_encoding;
 }
 
 static void mtk_plane_atomic_async_update(struct drm_plane *plane,

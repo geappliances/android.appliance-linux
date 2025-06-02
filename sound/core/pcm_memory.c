@@ -52,8 +52,9 @@ static void decrease_allocated_size(struct snd_card *card, size_t bytes)
 }
 
 static int do_alloc_pages(struct snd_card *card, int type, struct device *dev,
-			  size_t size, struct snd_dma_buffer *dmab)
+			  int str, size_t size, struct snd_dma_buffer *dmab)
 {
+	enum dma_data_direction dir;
 	int err;
 
 	/* check and reserve the requested size */
@@ -66,7 +67,11 @@ static int do_alloc_pages(struct snd_card *card, int type, struct device *dev,
 	__update_allocated_size(card, size);
 	mutex_unlock(&card->memory_mutex);
 
-	err = snd_dma_alloc_pages(type, dev, size, dmab);
+	if (str == SNDRV_PCM_STREAM_PLAYBACK)
+		dir = DMA_TO_DEVICE;
+	else
+		dir = DMA_FROM_DEVICE;
+	err = snd_dma_alloc_dir_pages(type, dev, dir, size, dmab);
 	if (!err) {
 		/* the actual allocation size might be bigger than requested,
 		 * and we need to correct the account
@@ -105,7 +110,7 @@ static int preallocate_pcm_pages(struct snd_pcm_substream *substream,
 
 	do {
 		err = do_alloc_pages(card, dmab->dev.type, dmab->dev.dev,
-				     size, dmab);
+				     substream->stream, size, dmab);
 		if (err != -ENOMEM)
 			return err;
 		if (no_fallback)
@@ -206,6 +211,7 @@ static void snd_pcm_lib_preallocate_proc_write(struct snd_info_entry *entry,
 			if (do_alloc_pages(card,
 					   substream->dma_buffer.dev.type,
 					   substream->dma_buffer.dev.dev,
+					   substream->stream,
 					   size, &new_dmab) < 0) {
 				buffer->error = -ENOMEM;
 				pr_debug("ALSA pcmC%dD%d%c,%d:%s: cannot preallocate for size %zu\n",
@@ -449,6 +455,7 @@ int snd_pcm_lib_malloc_pages(struct snd_pcm_substream *substream, size_t size)
 		if (do_alloc_pages(card,
 				   substream->dma_buffer.dev.type,
 				   substream->dma_buffer.dev.dev,
+				   substream->stream,
 				   size, dmab) < 0) {
 			kfree(dmab);
 			pr_debug("ALSA pcmC%dD%d%c,%d:%s: cannot preallocate for size %zu\n",

@@ -182,7 +182,7 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *bo,
 
 	if (obj->flags & I915_BO_ALLOC_CPU_CLEAR &&
 	    man->use_tt)
-		page_flags |= TTM_PAGE_FLAG_ZERO_ALLOC;
+		page_flags |= TTM_TT_FLAG_ZERO_ALLOC;
 
 	ret = ttm_tt_init(&i915_tt->ttm, bo, page_flags,
 			  i915_ttm_select_tt_caching(obj));
@@ -214,7 +214,6 @@ static void i915_ttm_tt_destroy(struct ttm_device *bdev, struct ttm_tt *ttm)
 {
 	struct i915_ttm_tt *i915_tt = container_of(ttm, typeof(*i915_tt), ttm);
 
-	ttm_tt_destroy_common(bdev, ttm);
 	ttm_tt_fini(ttm);
 	kfree(i915_tt);
 }
@@ -449,7 +448,7 @@ static int i915_ttm_accel_move(struct ttm_buffer_object *bo,
 		if (bo->type == ttm_bo_type_kernel)
 			return -EINVAL;
 
-		if (ttm && !(ttm->page_flags & TTM_PAGE_FLAG_ZERO_ALLOC))
+		if (ttm && !(ttm->page_flags & TTM_TT_FLAG_ZERO_ALLOC))
 			return 0;
 
 		intel_engine_pm_get(i915->gt.migrate.context->engine);
@@ -483,6 +482,41 @@ static int i915_ttm_accel_move(struct ttm_buffer_object *bo,
 	}
 
 	return ret;
+}
+
+static void __i915_ttm_move(struct ttm_buffer_object *bo, bool clear,
+			    struct ttm_resource *dst_mem,
+			    struct sg_table *dst_st)
+{
+	int ret;
+
+	ret = i915_ttm_accel_move(bo, clear, dst_mem, dst_st);
+	if (ret) {
+		struct drm_i915_gem_object *obj = i915_ttm_to_gem(bo);
+		struct intel_memory_region *dst_reg, *src_reg;
+		union {
+			struct ttm_kmap_iter_tt tt;
+			struct ttm_kmap_iter_iomap io;
+		} _dst_iter, _src_iter;
+		struct ttm_kmap_iter *dst_iter, *src_iter;
+
+		dst_reg = i915_ttm_region(bo->bdev, dst_mem->mem_type);
+		src_reg = i915_ttm_region(bo->bdev, bo->resource->mem_type);
+		GEM_BUG_ON(!dst_reg || !src_reg);
+
+		dst_iter = !cpu_maps_iomem(dst_mem) ?
+			ttm_kmap_iter_tt_init(&_dst_iter.tt, bo->ttm) :
+			ttm_kmap_iter_iomap_init(&_dst_iter.io, &dst_reg->iomap,
+						 dst_st, dst_reg->region.start);
+
+		src_iter = !cpu_maps_iomem(bo->resource) ?
+			ttm_kmap_iter_tt_init(&_src_iter.tt, bo->ttm) :
+			ttm_kmap_iter_iomap_init(&_src_iter.io, &src_reg->iomap,
+						 obj->ttm.cached_io_st,
+						 src_reg->region.start);
+
+		ttm_move_memcpy(clear, dst_mem->num_pages, dst_iter, src_iter);
+	}
 }
 
 static int i915_ttm_move(struct ttm_buffer_object *bo, bool evict,
@@ -523,7 +557,7 @@ static int i915_ttm_move(struct ttm_buffer_object *bo, bool evict,
 
 	/* Populate ttm with pages if needed. Typically system memory. */
 	if (bo->ttm && (dst_man->use_tt ||
-			(bo->ttm->page_flags & TTM_PAGE_FLAG_SWAPPED))) {
+			(bo->ttm->page_flags & TTM_TT_FLAG_SWAPPED))) {
 		ret = ttm_tt_populate(bo->bdev, bo->ttm, ctx);
 		if (ret)
 			return ret;

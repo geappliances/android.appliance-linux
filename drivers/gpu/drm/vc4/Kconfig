@@ -7,7 +7,6 @@ config DRM_VC4
 	depends on COMMON_CLK
 	depends on PM
 	select DRM_KMS_HELPER
-	select DRM_KMS_CMA_HELPER
 	select DRM_GEM_CMA_HELPER
 	select DRM_PANEL_BRIDGE
 	select SND_PCM

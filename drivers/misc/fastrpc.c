@@ -596,11 +596,11 @@ static void fastrpc_dma_buf_detatch(struct dma_buf *dmabuf,
 	kfree(a);
 }
 
-static int fastrpc_vmap(struct dma_buf *dmabuf, struct dma_buf_map *map)
+static int fastrpc_vmap(struct dma_buf *dmabuf, struct iosys_map *map)
 {
 	struct fastrpc_buf *buf = dmabuf->priv;
 
-	dma_buf_map_set_vaddr(map, buf->virt);
+	iosys_map_set_vaddr(map, buf->virt);
 
 	return 0;
 }
@@ -1784,3 +1784,4 @@ static void fastrpc_exit(void)
 module_exit(fastrpc_exit);
 
 MODULE_LICENSE("GPL v2");
+MODULE_IMPORT_NS(DMA_BUF);

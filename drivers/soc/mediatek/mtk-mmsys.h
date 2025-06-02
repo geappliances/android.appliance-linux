@@ -78,6 +78,10 @@
 #define DSI_SEL_IN_RDMA				0x1
 #define DSI_SEL_IN_MASK				0x1
 
+#define MMSYS_LVDS_CFG				0xfdc
+#define DPI_CLK_SOURCE				BIT(0)
+#define LVDS_SYS_CFG_PXL_CLK			(0x3 << 16)
+
 struct mtk_mmsys_routes {
 	u32 from_comp;
 	u32 to_comp;
@@ -86,10 +90,29 @@ struct mtk_mmsys_routes {
 	u32 val;
 };
 
+struct mtk_mmsys_config {
+	enum mtk_mmsys_config_type config;
+	u32 id;
+	u32 addr;
+	u32 mask;
+	u32 shift;
+};
+
 struct mtk_mmsys_driver_data {
 	const char *clk_driver;
 	const struct mtk_mmsys_routes *routes;
 	const unsigned int num_routes;
+	const u16 sw0_rst_offset;
+	const u32 num_resets;
+	const struct mtk_mmsys_config *config;
+	const unsigned int num_configs;
+	const u32 *main_sys_w_h_configs;
+	const unsigned int num_main_sys_w_h_configs;
+	const u32 *cross_sys_w_h_configs;
+	const unsigned int num_cross_sys_w_h_configs;
+	const bool is_vppsys;
+	const bool need_gce;
+	const bool has_lvds;
 };
 
 /*
@@ -123,7 +146,7 @@ static const struct mtk_mmsys_routes mmsys_default_routing_table[] = {
 		DISP_REG_CONFIG_DPI_SEL, DPI_SEL_IN_MASK,
 		DPI_SEL_IN_BLS
 	}, {
-		DDP_COMPONENT_GAMMA, DDP_COMPONENT_RDMA1,
+		DDP_COMPONENT_GAMMA0, DDP_COMPONENT_RDMA1,
 		DISP_REG_CONFIG_DISP_GAMMA_MOUT_EN, GAMMA_MOUT_EN_RDMA1,
 		GAMMA_MOUT_EN_RDMA1
 	}, {

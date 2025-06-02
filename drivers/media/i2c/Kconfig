@@ -209,6 +209,43 @@ config VIDEO_SAA6588
 	  module will be called saa6588.
 endmenu
 
+config VIDEO_DECODER
+	tristate "Video decoders"
+	depends on VIDEO_V4L2 && I2C && MEDIA_HIDE_ANCILLARY_SUBDRV
+	default n
+	select VIDEO_ADV7180 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_ADV7183 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_ADV748X if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_ADV7604 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_ADV7604_CEC if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_ADV7842 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_ADV7842_CEC if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_BT819 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_BT856 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_BT866 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_KS0127 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_ML86V7667 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_SAA7110 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_SAA711X if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_TC358743 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_TC358743_CEC if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_TVP514X if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_TVP5150 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_TVP7002 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_TW2804 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_TW9903 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_TW9906 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_TW9910 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_VPX3220 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_MAX9286 if MEDIA_SUBDRV_AUTOSELECT
+	select VIDEO_SAA717X if MEDIA_SUBDRV_AUTOSELECT
+	help
+	  Say Y here to select the video decoders which are
+	  hidden by MEDIA_HIDE_ANCILLARY_SUBDRV. This config
+	  is available only if MEDIA_HIDE_ANCILLARY_SUBDRV=y.
+
+	  To compile these drivers as modules, choose M here.
+
 menu "Video decoders"
 	visible if !MEDIA_HIDE_ANCILLARY_SUBDRV
 
@@ -1224,6 +1261,33 @@ config VIDEO_MT9M111
 	  This driver supports MT9M111, MT9M112 and MT9M131 cameras from
 	  Micron/Aptina
 
+config VIDEO_AP1302
+	tristate "ON Semiconductor AP1302 support"
+	depends on I2C && VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
+	select V4L2_FWNODE
+	help
+	  This is a Video4Linux2 sensor-level driver for the ON Semiconductor
+	  AP1302 ISP.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called ap1302.
+
+config VIDEO_AR0330
+	tristate "Aptina AR0330 support"
+	depends on I2C && VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
+	select VIDEO_CCS_PLL
+	help
+	  This is a Video4Linux2 sensor-level driver for the Aptina
+	  AR0330 3.4 Mpixel camera.
+
+config VIDEO_AR0430
+	tristate "Aptina AR0430 support"
+	depends on I2C && VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
+	select VIDEO_CCS_PLL
+	help
+	  This is a Video4Linux2 sensor-level driver for the Aptina
+	  AR0430 4 Mpixel camera.
+
 config VIDEO_MT9P031
 	tristate "Aptina MT9P031 support"
 	depends on I2C && VIDEO_V4L2
@@ -1392,6 +1456,22 @@ config VIDEO_S5C73M3
 
 endmenu
 
+menu "Camera ISPs"
+	visible if MEDIA_CAMERA_SUPPORT
+
+config VIDEO_THP7312
+	tristate "THine THP7312 support"
+	depends on I2C
+	select MEDIA_CONTROLLER
+	select V4L2_CCI_I2C
+	select V4L2_FWNODE
+	select VIDEO_V4L2_SUBDEV_API
+	help
+	  This is a Video4Linux2 sensor-level driver for the THine
+	  THP7312 ISP.
+
+endmenu
+
 menu "Lens drivers"
 	visible if MEDIA_CAMERA_SUPPORT
 
@@ -1488,3 +1568,4 @@ config VIDEO_LM3646
 endmenu
 
 endif # VIDEO_V4L2
+

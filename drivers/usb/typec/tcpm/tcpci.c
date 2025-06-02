@@ -16,7 +16,6 @@
 #include <linux/usb/tcpci.h>
 #include <linux/usb/tcpm.h>
 #include <linux/usb/typec.h>
-#include <trace/hooks/typec.h>
 
 #define	PD_RETRY_COUNT_DEFAULT			3
 #define	PD_RETRY_COUNT_3_0_OR_HIGHER		2
@@ -27,11 +26,6 @@
 #define	VPPS_NEW_MIN_PERCENT			95
 #define	VPPS_VALID_MIN_MV			100
 #define	VSINKDISCONNECT_PD_MIN_PERCENT		90
-
-#define tcpc_presenting_rd(reg, cc) \
-	(!(TCPC_ROLE_CTRL_DRP & (reg)) && \
-	 (((reg) & (TCPC_ROLE_CTRL_## cc ##_MASK << TCPC_ROLE_CTRL_## cc ##_SHIFT)) == \
-	  (TCPC_ROLE_CTRL_CC_RD << TCPC_ROLE_CTRL_## cc ##_SHIFT)))
 
 struct tcpci {
 	struct device *dev;
@@ -185,12 +179,8 @@ static int tcpci_start_toggling(struct tcpc_dev *tcpc,
 
 	/* Handle vendor drp toggling */
 	if (tcpci->data->start_drp_toggling) {
-		int override_toggling = 0;
-
-		trace_android_vh_typec_tcpci_override_toggling(tcpci, tcpci->data,
-							       &override_toggling);
 		ret = tcpci->data->start_drp_toggling(tcpci, tcpci->data, cc);
-		if (ret < 0 || override_toggling)
+		if (ret < 0)
 			return ret;
 	}
 
@@ -221,23 +211,6 @@ static int tcpci_start_toggling(struct tcpc_dev *tcpc,
 		return ret;
 	return regmap_write(tcpci->regmap, TCPC_COMMAND,
 			    TCPC_CMD_LOOK4CONNECTION);
-}
-
-static enum typec_cc_status tcpci_to_typec_cc(unsigned int cc, bool sink)
-{
-	switch (cc) {
-	case 0x1:
-		return sink ? TYPEC_CC_RP_DEF : TYPEC_CC_RA;
-	case 0x2:
-		return sink ? TYPEC_CC_RP_1_5 : TYPEC_CC_RD;
-	case 0x3:
-		if (sink)
-			return TYPEC_CC_RP_3_0;
-		fallthrough;
-	case 0x0:
-	default:
-		return TYPEC_CC_OPEN;
-	}
 }
 
 static int tcpci_get_cc(struct tcpc_dev *tcpc,
@@ -430,14 +403,6 @@ static void tcpci_frs_sourcing_vbus(struct tcpc_dev *dev)
 		tcpci->data->frs_sourcing_vbus(tcpci, tcpci->data);
 }
 
-static void tcpci_check_contaminant(struct tcpc_dev *dev)
-{
-	struct tcpci *tcpci = tcpc_to_tcpci(dev);
-
-	if (tcpci->data->check_contaminant)
-		tcpci->data->check_contaminant(tcpci, tcpci->data);
-}
-
 static int tcpci_set_bist_data(struct tcpc_dev *tcpc, bool enable)
 {
 	struct tcpci *tcpci = tcpc_to_tcpci(tcpc);
@@ -484,11 +449,7 @@ static int tcpci_get_vbus(struct tcpc_dev *tcpc)
 {
 	struct tcpci *tcpci = tcpc_to_tcpci(tcpc);
 	unsigned int reg;
-	int ret, vbus, bypass = 0;
-
-	trace_android_rvh_typec_tcpci_get_vbus(tcpci, tcpci->data, &vbus, &bypass);
-	if (bypass)
-		return vbus;
+	int ret;
 
 	ret = regmap_read(tcpci->regmap, TCPC_POWER_STATUS, &reg);
 	if (ret < 0)
@@ -631,10 +592,6 @@ static int tcpci_init(struct tcpc_dev *tcpc)
 	}
 	if (time_after(jiffies, timeout))
 		return -ETIMEDOUT;
-
-	ret = tcpci_write16(tcpci, TCPC_FAULT_STATUS, TCPC_FAULT_STATUS_ALL_REG_RST_TO_DEFAULT);
-	if (ret < 0)
-		return ret;
 
 	/* Handle vendor init */
 	if (tcpci->data->init) {
@@ -821,9 +778,6 @@ struct tcpci *tcpci_register_port(struct device *dev, struct tcpci_data *data)
 	tcpci->tcpc.frs_sourcing_vbus = tcpci_frs_sourcing_vbus;
 	tcpci->tcpc.set_partner_usb_comm_capable = tcpci_set_partner_usb_comm_capable;
 
-	if (tcpci->data->check_contaminant)
-		tcpci->tcpc.check_contaminant = tcpci_check_contaminant;
-
 	if (tcpci->data->auto_discharge_disconnect) {
 		tcpci->tcpc.enable_auto_vbus_discharge = tcpci_enable_auto_vbus_discharge;
 		tcpci->tcpc.set_auto_vbus_discharge_threshold =
@@ -840,10 +794,8 @@ struct tcpci *tcpci_register_port(struct device *dev, struct tcpci_data *data)
 		return ERR_PTR(err);
 
 	tcpci->port = tcpm_register_port(tcpci->dev, &tcpci->tcpc);
-	if (IS_ERR(tcpci->port)) {
-		fwnode_handle_put(tcpci->tcpc.fwnode);
+	if (IS_ERR(tcpci->port))
 		return ERR_CAST(tcpci->port);
-	}
 
 	return tcpci;
 }
@@ -852,7 +804,6 @@ EXPORT_SYMBOL_GPL(tcpci_register_port);
 void tcpci_unregister_port(struct tcpci *tcpci)
 {
 	tcpm_unregister_port(tcpci->port);
-	fwnode_handle_put(tcpci->tcpc.fwnode);
 }
 EXPORT_SYMBOL_GPL(tcpci_unregister_port);
 
@@ -919,7 +870,6 @@ MODULE_DEVICE_TABLE(i2c, tcpci_id);
 #ifdef CONFIG_OF
 static const struct of_device_id tcpci_of_match[] = {
 	{ .compatible = "nxp,ptn5110", },
-	{ .compatible = "tcpci", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, tcpci_of_match);

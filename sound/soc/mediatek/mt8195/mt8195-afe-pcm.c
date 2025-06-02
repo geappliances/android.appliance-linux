@@ -83,12 +83,21 @@ static int mt8195_memif_fs(struct snd_pcm_substream *substream,
 			   unsigned int rate)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_component *component =
-			snd_soc_rtdcom_lookup(rtd, AFE_PCM_NAME);
-	struct mtk_base_afe *afe = snd_soc_component_get_drvdata(component);
+	struct snd_soc_component *component;
+	struct mtk_base_afe *afe;
+	struct mtk_base_afe_memif *memif;
 	int id = asoc_rtd_to_cpu(rtd, 0)->id;
-	struct mtk_base_afe_memif *memif = &afe->memif[id];
 	int fs = mt8195_afe_fs_timing(rate);
+
+	if (id < 0)
+		return -EINVAL;
+
+	component = snd_soc_rtdcom_lookup(rtd, AFE_PCM_NAME);
+	if (!component)
+		return -EINVAL;
+
+	afe = snd_soc_component_get_drvdata(component);
+	memif = &afe->memif[id];
 
 	switch (memif->data->id) {
 	case MT8195_AFE_MEMIF_DL10:
@@ -672,6 +681,7 @@ static struct snd_soc_dai_driver mt8195_memif_dai_driver[] = {
 
 static const struct snd_kcontrol_new o002_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I000 Switch", AFE_CONN2, 0, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I004 Switch", AFE_CONN2, 4, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I012 Switch", AFE_CONN2, 12, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I020 Switch", AFE_CONN2, 20, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I022 Switch", AFE_CONN2, 22, 1, 0),
@@ -682,6 +692,8 @@ static const struct snd_kcontrol_new o002_mix[] = {
 
 static const struct snd_kcontrol_new o003_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I001 Switch", AFE_CONN3, 1, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I005 Switch", AFE_CONN3, 5, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I010 Switch", AFE_CONN3, 10, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I013 Switch", AFE_CONN3, 13, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I021 Switch", AFE_CONN3, 21, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I023 Switch", AFE_CONN3, 23, 1, 0),
@@ -692,6 +704,7 @@ static const struct snd_kcontrol_new o003_mix[] = {
 
 static const struct snd_kcontrol_new o004_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I000 Switch", AFE_CONN4, 0, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I006 Switch", AFE_CONN4, 6, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I014 Switch", AFE_CONN4, 14, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I024 Switch", AFE_CONN4, 24, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I074 Switch", AFE_CONN4_2, 10, 1, 0),
@@ -700,6 +713,7 @@ static const struct snd_kcontrol_new o004_mix[] = {
 
 static const struct snd_kcontrol_new o005_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I001 Switch", AFE_CONN5, 1, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I007 Switch", AFE_CONN5, 7, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I015 Switch", AFE_CONN5, 15, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I025 Switch", AFE_CONN5, 25, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I075 Switch", AFE_CONN5_2, 11, 1, 0),
@@ -708,6 +722,7 @@ static const struct snd_kcontrol_new o005_mix[] = {
 
 static const struct snd_kcontrol_new o006_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I000 Switch", AFE_CONN6, 0, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I008 Switch", AFE_CONN6, 8, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I016 Switch", AFE_CONN6, 16, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I026 Switch", AFE_CONN6, 26, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I076 Switch", AFE_CONN6_2, 12, 1, 0),
@@ -715,18 +730,21 @@ static const struct snd_kcontrol_new o006_mix[] = {
 
 static const struct snd_kcontrol_new o007_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I001 Switch", AFE_CONN7, 1, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I009 Switch", AFE_CONN7, 9, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I017 Switch", AFE_CONN7, 17, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I027 Switch", AFE_CONN7, 27, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I077 Switch", AFE_CONN7_2, 13, 1, 0),
 };
 
 static const struct snd_kcontrol_new o008_mix[] = {
+	SOC_DAPM_SINGLE_AUTODISABLE("I010 Switch", AFE_CONN8, 10, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I018 Switch", AFE_CONN8, 18, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I028 Switch", AFE_CONN8, 28, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I078 Switch", AFE_CONN8_2, 14, 1, 0),
 };
 
 static const struct snd_kcontrol_new o009_mix[] = {
+	SOC_DAPM_SINGLE_AUTODISABLE("I011 Switch", AFE_CONN9, 11, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I019 Switch", AFE_CONN9, 19, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I029 Switch", AFE_CONN9, 29, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I079 Switch", AFE_CONN9_2, 15, 1, 0),
@@ -896,30 +914,40 @@ static const struct snd_kcontrol_new o035_mix[] = {
 
 static const struct snd_kcontrol_new o036_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I000 Switch", AFE_CONN36, 0, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I004 Switch", AFE_CONN36, 4, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I006 Switch", AFE_CONN36, 6, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I012 Switch", AFE_CONN36, 12, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I020 Switch", AFE_CONN36, 20, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I070 Switch", AFE_CONN36_2, 6, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I072 Switch", AFE_CONN36_2, 8, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I168 Switch", AFE_CONN36_5, 8, 1, 0),
 };
 
 static const struct snd_kcontrol_new o037_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I001 Switch", AFE_CONN37, 1, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I005 Switch", AFE_CONN37, 5, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I006 Switch", AFE_CONN37, 6, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I007 Switch", AFE_CONN37, 7, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I013 Switch", AFE_CONN37, 13, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I021 Switch", AFE_CONN37, 21, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I071 Switch", AFE_CONN37_2, 7, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I073 Switch", AFE_CONN37_2, 9, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I169 Switch", AFE_CONN37_5, 9, 1, 0),
 };
 
 static const struct snd_kcontrol_new o038_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I022 Switch", AFE_CONN38, 22, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I168 Switch", AFE_CONN38_5, 8, 1, 0),
 };
 
 static const struct snd_kcontrol_new o039_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I023 Switch", AFE_CONN39, 23, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I169 Switch", AFE_CONN39_5, 9, 1, 0),
 };
 
 static const struct snd_kcontrol_new o040_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I002 Switch", AFE_CONN40, 2, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I004 Switch", AFE_CONN40, 4, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I012 Switch", AFE_CONN40, 12, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I022 Switch", AFE_CONN40, 22, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I168 Switch", AFE_CONN40_5, 8, 1, 0),
@@ -927,49 +955,58 @@ static const struct snd_kcontrol_new o040_mix[] = {
 
 static const struct snd_kcontrol_new o041_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I003 Switch", AFE_CONN41, 3, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I005 Switch", AFE_CONN41, 5, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I013 Switch", AFE_CONN41, 13, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I023 Switch", AFE_CONN41, 23, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I169 Switch", AFE_CONN41_5, 9, 1, 0),
 };
 
 static const struct snd_kcontrol_new o042_mix[] = {
+	SOC_DAPM_SINGLE_AUTODISABLE("I006 Switch", AFE_CONN42, 6, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I014 Switch", AFE_CONN42, 14, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I024 Switch", AFE_CONN42, 24, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I170 Switch", AFE_CONN42_5, 10, 1, 0),
 };
 
 static const struct snd_kcontrol_new o043_mix[] = {
+	SOC_DAPM_SINGLE_AUTODISABLE("I007 Switch", AFE_CONN43, 7, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I015 Switch", AFE_CONN43, 15, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I025 Switch", AFE_CONN43, 25, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I171 Switch", AFE_CONN43_5, 11, 1, 0),
 };
 
 static const struct snd_kcontrol_new o044_mix[] = {
+	SOC_DAPM_SINGLE_AUTODISABLE("I008 Switch", AFE_CONN44, 8, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I016 Switch", AFE_CONN44, 16, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I026 Switch", AFE_CONN44, 26, 1, 0),
 };
 
 static const struct snd_kcontrol_new o045_mix[] = {
+	SOC_DAPM_SINGLE_AUTODISABLE("I009 Switch", AFE_CONN45, 9, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I017 Switch", AFE_CONN45, 17, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I027 Switch", AFE_CONN45, 27, 1, 0),
 };
 
 static const struct snd_kcontrol_new o046_mix[] = {
+	SOC_DAPM_SINGLE_AUTODISABLE("I010 Switch", AFE_CONN46, 10, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I018 Switch", AFE_CONN46, 18, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I028 Switch", AFE_CONN46, 28, 1, 0),
 };
 
 static const struct snd_kcontrol_new o047_mix[] = {
+	SOC_DAPM_SINGLE_AUTODISABLE("I011 Switch", AFE_CONN47, 11, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I019 Switch", AFE_CONN47, 19, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I029 Switch", AFE_CONN47, 29, 1, 0),
 };
 
 static const struct snd_kcontrol_new o182_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I024 Switch", AFE_CONN182, 24, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I170 Switch", AFE_CONN182_5, 10, 1, 0),
 };
 
 static const struct snd_kcontrol_new o183_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I025 Switch", AFE_CONN183, 25, 1, 0),
+	SOC_DAPM_SINGLE_AUTODISABLE("I171 Switch", AFE_CONN183_5, 11, 1, 0),
 };
 
 static const char * const dl8_dl11_data_sel_mux_text[] = {
@@ -1279,6 +1316,17 @@ static const struct snd_soc_dapm_route mt8195_memif_routes[] = {
 	{"O006", "I000 Switch", "I000"},
 	{"O007", "I001 Switch", "I001"},
 
+	{"O002", "I004 Switch", "I004"},
+	{"O003", "I005 Switch", "I005"},
+	{"O004", "I006 Switch", "I006"},
+	{"O005", "I007 Switch", "I007"},
+	{"O006", "I008 Switch", "I008"},
+	{"O007", "I009 Switch", "I009"},
+	{"O008", "I010 Switch", "I010"},
+	{"O009", "I011 Switch", "I011"},
+
+	{"O003", "I010 Switch", "I010"},
+
 	{"O010", "I022 Switch", "I022"},
 	{"O011", "I023 Switch", "I023"},
 	{"O012", "I024 Switch", "I024"},
@@ -1351,12 +1399,19 @@ static const struct snd_soc_dapm_route mt8195_memif_routes[] = {
 
 	{"O036", "I000 Switch", "I000"},
 	{"O037", "I001 Switch", "I001"},
+	{"O036", "I004 Switch", "I004"},
+	{"O037", "I005 Switch", "I005"},
+	{"O036", "I006 Switch", "I006"},
+	{"O037", "I006 Switch", "I006"},
+	{"O037", "I007 Switch", "I007"},
 	{"O036", "I012 Switch", "I012"},
 	{"O037", "I013 Switch", "I013"},
 	{"O036", "I020 Switch", "I020"},
 	{"O037", "I021 Switch", "I021"},
 	{"O036", "I070 Switch", "I070"},
 	{"O037", "I071 Switch", "I071"},
+	{"O036", "I072 Switch", "I072"},
+	{"O037", "I073 Switch", "I073"},
 	{"O036", "I168 Switch", "I168"},
 	{"O037", "I169 Switch", "I169"},
 
@@ -1364,6 +1419,11 @@ static const struct snd_soc_dapm_route mt8195_memif_routes[] = {
 	{"O039", "I023 Switch", "I023"},
 	{"O182", "I024 Switch", "I024"},
 	{"O183", "I025 Switch", "I025"},
+
+	{"O038", "I168 Switch", "I168"},
+	{"O039", "I169 Switch", "I169"},
+	{"O182", "I170 Switch", "I170"},
+	{"O183", "I171 Switch", "I171"},
 
 	{"O040", "I022 Switch", "I022"},
 	{"O041", "I023 Switch", "I023"},
@@ -1373,6 +1433,15 @@ static const struct snd_soc_dapm_route mt8195_memif_routes[] = {
 	{"O045", "I027 Switch", "I027"},
 	{"O046", "I028 Switch", "I028"},
 	{"O047", "I029 Switch", "I029"},
+
+	{"O040", "I004 Switch", "I004"},
+	{"O041", "I005 Switch", "I005"},
+	{"O042", "I006 Switch", "I006"},
+	{"O043", "I007 Switch", "I007"},
+	{"O044", "I008 Switch", "I008"},
+	{"O045", "I009 Switch", "I009"},
+	{"O046", "I010 Switch", "I010"},
+	{"O047", "I011 Switch", "I011"},
 
 	{"O040", "I002 Switch", "I002"},
 	{"O041", "I003 Switch", "I003"},
@@ -1793,8 +1862,37 @@ static const struct snd_kcontrol_new mt8195_memif_controls[] = {
 			    MT8195_AFE_IRQ_28),
 };
 
+int mt8195_afe_dai_suspend(struct snd_soc_component *component)
+{
+	struct mtk_base_afe *afe = snd_soc_component_get_drvdata(component);
+	struct regmap *regmap = afe->regmap;
+	int i;
+
+	for (i = 0; i < afe->reg_back_up_list_num; i++)
+		regmap_read(regmap, afe->reg_back_up_list[i],
+			    &afe->reg_back_up[i]);
+
+	return 0;
+}
+
+
+int mt8195_afe_dai_resume(struct snd_soc_component *component)
+{
+	struct mtk_base_afe *afe = snd_soc_component_get_drvdata(component);
+	struct regmap *regmap = afe->regmap;
+	int i;
+
+	for (i = 0; i < afe->reg_back_up_list_num; i++)
+		regmap_write(regmap, afe->reg_back_up_list[i],
+			     afe->reg_back_up[i]);
+
+	return 0;
+}
+
 static const struct snd_soc_component_driver mt8195_afe_pcm_dai_component = {
 	.name = "mt8195-afe-pcm-dai",
+	.suspend = mt8195_afe_dai_suspend,
+	.resume = mt8195_afe_dai_resume,
 };
 
 static const struct mtk_base_memif_data memif_data[MT8195_AFE_MEMIF_NUM] = {
@@ -2582,8 +2680,6 @@ static bool mt8195_is_volatile_reg(struct device *dev, unsigned int reg)
 	case AFE_IRQ3_CON_MON:
 	case AFE_IRQ_MCU_MON2:
 	case ADSP_IRQ_STATUS:
-	case AFE_APLL_TUNER_CFG:
-	case AFE_APLL_TUNER_CFG1:
 	case AUDIO_TOP_STA0:
 	case AUDIO_TOP_STA1:
 	case AFE_GAIN1_CUR:
@@ -2622,7 +2718,6 @@ static bool mt8195_is_volatile_reg(struct device *dev, unsigned int reg)
 	case SPDIFIN_USERCODE10:
 	case SPDIFIN_USERCODE11:
 	case SPDIFIN_USERCODE12:
-	case AFE_SPDIFIN_APLL_TUNER_CFG:
 	case AFE_LINEIN_APLL_TUNER_MON:
 	case AFE_EARC_APLL_TUNER_MON:
 	case AFE_CM0_MON:
@@ -2754,10 +2849,6 @@ static bool mt8195_is_volatile_reg(struct device *dev, unsigned int reg)
 	case AFE_DMIC3_SRC_DEBUG_MON0:
 	case AFE_DMIC3_UL_SRC_MON0:
 	case AFE_DMIC3_UL_SRC_MON1:
-	case DMIC_GAIN1_CUR:
-	case DMIC_GAIN2_CUR:
-	case DMIC_GAIN3_CUR:
-	case DMIC_GAIN4_CUR:
 	case ETDM_IN1_MONITOR:
 	case ETDM_IN2_MONITOR:
 	case ETDM_OUT1_MONITOR:
@@ -3013,8 +3104,10 @@ static int mt8195_dai_memif_register(struct mtk_base_afe *afe)
 typedef int (*dai_register_cb)(struct mtk_base_afe *);
 static const dai_register_cb dai_register_cbs[] = {
 	mt8195_dai_adda_register,
+	mt8195_dai_dmic_register,
 	mt8195_dai_etdm_register,
 	mt8195_dai_pcm_register,
+	mt8195_dai_multi_in_register,
 	mt8195_dai_memif_register,
 };
 
@@ -3029,6 +3122,10 @@ static const struct reg_sequence mt8195_afe_reg_defaults[] = {
 static const struct reg_sequence mt8195_cg_patch[] = {
 	{ AUDIO_TOP_CON0, 0xfffffffb },
 	{ AUDIO_TOP_CON1, 0xfffffff8 },
+};
+
+static const unsigned int afe_backup_list[] = {
+	AUDIO_TOP_CON5,
 };
 
 static int mt8195_afe_init_registers(struct mtk_base_afe *afe)
@@ -3156,6 +3253,13 @@ static int mt8195_afe_pcm_dev_probe(struct platform_device *pdev)
 	afe->memif_fs = mt8195_memif_fs;
 	afe->irq_fs = mt8195_irq_fs;
 
+	afe->reg_back_up_list = afe_backup_list;
+	afe->reg_back_up_list_num = ARRAY_SIZE(afe_backup_list);
+	afe->reg_back_up = devm_kcalloc(dev, afe->reg_back_up_list_num,
+					sizeof(unsigned int), GFP_KERNEL);
+	if (!afe->reg_back_up)
+		return -ENOMEM;
+
 	afe->runtime_resume = mt8195_afe_runtime_resume;
 	afe->runtime_suspend = mt8195_afe_runtime_suspend;
 
@@ -3237,13 +3341,15 @@ err_pm_put:
 	return ret;
 }
 
-static void mt8195_afe_pcm_dev_remove(struct platform_device *pdev)
+static int mt8195_afe_pcm_dev_remove(struct platform_device *pdev)
 {
 	snd_soc_unregister_component(&pdev->dev);
 
 	pm_runtime_disable(&pdev->dev);
 	if (!pm_runtime_status_suspended(&pdev->dev))
 		mt8195_afe_runtime_suspend(&pdev->dev);
+
+	return 0;
 }
 
 static const struct of_device_id mt8195_afe_pcm_dt_match[] = {
@@ -3255,6 +3361,7 @@ MODULE_DEVICE_TABLE(of, mt8195_afe_pcm_dt_match);
 static const struct dev_pm_ops mt8195_afe_pm_ops = {
 	SET_RUNTIME_PM_OPS(mt8195_afe_runtime_suspend,
 			   mt8195_afe_runtime_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
 };
 
 static struct platform_driver mt8195_afe_pcm_driver = {
@@ -3266,7 +3373,7 @@ static struct platform_driver mt8195_afe_pcm_driver = {
 #endif
 	},
 	.probe = mt8195_afe_pcm_dev_probe,
-	.remove_new = mt8195_afe_pcm_dev_remove,
+	.remove = mt8195_afe_pcm_dev_remove,
 };
 
 module_platform_driver(mt8195_afe_pcm_driver);

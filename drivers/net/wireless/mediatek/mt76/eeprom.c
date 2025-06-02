@@ -15,6 +15,7 @@ int mt76_get_of_eeprom(struct mt76_dev *dev, void *eep, int offset, int len)
 	struct device_node *np = dev->dev->of_node;
 	struct mtd_info *mtd;
 	const __be32 *list;
+	const void *data;
 	const char *part;
 	phandle phandle;
 	int size;
@@ -23,6 +24,16 @@ int mt76_get_of_eeprom(struct mt76_dev *dev, void *eep, int offset, int len)
 
 	if (!np)
 		return -ENOENT;
+
+	data = of_get_property(np, "mediatek,eeprom-data", &size);
+	if (data) {
+		if (size > len)
+			return -EINVAL;
+
+		memcpy(eep, data, size);
+
+		return 0;
+	}
 
 	list = of_get_property(np, "mediatek,mtd-eeprom", &size);
 	if (!list)
@@ -54,8 +65,13 @@ int mt76_get_of_eeprom(struct mt76_dev *dev, void *eep, int offset, int len)
 	offset += be32_to_cpup(list);
 	ret = mtd_read(mtd, offset, len, &retlen, eep);
 	put_mtd_device(mtd);
-	if (ret)
+	if (mtd_is_bitflip(ret))
+		ret = 0;
+	if (ret) {
+		dev_err(dev->dev, "reading EEPROM from mtd %s failed: %i\n",
+			part, ret);
 		goto out_put_node;
+	}
 
 	if (retlen < len) {
 		ret = -EINVAL;
@@ -117,7 +133,7 @@ static bool mt76_string_prop_find(struct property *prop, const char *str)
 	return false;
 }
 
-static struct device_node *
+struct device_node *
 mt76_find_power_limits_node(struct mt76_dev *dev)
 {
 	struct device_node *np = dev->dev->of_node;
@@ -155,6 +171,7 @@ mt76_find_power_limits_node(struct mt76_dev *dev)
 	of_node_put(np);
 	return fallback;
 }
+EXPORT_SYMBOL_GPL(mt76_find_power_limits_node);
 
 static const __be32 *
 mt76_get_of_array(struct device_node *np, char *name, size_t *len, int min)
@@ -169,7 +186,7 @@ mt76_get_of_array(struct device_node *np, char *name, size_t *len, int min)
 	return prop->value;
 }
 
-static struct device_node *
+struct device_node *
 mt76_find_channel_node(struct device_node *np, struct ieee80211_channel *chan)
 {
 	struct device_node *cur;
@@ -193,6 +210,8 @@ mt76_find_channel_node(struct device_node *np, struct ieee80211_channel *chan)
 
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(mt76_find_channel_node);
+
 
 static s8
 mt76_get_txs_delta(struct device_node *np, u8 nss)
@@ -287,6 +306,9 @@ s8 mt76_get_rate_power_limits(struct mt76_phy *phy,
 		break;
 	case NL80211_BAND_5GHZ:
 		band = '5';
+		break;
+	case NL80211_BAND_6GHZ:
+		band = '6';
 		break;
 	default:
 		return target_power;

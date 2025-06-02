@@ -51,22 +51,22 @@ properties:
   clock-names:
     items:
       - const: clk26m
-      - const: apll1_ck
-      - const: apll2_ck
+      - const: apll1
+      - const: apll2
       - const: apll12_div0
       - const: apll12_div1
       - const: apll12_div2
       - const: apll12_div3
       - const: apll12_div9
-      - const: a1sys_hp_sel
-      - const: aud_intbus_sel
-      - const: audio_h_sel
-      - const: audio_local_bus_sel
-      - const: dptx_m_sel
-      - const: i2so1_m_sel
-      - const: i2so2_m_sel
-      - const: i2si1_m_sel
-      - const: i2si2_m_sel
+      - const: top_a1sys_hp
+      - const: top_aud_intbus
+      - const: top_audio_h
+      - const: top_audio_local_bus
+      - const: top_dptx_mck
+      - const: top_i2so1_mck
+      - const: top_i2so2_mck
+      - const: top_i2si1_mck
+      - const: top_i2si2_mck
       - const: infra_ao_audio_26m_b
       - const: scp_adsp_audiodsp
 
@@ -130,6 +130,7 @@ additionalProperties: false
 
 examples:
   - |
+    #include <dt-bindings/clock/mt8195-clk.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     #include <dt-bindings/interrupt-controller/irq.h>
 
@@ -140,41 +141,42 @@ examples:
         mediatek,topckgen = <&topckgen>;
         power-domains = <&spm 7>; //MT8195_POWER_DOMAIN_AUDIO
         clocks = <&clk26m>,
-                 <&topckgen 163>, //CLK_TOP_APLL1
-                 <&topckgen 166>, //CLK_TOP_APLL2
-                 <&topckgen 233>, //CLK_TOP_APLL12_DIV0
-                 <&topckgen 234>, //CLK_TOP_APLL12_DIV1
-                 <&topckgen 235>, //CLK_TOP_APLL12_DIV2
-                 <&topckgen 236>, //CLK_TOP_APLL12_DIV3
-                 <&topckgen 238>, //CLK_TOP_APLL12_DIV9
-                 <&topckgen 100>, //CLK_TOP_A1SYS_HP_SEL
-                 <&topckgen 33>, //CLK_TOP_AUD_INTBUS_SEL
-                 <&topckgen 34>, //CLK_TOP_AUDIO_H_SEL
-                 <&topckgen 107>, //CLK_TOP_AUDIO_LOCAL_BUS_SEL
-                 <&topckgen 98>, //CLK_TOP_DPTX_M_SEL
-                 <&topckgen 94>, //CLK_TOP_I2SO1_M_SEL
-                 <&topckgen 95>, //CLK_TOP_I2SO2_M_SEL
-                 <&topckgen 96>, //CLK_TOP_I2SI1_M_SEL
-                 <&topckgen 97>, //CLK_TOP_I2SI2_M_SEL
-                 <&infracfg_ao 50>, //CLK_INFRA_AO_AUDIO_26M_B
-                 <&scp_adsp 0>; //CLK_SCP_ADSP_AUDIODSP
+                 <&topckgen CLK_TOP_APLL1>,
+                 <&topckgen CLK_TOP_APLL2>,
+                 <&topckgen CLK_TOP_APLL12_DIV0>,
+                 <&topckgen CLK_TOP_APLL12_DIV1>,
+                 <&topckgen CLK_TOP_APLL12_DIV2>,
+                 <&topckgen CLK_TOP_APLL12_DIV3>,
+                 <&topckgen CLK_TOP_APLL12_DIV9>,
+                 <&topckgen CLK_TOP_A1SYS_HP>,
+                 <&topckgen CLK_TOP_AUD_INTBUS>,
+                 <&topckgen CLK_TOP_AUDIO_H>,
+                 <&topckgen CLK_TOP_AUDIO_LOCAL_BUS>,
+                 <&topckgen CLK_TOP_DPTX_MCK>,
+                 <&topckgen CLK_TOP_I2SO1_MCK>,
+                 <&topckgen CLK_TOP_I2SO2_MCK>,
+                 <&topckgen CLK_TOP_I2SI1_MCK>,
+                 <&topckgen CLK_TOP_I2SI2_MCK>,
+                 <&infracfg_ao CLK_INFRA_AO_AUDIO_26M_B>,
+                 <&scp_adsp CLK_SCP_ADSP_AUDIODSP>;
+
         clock-names = "clk26m",
-                      "apll1_ck",
-                      "apll2_ck",
+                      "apll1",
+                      "apll2",
                       "apll12_div0",
                       "apll12_div1",
                       "apll12_div2",
                       "apll12_div3",
                       "apll12_div9",
-                      "a1sys_hp_sel",
-                      "aud_intbus_sel",
-                      "audio_h_sel",
-                      "audio_local_bus_sel",
-                      "dptx_m_sel",
-                      "i2so1_m_sel",
-                      "i2so2_m_sel",
-                      "i2si1_m_sel",
-                      "i2si2_m_sel",
+                      "top_a1sys_hp",
+                      "top_aud_intbus",
+                      "top_audio_h",
+                      "top_audio_local_bus",
+                      "top_dptx_mck",
+                      "top_i2so1_mck",
+                      "top_i2so2_mck",
+                      "top_i2si1_mck",
+                      "top_i2si2_mck",
                       "infra_ao_audio_26m_b",
                       "scp_adsp_audiodsp";
     };

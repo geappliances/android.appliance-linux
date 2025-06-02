@@ -1,0 +1,7 @@
+config DRM_I2C_SN65DSI83
+	tristate "SN65DSI83 mipi dsi to lvds bridge"
+	depends on OF
+	select DRM_MIPI_DSI
+	select DRM_KMS_HELPER
+	help
+	  Support for the sn65dsi83 MIPI DSI to LVDS bridge

@@ -34,6 +34,9 @@
 #define MT6577_AUXADC_POWER_READY_MS          1
 #define MT6577_AUXADC_SAMPLE_READY_US         25
 
+#define MT6577_VOLTAGE_FULL_RANGE             1500
+#define MT6577_AUXADC_PRECISION               4096
+
 struct mtk_auxadc_compatible {
 	bool sample_data_cali;
 	bool check_global_idle;
@@ -56,11 +59,23 @@ static const struct mtk_auxadc_compatible mt6765_compat = {
 	.check_global_idle = false,
 };
 
-#define MT6577_AUXADC_CHANNEL(idx) {				    \
-		.type = IIO_VOLTAGE,				    \
-		.indexed = 1,					    \
-		.channel = (idx),				    \
-		.info_mask_separate = BIT(IIO_CHAN_INFO_PROCESSED), \
+static const struct mtk_auxadc_compatible mt8188_compat = {
+	.sample_data_cali = false,
+	.check_global_idle = false,
+};
+
+static const struct mtk_auxadc_compatible mt8195_compat = {
+	.sample_data_cali = false,
+	.check_global_idle = false,
+};
+
+#define MT6577_AUXADC_CHANNEL(idx) {				      \
+		.type = IIO_VOLTAGE,				      \
+		.indexed = 1,					      \
+		.channel = (idx),				      \
+		.info_mask_separate = BIT(IIO_CHAN_INFO_PROCESSED) |  \
+				      BIT(IIO_CHAN_INFO_RAW),	      \
+		.info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE), \
 }
 
 static const struct iio_chan_spec mt6577_auxadc_iio_channels[] = {
@@ -185,6 +200,7 @@ static int mt6577_auxadc_read_raw(struct iio_dev *indio_dev,
 	struct mt6577_auxadc_device *adc_dev = iio_priv(indio_dev);
 
 	switch (info) {
+	case IIO_CHAN_INFO_RAW:
 	case IIO_CHAN_INFO_PROCESSED:
 		*val = mt6577_auxadc_read(indio_dev, chan);
 		if (*val < 0) {
@@ -200,6 +216,11 @@ static int mt6577_auxadc_read_raw(struct iio_dev *indio_dev,
 		*val = *val * VOLTAGE_FULL_RANGE / AUXADC_PRECISE;
 
 		return IIO_VAL_INT;
+
+	case IIO_CHAN_INFO_SCALE:
+		*val = MT6577_VOLTAGE_FULL_RANGE;
+		*val2 = MT6577_AUXADC_PRECISION;
+		return IIO_VAL_FRACTIONAL;
 
 	default:
 		return -EINVAL;
@@ -254,6 +275,7 @@ static int mt6577_auxadc_probe(struct platform_device *pdev)
 
 	adc_dev = iio_priv(indio_dev);
 	indio_dev->name = dev_name(&pdev->dev);
+	indio_dev->dev.parent = &pdev->dev;
 	indio_dev->info = &mt6577_auxadc_info;
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	indio_dev->channels = mt6577_auxadc_iio_channels;
@@ -335,6 +357,8 @@ static const struct of_device_id mt6577_auxadc_of_match[] = {
 	{ .compatible = "mediatek,mt7622-auxadc", .data = &mt8173_compat},
 	{ .compatible = "mediatek,mt8173-auxadc", .data = &mt8173_compat},
 	{ .compatible = "mediatek,mt6765-auxadc", .data = &mt6765_compat},
+	{ .compatible = "mediatek,mt8188-auxadc", .data = &mt8188_compat},
+	{ .compatible = "mediatek,mt8195-auxadc", .data = &mt8195_compat},
 	{ }
 };
 MODULE_DEVICE_TABLE(of, mt6577_auxadc_of_match);

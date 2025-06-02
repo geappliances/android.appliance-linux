@@ -130,6 +130,7 @@ config SND_SOC_ALL_CODECS
 	imply SND_SOC_MC13783
 	imply SND_SOC_ML26124
 	imply SND_SOC_MT6351
+	imply SND_SOC_MT6357
 	imply SND_SOC_MT6358
 	imply SND_SOC_MT6359
 	imply SND_SOC_MT6660
@@ -146,6 +147,7 @@ config SND_SOC_ALL_CODECS
 	imply SND_SOC_PCM179X_SPI
 	imply SND_SOC_PCM186X_I2C
 	imply SND_SOC_PCM186X_SPI
+	imply SND_SOC_TLV320ADC3101
 	imply SND_SOC_PCM3008
 	imply SND_SOC_PCM3060_I2C
 	imply SND_SOC_PCM3060_SPI
@@ -1016,6 +1018,16 @@ config SND_SOC_PCM186X_SPI
 	select SND_SOC_PCM186X
 	select REGMAP_SPI
 
+config SND_SOC_TLV320ADC3101
+	tristate
+
+config SND_SOC_TLV320ADC3101_I2C
+	tristate "Texas Instruments TLV320ADC3101 CODECs - I2C"
+	depends on I2C
+	select SND_SOC_TLV320ADC3101
+	select REGMAP_I2C
+
+
 config SND_SOC_PCM3008
 	tristate
 
@@ -1865,6 +1877,12 @@ config SND_SOC_ML26124
 
 config SND_SOC_MT6351
 	tristate "MediaTek MT6351 Codec"
+
+config SND_SOC_MT6357
+	tristate "MediaTek MT6357 Codec"
+	help
+	  Enable support for the platform which uses MT6357 as
+	  external codec device.
 
 config SND_SOC_MT6358
 	tristate "MediaTek MT6358 Codec"

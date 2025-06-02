@@ -39,6 +39,7 @@ enum {
 	MT8195_AFE_MEMIF_NUM = (MT8195_AFE_MEMIF_END - MT8195_AFE_MEMIF_START),
 	MT8195_AFE_IO_START = MT8195_AFE_MEMIF_END,
 	MT8195_AFE_IO_DL_SRC = MT8195_AFE_IO_START,
+	MT8195_AFE_IO_DMIC_IN,
 	MT8195_AFE_IO_DPTX,
 	MT8195_AFE_IO_ETDM_START,
 	MT8195_AFE_IO_ETDM1_IN = MT8195_AFE_IO_ETDM_START,
@@ -49,7 +50,13 @@ enum {
 	MT8195_AFE_IO_ETDM_END,
 	MT8195_AFE_IO_ETDM_NUM =
 		(MT8195_AFE_IO_ETDM_END - MT8195_AFE_IO_ETDM_START),
-	MT8195_AFE_IO_PCM = MT8195_AFE_IO_ETDM_END,
+	MT8195_AFE_IO_MULTI_IN_START = MT8195_AFE_IO_ETDM_END,
+	MT8195_AFE_IO_MULTI_IN1 = MT8195_AFE_IO_MULTI_IN_START,
+	MT8195_AFE_IO_MULTI_IN2,
+	MT8195_AFE_IO_MULTI_IN_END,
+	MT8195_AFE_IO_MULTI_IN_NUM =
+		(MT8195_AFE_IO_MULTI_IN_END - MT8195_AFE_IO_MULTI_IN_START),
+	MT8195_AFE_IO_PCM = MT8195_AFE_IO_MULTI_IN_END,
 	MT8195_AFE_IO_UL_SRC1,
 	MT8195_AFE_IO_UL_SRC2,
 	MT8195_AFE_IO_END,
@@ -143,8 +150,10 @@ struct mt8195_afe_private {
 int mt8195_afe_fs_timing(unsigned int rate);
 /* dai register */
 int mt8195_dai_adda_register(struct mtk_base_afe *afe);
+int mt8195_dai_dmic_register(struct mtk_base_afe *afe);
 int mt8195_dai_etdm_register(struct mtk_base_afe *afe);
 int mt8195_dai_pcm_register(struct mtk_base_afe *afe);
+int mt8195_dai_multi_in_register(struct mtk_base_afe *afe);
 
 #define MT8195_SOC_ENUM_EXT(xname, xenum, xhandler_get, xhandler_put, id) \
 { \

@@ -768,6 +768,15 @@ config REGULATOR_MT6323
 	  This driver supports the control of different power rails of device
 	  through regulator interface.
 
+config REGULATOR_MT6357
+	tristate "MediaTek MT6357 PMIC"
+	depends on MFD_MT6397
+	help
+	  Say y here to select this option to enable the power regulator of
+	  MediaTek MT6357 PMIC.
+	  This driver supports the control of different power rails of device
+	  through regulator interface.
+
 config REGULATOR_MT6358
 	tristate "MediaTek MT6358 PMIC"
 	depends on MFD_MT6397
@@ -822,6 +831,17 @@ config REGULATOR_MTK_DVFSRC
 	  This driver supports to control regulators via the DVFSRC
 	  of Mediatek. It allows for voting on regulator state
 	  between multiple users.
+
+config REGULATOR_NT50358A
+	tristate "Novatek NT50358A Regulators"
+	depends on I2C
+	select REGMAP_I2C
+	help
+	  This adds support for voltage regulators in Novatek NT50358A
+	  Display Bias IC.
+	  The device supports two regulators (DSVP/DSVN).
+	  And DSVP is the real Vout range from 4V to 6V, DSVN is the real Vout range from -4V to -6V.
+	  It's common used to provide the power for the display panel.
 
 config REGULATOR_PALMAS
 	tristate "TI Palmas PMIC Regulators"

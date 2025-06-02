@@ -652,10 +652,8 @@ static void soc_dapm_async_complete(struct snd_soc_dapm_context *dapm)
 }
 
 static struct snd_soc_dapm_widget *
-dapm_wcache_lookup(struct snd_soc_dapm_wcache *wcache, const char *name)
+dapm_wcache_lookup(struct snd_soc_dapm_widget *w, const char *name)
 {
-	struct snd_soc_dapm_widget *w = wcache->widget;
-
 	if (w) {
 		struct list_head *wlist = &w->dapm->card->widgets;
 		const int depth = 2;
@@ -671,12 +669,6 @@ dapm_wcache_lookup(struct snd_soc_dapm_wcache *wcache, const char *name)
 	}
 
 	return NULL;
-}
-
-static inline void dapm_wcache_update(struct snd_soc_dapm_wcache *wcache,
-				      struct snd_soc_dapm_widget *w)
-{
-	wcache->widget = w;
 }
 
 /**
@@ -1336,11 +1328,13 @@ int snd_soc_dapm_dai_get_connected_widgets(struct snd_soc_dai *dai, int stream,
 
 	return paths;
 }
+EXPORT_SYMBOL_GPL(snd_soc_dapm_dai_get_connected_widgets);
 
 void snd_soc_dapm_dai_free_widgets(struct snd_soc_dapm_widget_list **list)
 {
 	dapm_widget_list_free(list);
 }
+EXPORT_SYMBOL_GPL(snd_soc_dapm_dai_free_widgets);
 
 /*
  * Handler for regulator supply widget.
@@ -2484,6 +2478,12 @@ static void dapm_free_path(struct snd_soc_dapm_path *path)
 	kfree(path);
 }
 
+/**
+ * snd_soc_dapm_free_widget - Free specified widget
+ * @w: widget to free
+ *
+ * Removes widget from all paths and frees memory occupied by it.
+ */
 void snd_soc_dapm_free_widget(struct snd_soc_dapm_widget *w)
 {
 	struct snd_soc_dapm_path *p, *next_p;
@@ -2506,12 +2506,7 @@ void snd_soc_dapm_free_widget(struct snd_soc_dapm_widget *w)
 	kfree_const(w->sname);
 	kfree(w);
 }
-
-void snd_soc_dapm_reset_cache(struct snd_soc_dapm_context *dapm)
-{
-	dapm->path_sink_cache.widget = NULL;
-	dapm->path_source_cache.widget = NULL;
-}
+EXPORT_SYMBOL_GPL(snd_soc_dapm_free_widget);
 
 /* free all dapm widgets and resources */
 static void dapm_free_widgets(struct snd_soc_dapm_context *dapm)
@@ -2523,7 +2518,9 @@ static void dapm_free_widgets(struct snd_soc_dapm_context *dapm)
 			continue;
 		snd_soc_dapm_free_widget(w);
 	}
-	snd_soc_dapm_reset_cache(dapm);
+
+	dapm->wcache_sink	= NULL;
+	dapm->wcache_source	= NULL;
 }
 
 static struct snd_soc_dapm_widget *dapm_find_widget(
@@ -2952,8 +2949,8 @@ static int snd_soc_dapm_add_route(struct snd_soc_dapm_context *dapm,
 		source = route->source;
 	}
 
-	wsource = dapm_wcache_lookup(&dapm->path_source_cache, source);
-	wsink = dapm_wcache_lookup(&dapm->path_sink_cache, sink);
+	wsource	= dapm_wcache_lookup(dapm->wcache_source, source);
+	wsink	= dapm_wcache_lookup(dapm->wcache_sink,   sink);
 
 	if (wsink && wsource)
 		goto skip_search;
@@ -3009,8 +3006,9 @@ static int snd_soc_dapm_add_route(struct snd_soc_dapm_context *dapm,
 	}
 
 skip_search:
-	dapm_wcache_update(&dapm->path_sink_cache, wsink);
-	dapm_wcache_update(&dapm->path_source_cache, wsource);
+	/* update cache */
+	dapm->wcache_sink	= wsink;
+	dapm->wcache_source	= wsource;
 
 	ret = snd_soc_dapm_add_path(dapm, wsource, wsink, route->control,
 		route->connected);
@@ -4204,6 +4202,13 @@ param_fail:
 	return ERR_PTR(ret);
 }
 
+/**
+ * snd_soc_dapm_new_dai_widgets - Create new DAPM widgets
+ * @dapm: DAPM context
+ * @dai: parent DAI
+ *
+ * Returns 0 on success, error code otherwise.
+ */
 int snd_soc_dapm_new_dai_widgets(struct snd_soc_dapm_context *dapm,
 				 struct snd_soc_dai *dai)
 {
@@ -4249,6 +4254,7 @@ int snd_soc_dapm_new_dai_widgets(struct snd_soc_dapm_context *dapm,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(snd_soc_dapm_new_dai_widgets);
 
 int snd_soc_dapm_link_dai_widgets(struct snd_soc_card *card)
 {
@@ -4432,11 +4438,11 @@ void snd_soc_dapm_connect_dai_link_widgets(struct snd_soc_card *card)
 		if (rtd->dai_link->dynamic)
 			continue;
 
-		if (rtd->num_cpus == 1) {
+		if (rtd->dai_link->num_cpus == 1) {
 			for_each_rtd_codec_dais(rtd, i, codec_dai)
 				dapm_connect_dai_pair(card, rtd, codec_dai,
 						      asoc_rtd_to_cpu(rtd, 0));
-		} else if (rtd->num_codecs == rtd->num_cpus) {
+		} else if (rtd->dai_link->num_codecs == rtd->dai_link->num_cpus) {
 			for_each_rtd_codec_dais(rtd, i, codec_dai)
 				dapm_connect_dai_pair(card, rtd, codec_dai,
 						      asoc_rtd_to_cpu(rtd, i));

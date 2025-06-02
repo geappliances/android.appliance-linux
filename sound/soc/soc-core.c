@@ -107,7 +107,7 @@ static umode_t soc_dev_attr_is_visible(struct kobject *kobj,
 
 	if (attr == &dev_attr_pmdown_time.attr)
 		return attr->mode; /* always visible */
-	return rtd->num_codecs ? attr->mode : 0; /* enabled only with codec */
+	return rtd->dai_link->num_codecs ? attr->mode : 0; /* enabled only with codec */
 }
 
 static const struct attribute_group soc_dapm_dev_group = {
@@ -501,8 +501,6 @@ static struct snd_soc_pcm_runtime *soc_new_pcm_runtime(
 	 *	asoc_rtd_to_cpu()
 	 *	asoc_rtd_to_codec()
 	 */
-	rtd->num_cpus	= dai_link->num_cpus;
-	rtd->num_codecs	= dai_link->num_codecs;
 	rtd->card	= card;
 	rtd->dai_link	= dai_link;
 	rtd->num	= card->num_rtd++;
@@ -1250,14 +1248,13 @@ int snd_soc_runtime_set_dai_fmt(struct snd_soc_pcm_runtime *rtd,
 
 	/*
 	 * Flip the polarity for the "CPU" end of a CODEC<->CODEC link
-	 * the component which has non_legacy_dai_naming is Codec
 	 */
 	inv_dai_fmt = snd_soc_daifmt_clock_provider_fliped(dai_fmt);
 
 	for_each_rtd_cpu_dais(rtd, i, cpu_dai) {
 		unsigned int fmt = dai_fmt;
 
-		if (cpu_dai->component->driver->non_legacy_dai_naming)
+		if (snd_soc_component_is_codec(cpu_dai->component))
 			fmt = inv_dai_fmt;
 
 		ret = snd_soc_dai_set_fmt(cpu_dai, fmt);
@@ -2492,6 +2489,7 @@ struct snd_soc_dai *snd_soc_register_dai(struct snd_soc_component *component,
 	dev_dbg(dev, "ASoC: Registered DAI '%s'\n", dai->name);
 	return dai;
 }
+EXPORT_SYMBOL_GPL(snd_soc_register_dai);
 
 /**
  * snd_soc_unregister_dais - Unregister DAIs from the ASoC core
@@ -2523,7 +2521,7 @@ static int snd_soc_register_dais(struct snd_soc_component *component,
 
 	for (i = 0; i < count; i++) {
 		dai = snd_soc_register_dai(component, dai_drv + i, count == 1 &&
-				  !component->driver->non_legacy_dai_naming);
+					   !snd_soc_component_is_codec(component));
 		if (dai == NULL) {
 			ret = -ENOMEM;
 			goto err;

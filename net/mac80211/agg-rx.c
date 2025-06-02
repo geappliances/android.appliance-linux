@@ -260,7 +260,7 @@ static void ieee80211_send_addba_resp(struct sta_info *sta, u8 *da, u16 tid,
 	mgmt->u.action.u.addba_resp.timeout = cpu_to_le16(timeout);
 	mgmt->u.action.u.addba_resp.status = cpu_to_le16(status);
 
-	if (sta->sta.deflink.he_cap.has_he && addbaext)
+	if (sta->sta.he_cap.has_he && addbaext)
 		ieee80211_add_addbaext(sdata, skb, addbaext);
 
 	ieee80211_tx_skb(sdata, skb);
@@ -293,7 +293,7 @@ void ___ieee80211_start_rx_ba_session(struct sta_info *sta,
 		goto end;
 	}
 
-	if (!sta->sta.deflink.ht_cap.ht_supported &&
+	if (!sta->sta.ht_cap.ht_supported &&
 	    sta->sdata->vif.bss_conf.chandef.chan->band != NL80211_BAND_6GHZ) {
 		ht_dbg(sta->sdata,
 		       "STA %pM erroneously requests BA session on tid %d w/o QoS\n",
@@ -309,7 +309,7 @@ void ___ieee80211_start_rx_ba_session(struct sta_info *sta,
 		goto end;
 	}
 
-	if (sta->sta.deflink.eht_cap.has_eht)
+	if (sta->sta.he_cap.has_he)
 		max_buf_size = IEEE80211_MAX_AMPDU_BUF_HE;
 	else
 		max_buf_size = IEEE80211_MAX_AMPDU_BUF_HT;
@@ -319,7 +319,7 @@ void ___ieee80211_start_rx_ba_session(struct sta_info *sta,
 	 * and if buffer size does not exceeds max value */
 	/* XXX: check own ht delayed BA capability?? */
 	if (((ba_policy != 1) &&
-	     (!(sta->sta.deflink.ht_cap.cap & IEEE80211_HT_CAP_DELAY_BA))) ||
+	     (!(sta->sta.ht_cap.cap & IEEE80211_HT_CAP_DELAY_BA))) ||
 	    (buf_size > max_buf_size)) {
 		status = WLAN_STATUS_INVALID_QOS_PARAM;
 		ht_dbg_ratelimited(sta->sdata,
@@ -478,7 +478,7 @@ void ieee80211_process_addba_request(struct ieee80211_local *local,
 				     size_t len)
 {
 	u16 capab, tid, timeout, ba_policy, buf_size, start_seq_num;
-	struct ieee802_11_elems *elems = NULL;
+	struct ieee802_11_elems elems = { };
 	u8 dialog_token;
 	int ies_len;
 
@@ -496,18 +496,16 @@ void ieee80211_process_addba_request(struct ieee80211_local *local,
 	ies_len = len - offsetof(struct ieee80211_mgmt,
 				 u.action.u.addba_req.variable);
 	if (ies_len) {
-		elems = ieee802_11_parse_elems(mgmt->u.action.u.addba_req.variable,
-					       ies_len, true, mgmt->bssid, NULL);
-		if (!elems || elems->parse_error)
-			goto free;
+		ieee802_11_parse_elems(mgmt->u.action.u.addba_req.variable,
+                                ies_len, true, &elems, mgmt->bssid, NULL);
+		if (elems.parse_error)
+			return;
 	}
 
 	__ieee80211_start_rx_ba_session(sta, dialog_token, timeout,
 					start_seq_num, ba_policy, tid,
 					buf_size, true, false,
-					elems ? elems->addba_ext_ie : NULL);
-free:
-	kfree(elems);
+					elems.addba_ext_ie);
 }
 
 void ieee80211_manage_rx_ba_offl(struct ieee80211_vif *vif,

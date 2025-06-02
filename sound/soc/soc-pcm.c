@@ -49,11 +49,11 @@ static inline void snd_soc_dpcm_stream_unlock_irq(struct snd_soc_pcm_runtime *rt
 
 static inline const char *soc_cpu_dai_name(struct snd_soc_pcm_runtime *rtd)
 {
-	return (rtd)->num_cpus == 1 ? asoc_rtd_to_cpu(rtd, 0)->name : "multicpu";
+	return (rtd)->dai_link->num_cpus == 1 ? asoc_rtd_to_cpu(rtd, 0)->name : "multicpu";
 }
 static inline const char *soc_codec_dai_name(struct snd_soc_pcm_runtime *rtd)
 {
-	return (rtd)->num_codecs == 1 ? asoc_rtd_to_codec(rtd, 0)->name : "multicodec";
+	return (rtd)->dai_link->num_codecs == 1 ? asoc_rtd_to_codec(rtd, 0)->name : "multicodec";
 }
 
 #ifdef CONFIG_DEBUG_FS
@@ -150,7 +150,7 @@ static ssize_t dpcm_state_read_file(struct file *file, char __user *user_buf,
 	int stream;
 	char *buf;
 
-	if (fe->num_cpus > 1) {
+	if (fe->dai_link->num_cpus > 1) {
 		dev_err(fe->dev,
 			"%s doesn't support Multi CPU yet\n", __func__);
 		return -EINVAL;
@@ -602,7 +602,7 @@ int snd_soc_runtime_calc_hw(struct snd_soc_pcm_runtime *rtd,
 	 * connected to CPU DAI(s), use CPU DAI's directly and let
 	 * channel allocation be fixed up later
 	 */
-	if (rtd->num_codecs > 1) {
+	if (rtd->dai_link->num_codecs > 1) {
 		hw->channels_min = cpu_chan_min;
 		hw->channels_max = cpu_chan_max;
 	}
@@ -922,12 +922,10 @@ static int soc_pcm_hw_clean(struct snd_soc_pcm_runtime *rtd,
 
 	/* clear the corresponding DAIs parameters when going to be inactive */
 	for_each_rtd_dais(rtd, i, dai) {
-		int active = snd_soc_dai_stream_active(dai, substream->stream);
-
 		if (snd_soc_dai_active(dai) == 1)
 			soc_pcm_set_dai_params(dai, NULL);
 
-		if (active == 1)
+		if (snd_soc_dai_stream_active(dai, substream->stream) == 1)
 			snd_soc_dai_digital_mute(dai, 1, substream->stream);
 	}
 
@@ -941,12 +939,9 @@ static int soc_pcm_hw_clean(struct snd_soc_pcm_runtime *rtd,
 	snd_soc_pcm_component_hw_free(substream, rollback);
 
 	/* now free hw params for the DAIs  */
-	for_each_rtd_dais(rtd, i, dai) {
-		if (!snd_soc_dai_stream_valid(dai, substream->stream))
-			continue;
-
-		snd_soc_dai_hw_free(dai, substream, rollback);
-	}
+	for_each_rtd_dais(rtd, i, dai)
+		if (snd_soc_dai_stream_valid(dai, substream->stream))
+			snd_soc_dai_hw_free(dai, substream, rollback);
 
 	return 0;
 }
@@ -1155,15 +1150,11 @@ start_err:
  */
 static snd_pcm_uframes_t soc_pcm_pointer(struct snd_pcm_substream *substream)
 {
-	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
-	struct snd_soc_dai *cpu_dai;
-	struct snd_soc_dai *codec_dai;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	snd_pcm_uframes_t offset = 0;
 	snd_pcm_sframes_t delay = 0;
 	snd_pcm_sframes_t codec_delay = 0;
 	snd_pcm_sframes_t cpu_delay = 0;
-	int i;
 
 	/* clearing the previous total delay */
 	runtime->delay = 0;
@@ -1173,19 +1164,11 @@ static snd_pcm_uframes_t soc_pcm_pointer(struct snd_pcm_substream *substream)
 	/* base delay if assigned in pointer callback */
 	delay = runtime->delay;
 
-	for_each_rtd_cpu_dais(rtd, i, cpu_dai) {
-		cpu_delay = max(cpu_delay,
-				snd_soc_dai_delay(cpu_dai, substream));
-	}
-	delay += cpu_delay;
+	/* should be called *after* snd_soc_pcm_component_pointer() */
+	snd_soc_pcm_dai_delay(substream, &cpu_delay, &codec_delay);
+	snd_soc_pcm_component_delay(substream, &cpu_delay, &codec_delay);
 
-	for_each_rtd_codec_dais(rtd, i, codec_dai) {
-		codec_delay = max(codec_delay,
-				  snd_soc_dai_delay(codec_dai, substream));
-	}
-	delay += codec_delay;
-
-	runtime->delay = delay;
+	runtime->delay = delay + cpu_delay + codec_delay;
 
 	return offset;
 }
@@ -1344,7 +1327,7 @@ static struct snd_soc_pcm_runtime *dpcm_get_be(struct snd_soc_card *card,
 	return NULL;
 }
 
-static int widget_in_list(struct snd_soc_dapm_widget_list *list,
+int widget_in_list(struct snd_soc_dapm_widget_list *list,
 		struct snd_soc_dapm_widget *widget)
 {
 	struct snd_soc_dapm_widget *w;
@@ -1356,9 +1339,9 @@ static int widget_in_list(struct snd_soc_dapm_widget_list *list,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(widget_in_list);
 
-static bool dpcm_end_walk_at_be(struct snd_soc_dapm_widget *widget,
-		enum snd_soc_dapm_direction dir)
+bool dpcm_end_walk_at_be(struct snd_soc_dapm_widget *widget, enum snd_soc_dapm_direction dir)
 {
 	struct snd_soc_card *card = widget->dapm->card;
 	struct snd_soc_pcm_runtime *rtd;
@@ -1376,6 +1359,7 @@ static bool dpcm_end_walk_at_be(struct snd_soc_dapm_widget *widget,
 
 	return false;
 }
+EXPORT_SYMBOL_GPL(dpcm_end_walk_at_be);
 
 int dpcm_path_get(struct snd_soc_pcm_runtime *fe,
 	int stream, struct snd_soc_dapm_widget_list **list)
@@ -1383,7 +1367,7 @@ int dpcm_path_get(struct snd_soc_pcm_runtime *fe,
 	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(fe, 0);
 	int paths;
 
-	if (fe->num_cpus > 1) {
+	if (fe->dai_link->num_cpus > 1) {
 		dev_err(fe->dev,
 			"%s doesn't support Multi CPU yet\n", __func__);
 		return -EINVAL;
@@ -1488,6 +1472,16 @@ static int dpcm_add_paths(struct snd_soc_pcm_runtime *fe, int stream,
 
 		/* don't connect if FE is not running */
 		if (!fe->dpcm[stream].runtime && !fe->fe_compr)
+			continue;
+
+		/*
+		 * Filter for systems with 'component_chaining' enabled.
+		 * This helps to avoid unnecessary re-configuration of an
+		 * already active BE on such systems.
+		 */
+		if (fe->card->component_chaining &&
+		    (be->dpcm[stream].state != SND_SOC_DPCM_STATE_NEW) &&
+		    (be->dpcm[stream].state != SND_SOC_DPCM_STATE_CLOSE))
 			continue;
 
 		/* newly connected FE and BE */
@@ -1752,7 +1746,7 @@ static void dpcm_runtime_setup_be_chan(struct snd_pcm_substream *substream)
 		 * chan min/max cannot be enforced if there are multiple CODEC
 		 * DAIs connected to a single CPU DAI, use CPU DAI's directly
 		 */
-		if (be->num_codecs == 1) {
+		if (be->dai_link->num_codecs == 1) {
 			struct snd_soc_pcm_stream *codec_stream = snd_soc_dai_get_pcm_stream(
 				asoc_rtd_to_codec(be, 0), stream);
 
@@ -2588,7 +2582,7 @@ static int soc_dpcm_fe_runtime_update(struct snd_soc_pcm_runtime *fe, int new)
 	if (!fe->dai_link->dynamic)
 		return 0;
 
-	if (fe->num_cpus > 1) {
+	if (fe->dai_link->num_cpus > 1) {
 		dev_err(fe->dev,
 			"%s doesn't support Multi CPU yet\n", __func__);
 		return -EINVAL;
@@ -2732,7 +2726,7 @@ static int soc_get_playback_capture(struct snd_soc_pcm_runtime *rtd,
 	struct snd_soc_dai *cpu_dai;
 	int i;
 
-	if (rtd->dai_link->dynamic && rtd->num_cpus > 1) {
+	if (rtd->dai_link->dynamic && rtd->dai_link->num_cpus > 1) {
 		dev_err(rtd->dev,
 			"DPCM doesn't support Multi CPU for Front-Ends yet\n");
 		return -EINVAL;
@@ -2784,9 +2778,9 @@ static int soc_get_playback_capture(struct snd_soc_pcm_runtime *rtd,
 			SNDRV_PCM_STREAM_CAPTURE : SNDRV_PCM_STREAM_PLAYBACK;
 
 		for_each_rtd_codec_dais(rtd, i, codec_dai) {
-			if (rtd->num_cpus == 1) {
+			if (rtd->dai_link->num_cpus == 1) {
 				cpu_dai = asoc_rtd_to_cpu(rtd, 0);
-			} else if (rtd->num_cpus == rtd->num_codecs) {
+			} else if (rtd->dai_link->num_cpus == rtd->dai_link->num_codecs) {
 				cpu_dai = asoc_rtd_to_cpu(rtd, i);
 			} else {
 				dev_err(rtd->card->dev,

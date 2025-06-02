@@ -8,10 +8,12 @@
 
 static int mtk_hdmi_phy_power_on(struct phy *phy);
 static int mtk_hdmi_phy_power_off(struct phy *phy);
+static int mtk_hdmi_phy_configure(struct phy *phy, union phy_configure_opts *opts);
 
 static const struct phy_ops mtk_hdmi_phy_dev_ops = {
 	.power_on = mtk_hdmi_phy_power_on,
 	.power_off = mtk_hdmi_phy_power_off,
+	.configure = mtk_hdmi_phy_configure,
 	.owner = THIS_MODULE,
 };
 
@@ -72,6 +74,16 @@ static int mtk_hdmi_phy_power_off(struct phy *phy)
 
 	hdmi_phy->conf->hdmi_phy_disable_tmds(hdmi_phy);
 	clk_disable_unprepare(hdmi_phy->pll);
+
+	return 0;
+}
+
+static int mtk_hdmi_phy_configure(struct phy *phy, union phy_configure_opts *opts)
+{
+	struct mtk_hdmi_phy *hdmi_phy = phy_get_drvdata(phy);
+
+	if (hdmi_phy->conf->hdmi_phy_configure)
+		return hdmi_phy->conf->hdmi_phy_configure(phy, opts);
 
 	return 0;
 }
@@ -173,12 +185,16 @@ static int mtk_hdmi_phy_probe(struct platform_device *pdev)
 		return PTR_ERR(phy);
 	}
 	phy_set_drvdata(phy, hdmi_phy);
+	platform_set_drvdata(pdev, hdmi_phy);
 
 	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
 	if (IS_ERR(phy_provider)) {
 		dev_err(dev, "Failed to register HDMI PHY\n");
 		return PTR_ERR(phy_provider);
 	}
+
+	if (hdmi_phy->conf->power_control)
+		hdmi_phy->conf->power_control(hdmi_phy, true);
 
 	if (hdmi_phy->conf->pll_default_off)
 		hdmi_phy->conf->hdmi_phy_disable_tmds(hdmi_phy);
@@ -187,12 +203,42 @@ static int mtk_hdmi_phy_probe(struct platform_device *pdev)
 				   hdmi_phy->pll);
 }
 
+static int mtk_hdmi_phy_suspend(struct device *dev)
+{
+	struct mtk_hdmi_phy *hdmi_phy = dev_get_drvdata(dev);
+
+	if (hdmi_phy->conf->power_control)
+		hdmi_phy->conf->power_control(hdmi_phy, false);
+
+	dev_dbg(dev, "%s hdmi phy suspend success!\n", __func__);
+	return 0;
+}
+
+static int mtk_hdmi_phy_resume(struct device *dev)
+{
+	struct mtk_hdmi_phy *hdmi_phy = dev_get_drvdata(dev);
+
+	if (hdmi_phy->conf->power_control)
+		hdmi_phy->conf->power_control(hdmi_phy, true);
+
+	dev_dbg(dev, "%s hdmi phy resume success!\n", __func__);
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(mtk_hdmi_phy_pm_ops, mtk_hdmi_phy_suspend, mtk_hdmi_phy_resume);
+
 static const struct of_device_id mtk_hdmi_phy_match[] = {
 	{ .compatible = "mediatek,mt2701-hdmi-phy",
 	  .data = &mtk_hdmi_phy_2701_conf,
 	},
 	{ .compatible = "mediatek,mt8173-hdmi-phy",
 	  .data = &mtk_hdmi_phy_8173_conf,
+	},
+	{ .compatible = "mediatek,mt8195-hdmi-phy",
+	  .data = &mtk_hdmi_phy_8195_conf,
+	},
+	{ .compatible = "mediatek,mt8188-hdmi-phy",
+	  .data = &mtk_hdmi_phy_8195_conf,
 	},
 	{},
 };
@@ -203,6 +249,7 @@ static struct platform_driver mtk_hdmi_phy_driver = {
 	.driver = {
 		.name = "mediatek-hdmi-phy",
 		.of_match_table = mtk_hdmi_phy_match,
+		.pm = &mtk_hdmi_phy_pm_ops,
 	},
 };
 module_platform_driver(mtk_hdmi_phy_driver);

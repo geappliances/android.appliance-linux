@@ -8,6 +8,11 @@
 #define MTK_SCPD_SRAM_ISO		BIT(2)
 #define MTK_SCPD_KEEP_DEFAULT_OFF	BIT(3)
 #define MTK_SCPD_DOMAIN_SUPPLY		BIT(4)
+/* can't set MTK_SCPD_KEEP_DEFAULT_OFF at the same time */
+#define MTK_SCPD_ALWAYS_ON		BIT(5)
+#define MTK_SCPD_STRICT_BUSP		BIT(6)
+#define MTK_SCPD_EXT_BUCK_ISO		BIT(7)
+#define MTK_SCPD_CLAMP_PROTECTION	BIT(8)
 #define MTK_SCPD_CAPS(_scpd, _x)	((_scpd)->data->caps & (_x))
 
 #define SPM_VDE_PWR_CON			0x0210
@@ -37,25 +42,31 @@
 #define PWR_STATUS_AUDIO		BIT(24)
 #define PWR_STATUS_USB			BIT(25)
 
-#define SPM_MAX_BUS_PROT_DATA		5
+#define SPM_MAX_BUS_PROT_DATA		6
+#define SPM_MAX_SMI_RESET_DATA		6
 
-#define _BUS_PROT(_mask, _set, _clr, _sta, _update, _ignore) {	\
-		.bus_prot_mask = (_mask),			\
-		.bus_prot_set = _set,				\
-		.bus_prot_clr = _clr,				\
-		.bus_prot_sta = _sta,				\
-		.bus_prot_reg_update = _update,			\
-		.ignore_clr_ack = _ignore,			\
+#define _BUS_PROT(_mask, _sta_mask, _set, _clr, _sta, _update, _ignore, _wayen) {	\
+		.bus_prot_mask = (_mask),				\
+		.bus_prot_set = _set,					\
+		.bus_prot_clr = _clr,					\
+		.bus_prot_sta = _sta,					\
+		.bus_prot_sta_mask = _sta_mask,				\
+		.bus_prot_reg_update = _update,				\
+		.ignore_clr_ack = _ignore,				\
+		.wayen = _wayen,					\
 	}
 
 #define BUS_PROT_WR(_mask, _set, _clr, _sta)			\
-		_BUS_PROT(_mask, _set, _clr, _sta, false, false)
+		_BUS_PROT(_mask, _mask, _set, _clr, _sta, false, false, false)
 
 #define BUS_PROT_WR_IGN(_mask, _set, _clr, _sta)		\
-		_BUS_PROT(_mask, _set, _clr, _sta, false, true)
+		_BUS_PROT(_mask, _mask, _set, _clr, _sta, false, true, false)
 
 #define BUS_PROT_UPDATE(_mask, _set, _clr, _sta)		\
-		_BUS_PROT(_mask, _set, _clr, _sta, true, false)
+		_BUS_PROT(_mask, _mask, _set, _clr, _sta, true, false, false)
+
+#define BUS_PROT_WAYEN(_en_mask, _sta_mask, _set, _sta)		\
+		_BUS_PROT(_en_mask, _sta_mask, _set, _set, _sta, true, false, true)
 
 #define BUS_PROT_UPDATE_TOPAXI(_mask)				\
 		BUS_PROT_UPDATE(_mask,				\
@@ -63,16 +74,26 @@
 				INFRA_TOPAXI_PROTECTEN,		\
 				INFRA_TOPAXI_PROTECTSTA1)
 
+#define SMI_RESET_WR(_mask, _addr) {		\
+		.smi_reset_mask = (_mask),	\
+		.smi_reset_addr = _addr,	\
+	}
+
+struct smi_reset_data {
+	u32 smi_reset_mask;
+	u32 smi_reset_addr;
+};
+
 struct scpsys_bus_prot_data {
 	u32 bus_prot_mask;
 	u32 bus_prot_set;
 	u32 bus_prot_clr;
 	u32 bus_prot_sta;
+	u32 bus_prot_sta_mask;
 	bool bus_prot_reg_update;
 	bool ignore_clr_ack;
+	bool wayen;
 };
-
-#define MAX_SUBSYS_CLKS 10
 
 /**
  * struct scpsys_domain_data - scp domain data for power on/off flow
@@ -81,6 +102,8 @@ struct scpsys_bus_prot_data {
  * @ctl_offs: The offset for main power control register.
  * @sram_pdn_bits: The mask for sram power control bits.
  * @sram_pdn_ack_bits: The mask for sram power control acked bits.
+ * @ext_buck_iso_offs: The offset for external buck isolation
+ * @ext_buck_iso_mask: The mask for external buck isolation
  * @caps: The flag for active wake-up action.
  * @bp_infracfg: bus protection for infracfg subsystem
  * @bp_smi: bus protection for smi subsystem
@@ -91,16 +114,19 @@ struct scpsys_domain_data {
 	int ctl_offs;
 	u32 sram_pdn_bits;
 	u32 sram_pdn_ack_bits;
-	u8 caps;
+	int ext_buck_iso_offs;
+	u32 ext_buck_iso_mask;
+	u16 caps;
 	const struct scpsys_bus_prot_data bp_infracfg[SPM_MAX_BUS_PROT_DATA];
 	const struct scpsys_bus_prot_data bp_smi[SPM_MAX_BUS_PROT_DATA];
+	const struct smi_reset_data reset_smi[SPM_MAX_SMI_RESET_DATA];
+	int pwr_sta_offs;
+	int pwr_sta2nd_offs;
 };
 
 struct scpsys_soc_data {
 	const struct scpsys_domain_data *domains_data;
 	int num_domains;
-	int pwr_sta_offs;
-	int pwr_sta2nd_offs;
 };
 
 #endif /* __SOC_MEDIATEK_MTK_PM_DOMAINS_H */

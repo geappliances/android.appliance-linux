@@ -1,0 +1,43 @@
+config MTK_THERMAL
+	tristate "Mediatek thermal drivers"
+	depends on THERMAL_OF
+	help
+	  This is the option for Mediatek thermal software
+	  solutions. Please enable corresponding options to
+	  get temperature information from thermal sensors or
+	  turn on throttle mechaisms for thermal mitigation.
+
+if MTK_THERMAL
+
+config MTK_SOC_THERMAL
+	tristate "Temperature sensor driver for mediatek SoCs"
+	depends on HAS_IOMEM
+	depends on NVMEM
+	depends on RESET_CONTROLLER
+	help
+	  Enable this option if you want to get SoC temperature
+	  information for Mediatek platforms. This driver
+	  configures thermal controllers to collect temperature
+	  via AUXADC interface.
+
+config MTK_SOC_THERMAL_LVTS
+        tristate "LVTS (Low voltage thermal sensor) driver for Mediatek SoCs"
+        depends on HAS_IOMEM
+        depends on NVMEM
+        depends on RESET_TI_SYSCON
+        help
+          Enable this option if you want to get SoC temperature
+          information for Mediatek platforms. This driver
+          configures LVTS thermal controllers to collect temperatures
+          via Analog Serial Interface(ASIF).
+
+config MTK_PMIC_THERMAL
+	tristate "PMIC thermal sensor driver for MediaTek SoCs"
+	depends on MT635X_EFUSE
+	depends on MEDIATEK_MT635X_AUXADC
+	help
+	  Enable this option if you want to get PMIC temperature
+	  for MediaTek platforms.
+	  This driver reads the voltage value from PMIC AUXADC channels,
+	  and converts raw value to PMIC temperature via PMIC efuse data.
+endif

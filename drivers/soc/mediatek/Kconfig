@@ -69,8 +69,27 @@ config MTK_MMSYS
 	bool "MediaTek MMSYS Support"
 	default ARCH_MEDIATEK
 	depends on HAS_IOMEM
+	select MTK_CMDQ
 	help
 	  Say yes here to add support for the MediaTek Multimedia
 	  Subsystem (MMSYS).
+
+config MTK_SVS
+	tristate "MediaTek Smart Voltage Scaling(SVS)"
+	depends on MTK_EFUSE && NVMEM
+	help
+	  The Smart Voltage Scaling(SVS) engine is a piece of hardware
+	  which has several controllers(banks) for calculating suitable
+	  voltage to different power domains(CPU/GPU/CCI) according to
+	  chip process corner, temperatures and other factors. Then DVFS
+	  driver could apply SVS bank voltage to PMIC/Buck.
+
+config MTK_HDMI_RX
+	tristate "MediaTek HDMI RX"
+	help
+	  MediaTek HDMI-Rx driver.
+	  Say 'm' here to add MediaTek HDMI-Rx driver,
+	  it supports HDMI 2.0.
+	  If unsure, say 'N'.
 
 endmenu

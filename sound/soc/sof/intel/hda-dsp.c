@@ -434,7 +434,7 @@ static int hda_dsp_set_D0_state(struct snd_sof_dev *sdev,
 		 * when the DSP enters D0I3 while the system is in S0
 		 * for debug purpose.
 		 */
-		if (!sdev->dtrace_is_supported ||
+		if (!sdev->fw_trace_is_supported ||
 		    !hda_enable_trace_D0I3_S0 ||
 		    sdev->system_suspend_target != SOF_SUSPEND_NONE)
 			flags = HDA_PM_NO_DMA_TRACE;
@@ -499,14 +499,8 @@ static void hda_dsp_state_log(struct snd_sof_dev *sdev)
 	case SOF_DSP_PM_D2:
 		dev_dbg(sdev->dev, "Current DSP power state: D2\n");
 		break;
-	case SOF_DSP_PM_D3_HOT:
-		dev_dbg(sdev->dev, "Current DSP power state: D3_HOT\n");
-		break;
 	case SOF_DSP_PM_D3:
 		dev_dbg(sdev->dev, "Current DSP power state: D3\n");
-		break;
-	case SOF_DSP_PM_D3_COLD:
-		dev_dbg(sdev->dev, "Current DSP power state: D3_COLD\n");
 		break;
 	default:
 		dev_dbg(sdev->dev, "Unknown DSP power state: %d\n",
