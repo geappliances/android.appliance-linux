@@ -585,6 +585,8 @@ _MTK_MODULE_OUTS = [
     "drivers/bluetooth/btmtk.ko",
     "drivers/bluetooth/btmtksdio.ko",
     "drivers/bluetooth/btmtkuart.ko",
+    "drivers/gpu/arm/midgard/mali_kbase.ko",
+    "drivers/gpu/arm/midgard/mali_mt8183_corex.ko",
     "drivers/gpu/drm/bridge/lontium-lt9611.ko",
     "drivers/gpu/drm/dp/drm_dp_helper.ko",
     "drivers/gpu/drm/drm_cma_helper.ko",
