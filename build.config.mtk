@@ -8,5 +8,6 @@ DTC_FLAGS="${DTC_FLAGS} -@"
 
 FILES="${FILES}
 arch/arm64/boot/dts/mediatek/genio-700-evk.dtb
+arch/arm64/boot/dts/mediatek/mt8188-android-dsi-kd070fhfid078.dtb
 arch/arm64/boot/dts/mediatek/mt8365-evk.dtb
 "

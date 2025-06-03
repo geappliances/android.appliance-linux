@@ -1,0 +1,57 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2025 BayLibre, SAS.
+ * Author: Julien Masson <jmasson@baylibre.com>
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/mediatek,mt8188-pinfunc.h>
+#include "dt-bindings/interrupt-controller/irq.h"
+
+&{/} {
+	backlight_lcd1: backlight-lcd1 {
+		compatible = "pwm-backlight";
+		pwms = <&disp_pwm1 0 500000>;
+		brightness-levels = <0 1023>;
+		num-interpolated-steps = <1023>;
+		default-brightness-level = <576>;
+	};
+};
+
+&reserved_memory {
+	#address-cells = <2>;
+	#size-cells = <2>;
+	ramoops@0x4FE00000 {
+		compatible = "ramoops";
+		reg = <0x0 0x4FF00000 0x0 0x00100000>;
+		record-size = <0x00008000>;
+		console-size = <0x00008000>;
+		ftrace-size = <0x00000000>;
+		pmsg-size = <0x00008000>;
+	};
+};
+
+&dpi1 {
+	status = "disabled";
+};
+
+&hdmi0 {
+	status = "disabled";
+};
+
+&pio {
+	disp_pwm1_pin_default: disp-pwm1-pin-default {
+		pins1 {
+			pinmux = <PINMUX_GPIO30__FUNC_O_DISP_PWM1>;
+		};
+	};
+};
+
+&disp_pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&disp_pwm1_pin_default>;
+	status = "okay";
+};
