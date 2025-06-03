@@ -621,11 +621,13 @@ kernel_build(
     make_goals = [
         "Image",
         "modules",
+        "mediatek/genio-700-evk.dtb",
         "mediatek/mt8365-evk.dtb",
     ],
     outs = [
         "Image",
         "System.map",
+        "arch/arm64/boot/dts/mediatek/genio-700-evk.dtb",
         "arch/arm64/boot/dts/mediatek/mt8365-evk.dtb",
         "modules.builtin",
         "modules.builtin.modinfo",
