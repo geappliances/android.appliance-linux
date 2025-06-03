@@ -557,7 +557,7 @@
 					#size-cells = <0>;
 					#power-domain-cells = <1>;
 
-					mfg1@MT8188_POWER_DOMAIN_MFG1 {
+					mfg1: mfg1@MT8188_POWER_DOMAIN_MFG1 {
 						reg = <MT8188_POWER_DOMAIN_MFG1>;
 						clocks = <&topckgen CLK_TOP_MFG_CK_FAST_REF>,
 							 <&topckgen CLK_TOP_MFG_CORE_TMP>;

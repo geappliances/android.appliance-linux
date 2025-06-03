@@ -1381,6 +1381,10 @@
 	domain-supply = <&mt6359_vproc2_buck_reg>;
 };
 
+&mfg1 {
+	domain-supply = <&mt6359_vsram_others_ldo_reg>;
+};
+
 &sound {
 	compatible = "mediatek,mt8390-evk";
 	model = "mt8390-evk";
@@ -1455,4 +1459,31 @@
 
 &img_vcore {
 	domain-supply = <&mt6359_vproc1_buck_reg>;
+};
+
+&mt6359_vproc2_buck_reg {
+	/* The name "vgpu" is required by mtk-regulator-coupler */
+	regulator-name = "vgpu";
+	regulator-min-microvolt = <550000>;
+	regulator-max-microvolt = <800000>;
+	regulator-coupled-with = <&mt6359_vsram_others_ldo_reg>;
+	regulator-coupled-max-spread = <225000>;
+	regulator-always-on;
+};
+
+&mt6359_vsram_others_ldo_reg {
+	/* The name "vsram_gpu" is required by mtk-regulator-coupler */
+	regulator-name = "vsram_gpu";
+	regulator-min-microvolt = <750000>;
+	regulator-max-microvolt = <800000>;
+	regulator-coupled-with = <&mt6359_vproc2_buck_reg>;
+	regulator-coupled-max-spread = <225000>;
+	regulator-always-on;
+};
+
+&gpu {
+	supply-names = "mali","mali_sram";
+	mali-supply = <&mt6359_vproc2_buck_reg>;
+	mali_sram-supply = <&mt6359_vsram_others_ldo_reg>;
+	status = "okay";
 };
