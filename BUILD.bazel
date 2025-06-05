@@ -582,7 +582,6 @@ copy_to_dist_dir(
 
 _MTK_MODULE_OUTS = [
     # keep sorted
-    "drivers/bluetooth/btmtk.ko",
     "drivers/bluetooth/btmtksdio.ko",
     "drivers/bluetooth/btmtkuart.ko",
     "drivers/gpu/arm/midgard/mali_kbase.ko",
