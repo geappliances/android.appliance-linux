@@ -90,7 +90,7 @@
 		pinctrl-5 = <&aud_pins_dmic>;
 		status = "okay";
 
-		dai-link-hdmi {
+		dai_link_hdmi: dai-link-hdmi {
 			sound-dai = <&afe>;
 			dai-link-name = "2ND I2S BE";
 
@@ -428,7 +428,7 @@
 	#size-cells = <0>;
 	poweron-in-hs-mode = <0>;
 
-	panel@0 {
+	panel: panel@0 {
 		compatible = "startek,kd070fhfid015";
 		status = "okay";
 		reg = <0>;

@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2025 BayLibre, SAS.
+ * Author: Esteban Blanc <eblanc@baylibre.com>
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "mt8365-evk-android.dtsi"
+
+&dsi0 {
+	status = "okay";
+};
+
+&dpi0 {
+	status = "disabled";
+};
+
+&it66121hdmitx {
+	status = "disabled";
+};
+
+&dai_link_hdmi {
+	status = "disabled";
+};
