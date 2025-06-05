@@ -4841,6 +4841,7 @@ int power_control_init(struct kbase_device *kbdev)
 	for (i = 0; i < BASE_MAX_NR_CLOCKS_REGULATORS; i++) {
 		if (NULL == regulator_names[i]) {
 			kbdev->regulators[i] = NULL;
+			num_supply = i;
 			break;
 		}
 		kbdev->regulators[i] = regulator_get_optional(kbdev->dev, regulator_names[i]);
@@ -4901,7 +4902,7 @@ int power_control_init(struct kbase_device *kbdev)
 #elif (KERNEL_VERSION(4, 10, 0) <= LINUX_VERSION_CODE)
 	if (kbdev->nr_regulators > 0) {
 		kbdev->opp_table = dev_pm_opp_set_regulators(kbdev->dev, regulator_names,
-							     BASE_MAX_NR_CLOCKS_REGULATORS);
+							     num_supply);
 
 		if (IS_ERR(kbdev->opp_table)) {
 			err = PTR_ERR(kbdev->opp_table);
