@@ -608,6 +608,8 @@ _MTK_MODULE_OUTS = [
     "drivers/net/wireless/mediatek/mt76/mt7615/mt7615-common.ko",
     "drivers/net/wireless/mediatek/mt76/mt7615/mt7663-usb-sdio-common.ko",
     "drivers/net/wireless/mediatek/mt76/mt7615/mt7663s.ko",
+    "drivers/net/wireless/mediatek/mt76/mt7921/mt7921-common.ko",
+    "drivers/net/wireless/mediatek/mt76/mt7921/mt7921e.ko",
     "drivers/phy/mediatek/phy-mtk-hdmi-drv.ko",
     "drivers/phy/mediatek/phy-mtk-mipi-dsi-drv.ko",
     "drivers/power/supply/bq27xxx_battery.ko",
