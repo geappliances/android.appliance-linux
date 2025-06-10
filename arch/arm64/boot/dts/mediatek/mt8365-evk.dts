@@ -461,7 +461,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&dpi_pin_func>;
 	pinctrl-1 = <&dpi_pin_gpio>;
-	status = "okay";
+	status = "disabled";
 
 	port {
 		dpi_out: endpoint {
@@ -499,7 +499,7 @@
 	phy-handle = <&eth_phy>;
 	phy-mode = "rmii";
 	mac-address = [00 00 00 00 00 00];
-	status = "disabled";
+	status = "enable";
 
 	mdio {
 		#address-cells = <1>;
