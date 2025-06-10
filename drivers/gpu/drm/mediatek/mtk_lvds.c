@@ -178,6 +178,13 @@ err_lvdstx_pxl:
 	return ret;
 }
 
+static void mtk_lvds_disable_clks(struct mtk_lvds *lvds)
+{
+	clk_disable_unprepare(lvds->lvdstx_dig_clk);
+	clk_disable_unprepare(lvds->lvdstx_pxl_clk);
+	clk_disable_unprepare(lvds->lvdstx_cts_clk);
+}
+
 static const struct mtk_ddp_comp_funcs mtk_lvds_funcs = {
 	.config = mtk_lvds_config,
 	.start = mtk_lvds_start,
@@ -294,9 +301,7 @@ static int mtk_lvds_probe(struct platform_device *pdev)
 	return 0;
 
 err_comp:
-	clk_disable_unprepare(lvds->lvdstx_dig_clk);
-	clk_disable_unprepare(lvds->lvdstx_pxl_clk);
-	clk_disable_unprepare(lvds->lvdstx_cts_clk);
+	mtk_lvds_disable_clks(lvds);
 
 	return ret;
 }
@@ -307,12 +312,38 @@ static int mtk_lvds_remove(struct platform_device *pdev)
 
 	component_del(&pdev->dev, &mtk_lvds_component_ops);
 
-	clk_disable_unprepare(lvds->lvdstx_dig_clk);
-	clk_disable_unprepare(lvds->lvdstx_pxl_clk);
-	clk_disable_unprepare(lvds->lvdstx_cts_clk);
+	mtk_lvds_disable_clks(lvds);
 
 	return 0;
 }
+
+#ifdef CONFIG_PM_SLEEP
+static int mtk_lvds_suspend(struct device *dev)
+{
+	struct mtk_lvds *lvds = dev_get_drvdata(dev);
+	mtk_lvds_disable_clks(lvds);
+
+	return 0;
+}
+
+static int mtk_lvds_resume(struct device *dev)
+{
+	struct mtk_lvds *lvds = dev_get_drvdata(dev);
+	int ret = 0;
+	ret = mtk_lvds_enable_clks(lvds);
+	if (ret) {
+		dev_err(dev, "lvds resume failed!\n");
+		return ret;
+	}
+
+	mtk_lvds_soft_reset(lvds);
+
+	return 0;
+}
+
+#endif
+static SIMPLE_DEV_PM_OPS(mtk_lvds_pm_ops,
+			 mtk_lvds_suspend, mtk_lvds_resume);
 
 static const struct of_device_id mtk_lvds_of_ids[] = {
 	{ .compatible = "mediatek,mt8365-lvds",},
@@ -326,6 +357,7 @@ struct platform_driver mtk_lvds_driver = {
 	.driver = {
 		.name = "mediatek-lvds",
 		.of_match_table = mtk_lvds_of_ids,
+		.pm = &mtk_lvds_pm_ops,
 	},
 };
 
