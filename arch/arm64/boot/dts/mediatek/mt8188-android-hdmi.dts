@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2025 BayLibre, SAS.
+ * Author: Julien Masson <jmasson@baylibre.com>
+ */
+
+/dts-v1/;
+/plugin/;
+
+&dsi0 {
+	status = "disabled";
+};
+
+&mipi_tx0 {
+	status = "disabled";
+};
