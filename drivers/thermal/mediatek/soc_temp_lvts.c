@@ -1360,7 +1360,7 @@ static void mt8188_efuse_to_cal_data(struct lvts_data *lvts_data)
 		GET_CAL_DATA_BITMASK(4, 31, 24);
 }
 
-static const struct tc_settings mt8188_tc_settings[] = {
+static struct tc_settings mt8188_tc_settings[] = {
 	[0] = {
 		.domain_index = MT8188_MCU_DOMAIN,
 		.addr_offset = 0x0,
