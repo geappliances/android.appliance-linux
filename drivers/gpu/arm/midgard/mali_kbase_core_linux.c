@@ -4764,12 +4764,17 @@ static int read_speed_bin_optional(struct device *dev)
 			dev_err(dev, "Cannot read speed-bin (%d).", ret);
 			return ret;
 		}
-	} else {
-		dev_info(dev, "GPU speed-bin = 0x%x\n", val);
-		return devm_pm_opp_set_supported_hw(dev, &val, 1);
+
+		/* (optionnal) try default value found in device-tree. */
+		ret = of_property_read_u32(dev->of_node, "nvmem-speed-bin-value", &val);
+		if (ret) {
+			dev_dbg(dev, "Cannot read nvmem-speed-bin-value prop (%d).", ret);
+			return 0;
+		}
 	}
 
-	return 0;
+	dev_info(dev, "GPU speed-bin = 0x%x\n", val);
+	return devm_pm_opp_set_supported_hw(dev, &val, 1);
 }
 
 int power_control_init(struct kbase_device *kbdev)
