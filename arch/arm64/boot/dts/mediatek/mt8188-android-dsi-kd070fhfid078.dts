@@ -15,3 +15,11 @@
 		backlight = <&backlight_lcd1>;
         };
 };
+
+&dpi1 {
+	status = "disabled";
+};
+
+&hdmi0 {
+	status = "disabled";
+};

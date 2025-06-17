@@ -34,14 +34,6 @@
 	};
 };
 
-&dpi1 {
-	status = "disabled";
-};
-
-&hdmi0 {
-	status = "disabled";
-};
-
 &pio {
 	disp_pwm1_pin_default: disp-pwm1-pin-default {
 		pins1 {
