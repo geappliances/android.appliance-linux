@@ -34,6 +34,10 @@
 	};
 };
 
+&hdmi0_dai_link {
+	status = "disabled";
+};
+
 &pio {
 	disp_pwm1_pin_default: disp-pwm1-pin-default {
 		pins1 {

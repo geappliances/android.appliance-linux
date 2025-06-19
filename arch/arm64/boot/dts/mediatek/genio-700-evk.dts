@@ -1418,7 +1418,7 @@
 		};
 	};
 
-	dai-link-1 {
+	hdmi0_dai_link: dai-link-1 {
 		sound-dai = <&afe>;
 		dai-link-name = "ETDM3_OUT_BE";
 		status = "okay";

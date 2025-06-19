@@ -15,3 +15,7 @@
 		backlight = <&backlight_lcd1>;
         };
 };
+
+&hdmi0_dai_link {
+	status = "okay";
+};

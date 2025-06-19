@@ -14,3 +14,7 @@
 &mipi_tx0 {
 	status = "disabled";
 };
+
+&hdmi0_dai_link {
+	status = "okay";
+};
