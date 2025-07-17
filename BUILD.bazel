@@ -611,6 +611,11 @@ _MTK_MODULE_OUTS = [
     "sound/soc/codecs/snd-soc-tas2562.ko",
 ]
 
+_MTK_EXT_MODULES = [
+    "//common-modules/mtk-vcodec:mtk_ext_vcodec_modules",
+    "//common-modules/mtk-vcu:mtk_ext_vcu",
+]
+
 kernel_build(
     name = "mtk",
     build_config = "build.config.mtk",
@@ -645,9 +650,19 @@ kernel_build(
     module_outs = _MTK_MODULE_OUTS,
 )
 
+kernel_modules_install(
+    name = "mtk_ext_modules",
+    kernel_build = ":mtk",
+    kernel_modules = _MTK_EXT_MODULES,
+    visibility = ["//visibility:private"],
+)
+
 copy_to_dist_dir(
     name = "mtk_dist",
-    data = [":mtk"],
+    data = [
+        ":mtk",
+        ":mtk_ext_modules",
+    ],
     dist_dir = "out/mtk/dist",
     flat = True,
 )
