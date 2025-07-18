@@ -596,6 +596,7 @@ _MTK_MODULE_OUTS = [
     "drivers/hwmon/ntc_thermistor.ko",
     "drivers/input/misc/rotary_encoder.ko",
     "drivers/input/touchscreen/ili210x.ko",
+    "drivers/media/platform/mediatek/mdp3/mtk-mdp3.ko",
     "drivers/net/wireless/mediatek/mt76/mt76-connac-lib.ko",
     "drivers/net/wireless/mediatek/mt76/mt76-sdio.ko",
     "drivers/net/wireless/mediatek/mt76/mt76.ko",
@@ -608,6 +609,10 @@ _MTK_MODULE_OUTS = [
     "drivers/phy/mediatek/phy-mtk-mipi-dsi-drv.ko",
     "drivers/power/supply/bq27xxx_battery.ko",
     "drivers/power/supply/bq27xxx_battery_i2c.ko",
+    "drivers/remoteproc/mtk_scp.ko",
+    "drivers/remoteproc/mtk_scp_ipi.ko",
+    "drivers/rpmsg/mtk_rpmsg.ko",
+    "drivers/rpmsg/rpmsg_core.ko",
     "sound/soc/codecs/snd-soc-tas2562.ko",
 ]
 
