@@ -650,7 +650,6 @@ static int config_rsz_subfrm(struct mdp_comp_ctx *ctx,
 	const struct mdp_platform_config *mdp_cfg = __get_plat_cfg(ctx);
 	phys_addr_t base = ctx->comp->reg_base;
 	u8 subsys_id = ctx->comp->subsys_id;
-	u32 id;
 	u32 csf_l = 0, csf_r = 0;
 	u32 reg = 0;
 
@@ -755,7 +754,6 @@ static int config_rsz_subfrm(struct mdp_comp_ctx *ctx,
 
 	if (CFG_CHECK(MT8195, p_id) || CFG_CHECK(MT8188, p_id)) {
 		struct mdp_comp *merge;
-		const struct mtk_mdp_driver_data *data = ctx->comp->mdp_dev->mdp_data;
 		enum mtk_mdp_comp_id public_id = ctx->comp->public_id;
 
 		switch (public_id) {
@@ -843,9 +841,6 @@ static const struct mdp_comp_ops rsz_ops = {
 
 static int init_split(struct mdp_comp_ctx *ctx, struct mdp_cmdq_cmd *cmd)
 {
-	phys_addr_t base = ctx->comp->reg_base;
-	u8 subsys_id = ctx->comp->subsys_id;
-
 	mtk_mmsys_vpp_split_out_config(ctx->comp->mdp_dev->mdp_mmsys2, &cmd->pkt);
 
 	return 0;

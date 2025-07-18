@@ -149,7 +149,7 @@ static int mdp_cap_try_fmt_mplane(struct file *file, void *fh,
 				  struct v4l2_format *f)
 {
 	struct mdp_cap_ctx *ctx = fh_to_ctx(fh);
-	struct mdp_format *fmt;
+	const struct mdp_format *fmt;
 	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
 
 	fmt = mdp_try_fmt_mplane(ctx->mdp_dev, f, &ctx->curr_param, ctx->id);
@@ -448,7 +448,6 @@ static int mdp_cap_start_streaming(struct vb2_queue *q, unsigned int count)
 static void mdp_cap_stop_streaming(struct vb2_queue *q)
 {
 	struct mdp_cap_ctx *ctx = vb2_get_drv_priv(q);
-	struct vb2_v4l2_buffer *vb;
 
 	if (ctx->mdp_dev->cap_state != MDP_CAP_STATE_DISCONNECTING)
 		atomic_set(&ctx->mdp_dev->cap_discard, 1);
@@ -642,7 +641,6 @@ static int mdp_cap_release(struct file *file)
 {
 	struct mdp_cap_ctx *ctx = fh_to_ctx(file->private_data);
 	struct mdp_dev *mdp = video_drvdata(file);
-	struct device *dev = &mdp->pdev->dev;
 
 	mutex_lock(&mdp->cap_lock);
 
@@ -949,8 +947,6 @@ err_video_alloc:
 
 void mdp_capture_device_unregister(struct mdp_dev *mdp)
 {
-	struct device *dev = &mdp->pdev->dev;
-
 	if (mdp->cap_vdev) {
 		/* Unregister Capture Driver */
 		video_unregister_device(mdp->cap_vdev);

@@ -45,7 +45,7 @@ static int mdp_vpu_shared_mem_alloc(struct mdp_vpu_dev *vpu)
 			vpu->config[i] = dma_alloc_wc(dev, vpu->config_size,
 						      &vpu->config_addr[i],
 						      GFP_KERNEL);
-			if (!vpu->config)
+			if (!vpu->config[i])
 				goto err_free_work;
 		}
 

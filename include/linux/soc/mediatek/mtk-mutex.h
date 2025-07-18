@@ -6,6 +6,8 @@
 #ifndef MTK_MUTEX_H
 #define MTK_MUTEX_H
 
+#include <linux/soc/mediatek/mtk-mmsys.h>
+
 struct regmap;
 struct device;
 struct mtk_mutex;
