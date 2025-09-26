@@ -29,7 +29,7 @@
 
 #define DRIVER_NAME "ap1302"
 
-#define BLOCK_SIZE 128
+#define AP1302_BLOCK_SIZE 128
 
 #define AP1302_FW_WINDOW_SIZE			0x2000
 #define AP1302_FW_WINDOW_OFFSET			0x8000
@@ -1208,9 +1208,9 @@ static int ap1302_dump_console(struct ap1302_device *ap1302)
 	if (!buffer)
 		return -ENOMEM;
 
-	for (idx = 0; idx < AP1302_CON_BUF_SIZE; idx += BLOCK_SIZE) {
+	for (idx = 0; idx < AP1302_CON_BUF_SIZE; idx += AP1302_BLOCK_SIZE) {
 		ret = __ap1302_read_raw(ap1302, AP1302_REG_ADDR(AP1302_CON_BUF + idx),
-			min(AP1302_CON_BUF_SIZE - idx, BLOCK_SIZE), buffer + idx);
+			min(AP1302_CON_BUF_SIZE - idx, AP1302_BLOCK_SIZE), buffer + idx);
 		if (ret < 0) {
 			dev_err(ap1302->dev, "Failed to read console buffer: %d\n",
 				ret);
