@@ -2918,7 +2918,6 @@ static int mtk_dp_audio_hw_params(struct device *dev, void *data,
 				  struct hdmi_codec_params *params)
 {
 	struct mtk_dp *mtk_dp = dev_get_drvdata(dev);
-	struct mtk_dp_audio_cfg cfg;
 
 	mtk_dp->info.audio_cur_cfg.channels = params->cea.channels;
 	mtk_dp->info.audio_cur_cfg.sample_rate = params->sample_rate;
@@ -3200,6 +3199,7 @@ struct platform_driver mtk_dp_driver = {
 		.pm = &mtk_dp_pm_ops,
 	},
 };
+EXPORT_SYMBOL(mtk_dp_driver);
 
 MODULE_AUTHOR("Jason-JH.Lin <jason-jh.lin@mediatek.com>");
 MODULE_AUTHOR("Markus Schneider-Pargmann <msp@baylibre.com>");
