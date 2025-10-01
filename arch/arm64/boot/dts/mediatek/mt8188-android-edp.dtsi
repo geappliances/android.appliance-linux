@@ -1,0 +1,64 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2025 BayLibre, SAS.
+ * Author: Vitor Sato Eschholz <vsatoes@baylibre.com>
+ */
+
+#include <dt-bindings/pinctrl/mediatek,mt8188-pinfunc.h>
+
+&backlight_lcd0 {
+	default-on;
+	power-supply = <&edp_panel_fixed_3v3>;
+	enable-active-high;
+	status = "okay";
+};
+
+&disp_pwm0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&disp_pwm0_pin_default>;
+};
+
+&dp_intf0 {
+	status = "okay";
+	ports {
+		port {
+			dp_intf0_out: endpoint {
+				remote-endpoint = <&edp_in>;
+			};
+		};
+	};
+};
+
+&edp_tx {
+	pinctrl-names = "default";
+	pinctrl-0 = <&edp_pin>;
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			edp_in: endpoint {
+			remote-endpoint = <&dp_intf0_out>;
+			};
+		};
+	};
+};
+
+&pio {
+	edp_pin: edp-pin-default {
+		pins-cmd-dat {
+			pinmux = <PINMUX_GPIO17__FUNC_I0_EDP_TX_HPD>;
+			bias-pull-up;
+		};
+	};
+
+	disp_pwm0_pin_default: disp-pwm0-pin-default {
+		pins1 {
+			pinmux = <PINMUX_GPIO29__FUNC_O_DISP_PWM0>;
+		};
+	};
+};
