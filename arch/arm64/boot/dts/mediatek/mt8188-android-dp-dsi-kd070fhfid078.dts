@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2025 BayLibre, SAS.
+ * Author: Vitor Sato Eschholz <vsatoes@baylibre.com>
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "mt8188-android-dsi.dtsi"
+#include "mt8188-android-dp.dtsi"
+
+&dsi0 {
+	panel@0 {
+		compatible = "startek,kd070fhfid078";
+		status = "okay";
+		backlight = <&backlight_lcd1>;
+    };
+};
