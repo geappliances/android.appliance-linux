@@ -12,8 +12,25 @@
 &dsi0 {
 	panel@0 {
 		compatible = "startek,kd070fhfid078";
+		status = "okay";
 		backlight = <&backlight_lcd1>;
-        };
+	};
+};
+
+&cec {
+	status = "okay";
+};
+
+&dpi1 {
+	status = "okay";
+};
+
+&hdmi0 {
+	status = "okay";
+};
+
+&hdmi_phy {
+	status = "okay";
 };
 
 &hdmi0_dai_link {

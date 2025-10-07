@@ -7,12 +7,20 @@
 /dts-v1/;
 /plugin/;
 
-&dsi0 {
-	status = "disabled";
+&cec {
+	status = "okay";
 };
 
-&mipi_tx0 {
-	status = "disabled";
+&dpi1 {
+	status = "okay";
+};
+
+&hdmi0 {
+	status = "okay";
+};
+
+&hdmi_phy {
+	status = "okay";
 };
 
 &hdmi0_dai_link {

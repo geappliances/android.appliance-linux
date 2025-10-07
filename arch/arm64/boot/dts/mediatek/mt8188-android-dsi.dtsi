@@ -4,9 +4,6 @@
  * Author: Julien Masson <jmasson@baylibre.com>
  */
 
-/dts-v1/;
-/plugin/;
-
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/pinctrl/mediatek,mt8188-pinfunc.h>
 #include "dt-bindings/interrupt-controller/irq.h"
@@ -19,6 +16,10 @@
 		num-interpolated-steps = <1023>;
 		default-brightness-level = <576>;
 	};
+};
+
+&dsi0 {
+	status = "okay";
 };
 
 &reserved_memory {
@@ -34,10 +35,6 @@
 	};
 };
 
-&hdmi0_dai_link {
-	status = "disabled";
-};
-
 &pio {
 	disp_pwm1_pin_default: disp-pwm1-pin-default {
 		pins1 {
@@ -49,5 +46,9 @@
 &disp_pwm1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&disp_pwm1_pin_default>;
+	status = "okay";
+};
+
+&mipi_tx0 {
 	status = "okay";
 };

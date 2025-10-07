@@ -374,10 +374,6 @@
 	};
 };
 
-&dpi1 {
-	status = "okay";
-};
-
 &dp_intf1 {
 	status = "disabled";
 	mediatek,oob-hpd;
@@ -409,12 +405,10 @@
 &dsi0 {
 	#address-cells = <1>;
 	#size-cells = <0>;
-	status = "okay";
 	poweron-in-hs-mode = <0>;
 
 	panel@0 {
 		compatible = "startek,kd070fhfid015";
-		status = "okay";
 		reg = <0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&panel_pins_default>;
@@ -435,10 +429,6 @@
 			};
 		};
 	};
-};
-
-&hdmi0 {
-	status = "okay";
 };
 
 &pio {
@@ -1132,10 +1122,6 @@
 	status = "okay";
 };
 
-&mipi_tx0 {
-	status = "okay";
-};
-
 &mmc0 {
 	status = "okay";
 	pinctrl-names = "default", "state_uhs";
@@ -1421,7 +1407,7 @@
 	hdmi0_dai_link: dai-link-1 {
 		sound-dai = <&afe>;
 		dai-link-name = "ETDM3_OUT_BE";
-		status = "okay";
+		status = "disabled";
 
 		codec-0 {
 			sound-dai = <&hdmi0>;
