@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2025 BayLibre, SAS.
+ * Author: Vitor Sato Eschholz <vsatoes@baylibre.com>
+ */
+
+&cec {
+	status = "okay";
+};
+
+&dpi1 {
+	status = "okay";
+};
+
+&hdmi0 {
+	status = "okay";
+};
+
+&hdmi_phy {
+	status = "okay";
+};
+
+&hdmi0_dai_link {
+	status = "okay";
+};

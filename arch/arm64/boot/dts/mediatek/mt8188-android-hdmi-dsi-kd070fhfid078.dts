@@ -8,6 +8,7 @@
 /plugin/;
 
 #include "mt8188-android-dsi.dtsi"
+#include "mt8188-android-hdmi.dtsi"
 
 &dsi0 {
 	panel@0 {
@@ -15,24 +16,4 @@
 		status = "okay";
 		backlight = <&backlight_lcd1>;
 	};
-};
-
-&cec {
-	status = "okay";
-};
-
-&dpi1 {
-	status = "okay";
-};
-
-&hdmi0 {
-	status = "okay";
-};
-
-&hdmi_phy {
-	status = "okay";
-};
-
-&hdmi0_dai_link {
-	status = "okay";
 };
