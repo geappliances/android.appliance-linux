@@ -244,6 +244,7 @@
 #define MSDC_PATCH_BIT1_CMDTA     (0x7 << 3)    /* RW */
 #define MSDC_PB1_BUSY_CHECK_SEL   (0x1 << 7)    /* RW */
 #define MSDC_PATCH_BIT1_STOP_DLY  (0xf << 8)    /* RW */
+#define MSDC_PB1_SINGLE_BURST     (0x1 << 16)   /* RW */
 
 #define MSDC_PATCH_BIT2_CFGRESP   (0x1 << 15)   /* RW */
 #define MSDC_PATCH_BIT2_CFGCRCSTS (0x1 << 28)   /* RW */
@@ -470,6 +471,7 @@ struct msdc_host {
 	u32 src_clk_freq;	/* source clock frequency */
 	unsigned char timing;
 	bool vqmmc_enabled;
+	bool disable_single_burst;
 	u32 latch_ck;
 	u32 hs400_ds_delay;
 	u32 hs400_ds_dly3;
@@ -1761,6 +1763,10 @@ static void msdc_init_hw(struct msdc_host *host)
 	writel(0xffff4089, host->base + MSDC_PATCH_BIT1);
 	sdr_set_bits(host->base + EMMC50_CFG0, EMMC50_CFG_CFCSTS_SEL);
 
+	if (host->disable_single_burst)
+		sdr_clr_bits(host->base + MSDC_PATCH_BIT1,
+			     MSDC_PB1_SINGLE_BURST);
+
 	if (host->dev_comp->stop_clk_fix) {
 		sdr_set_field(host->base + MSDC_PATCH_BIT1,
 			      MSDC_PATCH_BIT1_STOP_DLY, 3);
@@ -2691,6 +2697,10 @@ static void msdc_of_property_parse(struct platform_device *pdev,
 		host->cqhci = true;
 	else
 		host->cqhci = false;
+
+	host->disable_single_burst =
+		of_property_read_bool(pdev->dev.of_node,
+				      "mediatek,disable-single-burst");
 
 	of_property_read_u32(pdev->dev.of_node, "req-vcore",
 			     &host->req_vcore);
