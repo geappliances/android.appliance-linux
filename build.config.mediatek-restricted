@@ -13,7 +13,8 @@ EXT_MODULES="$EXT_MODULES mt7668-wifi-mod"
 RESTRICTED_MODULES_FILES=("wlan_drv_gen4_MT7663_prealloc.ko"
                           "wlan_drv_gen4_MT7663.ko"
                           "wlan_drv_gen4_MT7668_prealloc.ko"
-                          "wlan_drv_gen4_MT7668.ko")
+                          "wlan_drv_gen4_MT7668.ko"
+                          "mtreset_.ko")
 
 function rebuild_for_mt7663() {
   local EXT_MOD=mt7663-wifi-mod
