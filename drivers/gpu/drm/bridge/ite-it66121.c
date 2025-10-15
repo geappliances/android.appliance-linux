@@ -295,7 +295,6 @@
 struct it66121_ctx {
 	struct regmap *regmap;
 	struct drm_bridge bridge;
-	struct drm_bridge *next_bridge;
 	struct drm_connector *connector;
 	struct device *dev;
 	struct gpio_desc *gpio_reset;
@@ -630,10 +629,6 @@ static int it66121_bridge_attach(struct drm_bridge *bridge,
 
 	if (!(flags & DRM_BRIDGE_ATTACH_NO_CONNECTOR))
 		return -EINVAL;
-
-	ret = drm_bridge_attach(bridge->encoder, ctx->next_bridge, bridge, flags);
-	if (ret)
-		return ret;
 
 	ret = regmap_write_bits(ctx->regmap, IT66121_CLK_BANK_REG,
 				IT66121_CLK_BANK_PWROFF_RCLK, 0);
@@ -1557,16 +1552,6 @@ static int it66121_probe(struct i2c_client *client,
 		dev_err(ctx->dev, "The remote device is disabled\n");
 		return -ENODEV;
 	}
-
-	ctx->next_bridge = of_drm_find_bridge(ep);
-	of_node_put(ep);
-	if (!ctx->next_bridge) {
-		dev_dbg(ctx->dev, "Next bridge not found, deferring probe\n");
-		return -EPROBE_DEFER;
-	}
-
-	if (!ctx->next_bridge)
-		return -EPROBE_DEFER;
 
 	i2c_set_clientdata(client, ctx);
 	mutex_init(&ctx->lock);
