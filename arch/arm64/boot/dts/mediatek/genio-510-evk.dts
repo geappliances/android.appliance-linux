@@ -382,10 +382,6 @@
 	};
 };
 
-&dpi1 {
-	status = "okay";
-};
-
 &dp_intf1 {
 	status = "disabled";
 	mediatek,oob-hpd;
@@ -417,12 +413,10 @@
 &dsi0 {
 	#address-cells = <1>;
 	#size-cells = <0>;
-	status = "okay";
 	poweron-in-hs-mode = <0>;
 
 	panel@0 {
 		compatible = "startek,kd070fhfid078";
-		status = "okay";
 		reg = <0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&panel_pins_default>;
@@ -454,10 +448,6 @@
 
 &dmic_codec {
 	wakeup-delay-ms = <200>;
-};
-
-&hdmi0 {
-	status = "okay";
 };
 
 &pio {
@@ -1161,10 +1151,6 @@
 &uart2 {
 	pinctrl-0 = <&uart2_pins>;
 	pinctrl-names = "default";
-	status = "okay";
-};
-
-&mipi_tx0 {
 	status = "okay";
 };
 
