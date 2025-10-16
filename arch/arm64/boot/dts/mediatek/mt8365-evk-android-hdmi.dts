@@ -1,0 +1,29 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2025 BayLibre, SAS.
+ * Author: Julien Masson <jmasson@baylibre.com>
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "mt8365-evk-android.dtsi"
+
+&dsi0 {
+        panel@0 {
+                status = "disabled";
+        };
+        ports {
+                status = "disabled";
+        };
+};
+
+&i2c1 {
+        touch {
+                status = "disabled";
+        };
+};
+
+&dpi0 {
+	status = "okay";
+};

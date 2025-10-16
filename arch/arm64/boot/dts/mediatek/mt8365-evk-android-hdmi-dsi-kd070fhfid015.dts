@@ -10,13 +10,12 @@
 #include "mt8365-evk-android.dtsi"
 
 &dsi0 {
+        panel@0 {
+                compatible = "startek,kd070fhfid015";
+                status = "okay";
+        };
+};
+
+&dpi0 {
 	status = "okay";
-};
-
-&it66121hdmitx {
-	status = "disabled";
-};
-
-&dai_link_hdmi {
-	status = "disabled";
 };
