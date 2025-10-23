@@ -617,10 +617,6 @@ static int ar0430_corrections(struct ar0430 *ar0430)
 
 static int ar0430_set_params(struct ar0430 *ar0430)
 {
-	struct v4l2_mbus_framefmt *format = &ar0430->format;
-	const struct v4l2_rect *crop = &ar0430->crop;
-	unsigned int xskip;
-	unsigned int yskip;
 	int ret = 0;
 
 	/* Serial interface. */
@@ -661,14 +657,9 @@ static int ar0430_set_params(struct ar0430 *ar0430)
  * V4L2 subdev video operations
  */
 
-extern int nk_pattern_count = 0;
+extern int nk_pattern_count;
 static int ar0430_s_stream(struct v4l2_subdev *subdev, int enable)
 {
-	int r = 0;
-	int g1 = 0;
-	int b = 0;
-	int g2 = 0;
-
 	struct ar0430 *ar0430 = to_ar0430(subdev);
 	int ret;
 
