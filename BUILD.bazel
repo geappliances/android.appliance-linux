@@ -631,6 +631,7 @@ _MTK_MODULE_OUTS = [
 _MTK_EXT_MODULES = [
     "//common-modules/mtk-vcodec:mtk_ext_vcodec_modules",
     "//common-modules/mtk-vcu:mtk_ext_vcu",
+    "//common-modules/mtk-mdp:mtk_mdp_mt8365",
 ]
 
 kernel_build(
