@@ -628,6 +628,25 @@ _MTK_MODULE_OUTS = [
     "sound/soc/codecs/snd-soc-tas2562.ko",
 ]
 
+filegroup(
+    name = "mtk_internal_headers_group",
+    srcs = [
+        "drivers/rpmsg/rpmsg_internal.h",
+        "drivers/remoteproc/remoteproc_internal.h",
+    ],
+)
+
+ddk_headers(
+    name = "mtk_internal_module_headers",
+    hdrs = [
+        ":mtk_internal_headers_group",
+    ],
+    includes = [
+        "drivers/rpmsg",
+        "drivers/remoteproc",
+    ],
+)
+
 _MTK_EXT_MODULES = [
     "//common-modules/mtk-vcodec:mtk_ext_vcodec_modules",
     "//common-modules/mtk-vcu:mtk_ext_vcu",
