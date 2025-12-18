@@ -698,6 +698,13 @@ static int pwm_backlight_resume(struct device *dev)
 {
 	struct backlight_device *bl = dev_get_drvdata(dev);
 
+	/*
+	 * Delay backlight enable to allow framebuffer
+	 * to be ready after S3 resume, preventing white
+	 * flash on screen.
+	 */
+	msleep(100);
+
 	backlight_update_status(bl);
 
 	return 0;
