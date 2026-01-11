@@ -10,8 +10,8 @@
 #include <linux/kernel.h>
 #include <linux/mfd/mt6323/registers.h>
 #include <linux/mfd/mt6357/registers.h>
-#include <linux/mfd/mt6392/registers.h>
 #include <linux/mfd/mt6358/registers.h>
+#include <linux/mfd/mt6392/registers.h>
 #include <linux/mfd/mt6397/core.h>
 #include <linux/mfd/mt6397/registers.h>
 #include <linux/module.h>
@@ -19,6 +19,20 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
+
+#define HOME_DUMP_PROCESSES 1
+
+#ifdef HOME_DUMP_PROCESSES
+#include <../kernel/sched/sched.h>
+#include <asm-generic/bug.h>
+#include <linux/cpumask.h>
+#include <linux/jiffies.h>
+#include <linux/sched.h>
+#include <linux/sched/debug.h>
+#include <linux/sched/signal.h>
+#include "linux/slab.h"
+#include <linux/timer.h>
+#endif
 
 #define MTK_PMIC_PWRKEY_RST_EN_MASK	0x1
 #define MTK_PMIC_PWRKEY_RST_EN_SHIFT	6
@@ -87,16 +101,6 @@ static const struct mtk_pmic_regs mt6357_regs = {
 	.pmic_rst_reg = MT6357_TOP_RST_MISC,
 };
 
-static const struct mtk_pmic_regs mt6392_regs = {
-	.keys_regs[MTK_PMIC_PWRKEY_INDEX] =
-		MTK_PMIC_KEYS_REGS(MT6392_CHRSTATUS,
-		0x2, MT6392_INT_MISC_CON, 0x10),
-	.keys_regs[MTK_PMIC_HOMEKEY_INDEX] =
-		MTK_PMIC_KEYS_REGS(MT6392_CHRSTATUS,
-		0x4, MT6392_INT_MISC_CON, 0x8),
-	.pmic_rst_reg = MT6392_TOP_RST_MISC,
-};
-
 static const struct mtk_pmic_regs mt6358_regs = {
 	.keys_regs[MTK_PMIC_PWRKEY_INDEX] =
 		MTK_PMIC_KEYS_REGS(MT6358_TOPSTATUS,
@@ -105,6 +109,16 @@ static const struct mtk_pmic_regs mt6358_regs = {
 		MTK_PMIC_KEYS_REGS(MT6358_TOPSTATUS,
 		0x8, MT6358_PSC_TOP_INT_CON0, 0xa),
 	.pmic_rst_reg = MT6358_TOP_RST_MISC,
+};
+
+static const struct mtk_pmic_regs mt6392_regs = {
+	.keys_regs[MTK_PMIC_PWRKEY_INDEX] =
+		MTK_PMIC_KEYS_REGS(MT6392_CHRSTATUS,
+		0x2, MT6392_INT_MISC_CON, 0x10),
+	.keys_regs[MTK_PMIC_HOMEKEY_INDEX] =
+		MTK_PMIC_KEYS_REGS(MT6392_CHRSTATUS,
+		0x4, MT6392_INT_MISC_CON, 0x8),
+	.pmic_rst_reg = MT6392_TOP_RST_MISC,
 };
 
 struct mtk_pmic_keys_info {
@@ -128,6 +142,130 @@ enum mtk_pmic_keys_lp_mode {
 	LP_ONEKEY,
 	LP_TWOKEY,
 };
+
+#ifdef HOME_DUMP_PROCESSES
+#define INIT_TIMEOUT    5000	/* Init timeout 5 seconds */
+#define REPEAT_TIMEOUT  2000	/* Repeat timeout 2 seconds */
+
+static bool  mtk_pmic_is_active = 0;
+
+static struct mtk_pmic_keys*  poll_mtk_pmic_keys = NULL;
+
+static struct timer_list  poll_timer;
+
+static u32 prev_dump_process_key_pressed = 0;
+static u32 dump_process_info = 0;
+
+static int process_cpu(const struct task_struct *p)
+{
+	unsigned int cpu = task_cpu(p);
+	if (cpu > num_possible_cpus())
+		cpu = 0;
+	return cpu;
+}
+
+static char task_state_char (const struct task_struct *p)
+{
+	int cpu;
+	char state;
+	unsigned long tmp;
+
+	if (!p || probe_kernel_read(&tmp, (char *)p, sizeof(unsigned long)))
+		return 'E';
+
+	cpu = process_cpu(p);
+	state = (p->state == 0) ? 'R' :
+		(p->state < 0) ? 'U' :
+		(p->state & TASK_UNINTERRUPTIBLE) ? 'D' :
+		(p->state & TASK_STOPPED) ? 'T' :
+		(p->state & TASK_TRACED) ? 'C' :
+		(p->exit_state & EXIT_ZOMBIE) ? 'Z' :
+		(p->exit_state & EXIT_DEAD) ? 'E' :
+		(p->state & TASK_INTERRUPTIBLE) ? 'S' : '?';
+	if (is_idle_task(p)) {
+		state = 'I';	/* idle task */
+	} else if (!p->mm && state == 'S') {
+		state = 'M';	/* sleeping system daemon */
+	}
+	return state;
+}
+
+static void dump_task_info (struct task_struct* p)
+{
+	printk(KERN_EMERG "Stack traceback for pid %d\n", p->pid);
+	printk(KERN_EMERG "0x%px %8d %8d  %d %4d   %c  0x%px %s\n",
+		   (void *)p, p->pid, p->parent->pid,
+		   task_curr(p), process_cpu(p),
+		   task_state_char(p),
+		   (void *)(&p->thread),
+		   p->comm);
+
+	show_stack (p, NULL);
+}
+
+static void dump_all_task_info (void)
+{
+	unsigned long cpu;
+	struct task_struct* g;
+	struct task_struct* p;
+
+	printk(KERN_EMERG CUT_HERE);
+	for_each_online_cpu (cpu) {
+		p = cpu_curr(cpu);
+		dump_task_info(p);
+		printk(KERN_EMERG CUT_HERE);
+	}
+
+	for_each_process_thread(g, p) {
+		if (task_curr(p))
+			continue;
+		dump_task_info(p);
+		printk(KERN_EMERG CUT_HERE);
+	}
+
+	printk(KERN_EMERG "\n");
+}
+
+static void poll_timer_fn (struct timer_list*  timer)
+{
+	u32 key_deb;
+	u32 pressed;
+
+
+	if (poll_mtk_pmic_keys != NULL) {
+		if (!mtk_pmic_is_active) {
+
+#if 0
+			regmap_read(poll_mtk_pmic_keys->regmap, poll_mtk_pmic_keys->keys [MTK_PMIC_HOMEKEY_INDEX].regs->deb_reg, &key_deb);
+
+			key_deb &= poll_mtk_pmic_keys->keys [MTK_PMIC_HOMEKEY_INDEX].regs->deb_mask;
+#endif
+
+			regmap_read(poll_mtk_pmic_keys->regmap, poll_mtk_pmic_keys->keys [MTK_PMIC_PWRKEY_INDEX].regs->deb_reg, &key_deb);
+
+			key_deb &= poll_mtk_pmic_keys->keys [MTK_PMIC_PWRKEY_INDEX].regs->deb_mask;
+
+
+			pressed = !key_deb;
+
+			if (!pressed) {
+				if (prev_dump_process_key_pressed) {
+					dump_process_info = true;
+				}
+			}
+
+			prev_dump_process_key_pressed = pressed;
+		}
+
+		if (dump_process_info) {
+			dump_process_info = false;
+			dump_all_task_info ();
+		}
+	}
+
+	mod_timer (&poll_timer, jiffies + msecs_to_jiffies (REPEAT_TIMEOUT));
+}
+#endif
 
 static void mtk_pmic_keys_lp_reset_setup(struct mtk_pmic_keys *keys,
 		u32 pmic_rst_reg)
@@ -190,8 +328,45 @@ static irqreturn_t mtk_pmic_keys_irq_handler_thread(int irq, void *data)
 
 	pressed = !key_deb;
 
+#ifdef HOME_DUMP_PROCESSES
+
+	// For dump-trace, filter out the power-key, so it does not get reported to upper layer
+	if (info->keycode != KEY_POWER )
+	{
+		input_report_key(info->keys->input_dev, info->keycode, pressed);
+		input_sync(info->keys->input_dev);
+	}
+
+#else
 	input_report_key(info->keys->input_dev, info->keycode, pressed);
 	input_sync(info->keys->input_dev);
+#endif
+
+#ifdef HOME_DUMP_PROCESSES
+
+#if 0
+	if (info->keycode == KEY_HOME) {
+		if (!pressed) {
+			if (prev_dump_process_key_pressed) {
+				dump_process_info = true;
+			}
+		}
+
+		prev_dump_process_key_pressed = pressed;
+	}
+#endif
+
+	// Use power key to activate dump-trace
+	if (info->keycode == KEY_POWER) {
+		if (!pressed) {
+			if (prev_dump_process_key_pressed) {
+				dump_process_info = true;
+			}
+		}
+
+		prev_dump_process_key_pressed = pressed;
+	}
+#endif
 
 	dev_dbg(info->keys->dev, "(%s) key =%d using PMIC\n",
 		 pressed ? "pressed" : "released", info->keycode);
@@ -286,11 +461,11 @@ static const struct of_device_id of_mtk_pmic_keys_match_tbl[] = {
 		.compatible = "mediatek,mt6357-keys",
 		.data = &mt6357_regs,
 	}, {
-		.compatible = "mediatek,mt6392-keys",
-		.data = &mt6392_regs,
-	}, {
 		.compatible = "mediatek,mt6358-keys",
 		.data = &mt6358_regs,
+	}, {
+		.compatible = "mediatek,mt6392-keys",
+		.data = &mt6392_regs,
 	}, {
 		/* sentinel */
 	}
@@ -311,7 +486,13 @@ static int mtk_pmic_keys_probe(struct platform_device *pdev)
 	const struct of_device_id *of_id =
 		of_match_device(of_mtk_pmic_keys_match_tbl, &pdev->dev);
 
+#ifdef HOME_DUMP_PROCESSES
+	keys = kzalloc (sizeof(*keys), GFP_KERNEL);
+	poll_mtk_pmic_keys = keys;
+#else
 	keys = devm_kzalloc(&pdev->dev, sizeof(*keys), GFP_KERNEL);
+#endif
+
 	if (!keys)
 		return -ENOMEM;
 
@@ -397,7 +578,30 @@ static struct platform_driver pmic_keys_pdrv = {
 	},
 };
 
+#if HOME_DUMP_PROCESSES
+static int __init pmic_keys_pdrv_init(void)
+{
+	mtk_pmic_is_active = true;
+
+	timer_setup (&poll_timer, poll_timer_fn, 0);
+	mod_timer (&poll_timer, jiffies + msecs_to_jiffies (INIT_TIMEOUT));
+
+	return platform_driver_register(&pmic_keys_pdrv);
+}
+
+module_init(pmic_keys_pdrv_init);
+
+static void __exit pmic_keys_pdrv_exit(void)
+{
+	platform_driver_unregister(&pmic_keys_pdrv);
+
+	mtk_pmic_is_active = false;
+}
+
+module_exit(pmic_keys_pdrv_exit);
+#else
 module_platform_driver(pmic_keys_pdrv);
+#endif
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Chen Zhong <chen.zhong@mediatek.com>");
