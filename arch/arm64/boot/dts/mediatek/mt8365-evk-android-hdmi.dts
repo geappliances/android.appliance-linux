@@ -27,3 +27,12 @@
 &dpi0 {
 	status = "okay";
 };
+
+&ethernet {
+	/*
+	 * Ethernet and HDMI (DPI0) are sharing pins.
+	 * Only one can be enabled at a time and require the physical switch
+	 * SW2101 to be set on the desired position
+	 */
+	status = "disabled";
+};

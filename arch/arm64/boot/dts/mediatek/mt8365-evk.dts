@@ -499,7 +499,7 @@
 	phy-handle = <&eth_phy>;
 	phy-mode = "rmii";
 	mac-address = [00 00 00 00 00 00];
-	status = "enable";
+	status = "okay";
 
 	mdio {
 		#address-cells = <1>;
