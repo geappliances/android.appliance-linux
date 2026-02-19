@@ -139,7 +139,7 @@ static void mtk_uart_apdma_start_tx(struct mtk_chan *c)
 	struct mtk_uart_apdmadev *mtkd =
 				to_mtk_uart_apdma_dev(c->vc.chan.device);
 	struct mtk_uart_apdma_desc *d = c->desc;
-	unsigned int wpt, vff_sz;
+	unsigned int wpt, rpt, addr, vff_sz, dma_sz;
 
 	vff_sz = c->cfg.dst_port_window_size;
 	if (!mtk_uart_apdma_read(c, VFF_LEN)) {
@@ -163,9 +163,31 @@ static void mtk_uart_apdma_start_tx(struct mtk_chan *c)
 	}
 
 	wpt = mtk_uart_apdma_read(c, VFF_WPT);
+	/* Handle the case when the read index gets out */
+	/* of sync with the one in the kernel. */
+	rpt = mtk_uart_apdma_read(c, VFF_RPT) & VFF_RING_SIZE;
+	addr = mtk_uart_apdma_read(c, VFF_ADDR);
+	if ((addr + rpt) == ((unsigned int) c->desc->addr)) {
+	  dma_sz = c->desc->avail_len;
+	} else {
+	  if ((addr + rpt) < ((unsigned int) c->desc->addr)) {
+	    /* The kernel fifo read address is ahead */
+	    /* of the one in the DMA. */
+	    dma_sz = c->desc->avail_len + (c->desc->addr - (addr + rpt));
+	  } else {
+	    /* The DMA fifo read address is ahead of the one */
+	    /* in the kernel. Send at least one character. */
+	    dma_sz = 1;
+	    if ((addr + rpt) < (c->desc->addr + c->desc->avail_len))
+	      dma_sz = (c->desc->addr + c->desc->avail_len) - (addr + rpt);
+	  }
+	  dev_info(c->vc.chan.device->dev, "Resync TX FIFO Addr: %x Len: %d DMA Addr: %x Len: %d\n",
+		   c->desc->addr, c->desc->avail_len, (addr + rpt), dma_sz);
+	}
 
-	wpt += c->desc->avail_len;
-	if ((wpt & VFF_RING_SIZE) == vff_sz)
+	wpt += dma_sz;
+
+	if ((wpt & VFF_RING_SIZE) >= vff_sz)
 		wpt = (wpt & VFF_RING_WRAP) ^ VFF_RING_WRAP;
 
 	/* Let DMA start moving data */
