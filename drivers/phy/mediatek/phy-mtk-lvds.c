@@ -18,17 +18,9 @@
 
 #include "phy-mtk-lvds.h"
 
-static void mtk_lvds_tx_mask(struct mtk_lvds_tx *lvds_tx, u32 offset, u32 mask, u32 data)
-{
-	u32 temp = readl(lvds_tx->regs + offset);
-
-	writel((temp & ~mask) | (data & mask), lvds_tx->regs + offset);
-}
-
 static void mtk_lvds_tx_power_on_signal(struct phy *phy)
 {
 	struct mtk_lvds_tx *lvds_tx = phy_get_drvdata(phy);
-	u32 reg;
 
 	writel(0x8053, lvds_tx->regs + VOPLL_ANA14);
 	writel((0x38 << 24), lvds_tx->regs + VOPLL_ANA18);
