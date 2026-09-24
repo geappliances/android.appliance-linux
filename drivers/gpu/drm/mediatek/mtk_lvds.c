@@ -125,9 +125,9 @@ static void mtk_lvds_poweron(struct mtk_lvds *lvds)
 
 	/* LVDS Digital Soft reset & un-reset*/
 	mtk_lvds_mask(lvds, LVDSENC_SOFT_RESET, RG_LVDSENC_PCLK_SW_RST,
-		~RG_LVDSENC_PCLK_SW_RST);
+		~(u32)RG_LVDSENC_PCLK_SW_RST);
 	mtk_lvds_mask(lvds, LVDSENC_SOFT_RESET, RG_LVDSENC_CTSCLK_SW_RST,
-		~RG_LVDSENC_CTSCLK_SW_RST);
+		~(u32)RG_LVDSENC_CTSCLK_SW_RST);
 	mtk_lvds_mask(lvds, LVDSENC_SOFT_RESET, RG_LVDSENC_PCLK_SW_RST,
 		RG_LVDSENC_PCLK_SW_RST);
 	mtk_lvds_mask(lvds, LVDSENC_SOFT_RESET, RG_LVDSENC_CTSCLK_SW_RST,
