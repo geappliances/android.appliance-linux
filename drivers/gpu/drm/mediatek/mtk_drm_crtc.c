@@ -1328,10 +1328,10 @@ int mtk_drm_crtc_create(struct drm_device *drm_dev,
 		 * which is the drm bring up sub driver
 		 */
 		if (!node && comp_id != DDP_COMPONENT_DRM_OVL_ADAPTOR) {
-			dev_err(dev,
-				"Not creating crtc %d because component %d is disabled, missing or not initialized\n",
-				crtc_i, comp_id);
-			return -ENODEV;
+			dev_info(dev,
+				 "Not creating crtc %d because component %d is disabled or missing\n",
+				 crtc_i, comp_id);
+			return 0;
 		}
 	}
 
